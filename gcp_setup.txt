@@ -1,0 +1,96 @@
+# Google Cloud Platform (GCP) Setup Guide: Rider Scheduling System
+
+This guide provides the professional industry-standard steps to deploy this project as a high-availability web service on GCP using **Cloud Run** (for the app) and **Cloud SQL** (for the database).
+
+---
+
+## 1. Containerization (Dockerfile)
+To run on GCP, the app must be "containerized." Create a file named `Dockerfile` in the root directory:
+
+```dockerfile
+# Step 1: Build the Frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Step 2: Set up the Server
+FROM node:20-slim
+WORKDIR /app
+COPY --from=frontend-builder /app/dist ./dist
+COPY --from=frontend-builder /app/server ./server
+WORKDIR /app/server
+RUN npm install
+RUN npm run build
+
+# Step 3: Environment and Start
+ENV NODE_ENV=production
+ENV PORT=3001
+EXPOSE 3001
+CMD ["node", "dist/index.js"]
+```
+
+Create a `.dockerignore` file to keep the image small:
+```text
+node_modules
+dist
+.git
+mobile-app
+```
+
+---
+
+## 2. Database Setup (Cloud SQL)
+1. Go to **Cloud SQL** in the GCP Console.
+2. Create a **MySQL 8.0** instance (e.g., `rider-db`).
+3. Create a database named `rider_scheduling`.
+4. Create a user and password.
+5. **Important:** Enable the **Cloud SQL Auth Proxy** or allow the Cloud Run service to connect to the instance.
+
+---
+
+## 3. Deployment Commands (Cloud SDK)
+Run these commands from your local terminal (ensure you have the `gcloud` CLI installed):
+
+### Step A: Enable APIs
+```bash
+gcloud services enable run.googleapis.com sqladmin.googleapis.com cloudbuild.googleapis.com
+```
+
+### Step B: Build and Push to Google Artifact Registry
+```bash
+gcloud builds submit --tag gcr.io/[PROJECT_ID]/rider-app
+```
+
+### Step C: Deploy to Cloud Run
+```bash
+gcloud run deploy rider-service \
+  --image gcr.io/[PROJECT_ID]/rider-app \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="DB_HOST=[CLOUD_SQL_IP],DB_USER=[USER],DB_PASS=[PASS],DB_NAME=rider_scheduling" \
+  --add-cloudsql-instances=[INSTANCE_CONNECTION_NAME]
+```
+
+---
+
+## 4. Why this is better than Render
+1. **Performance:** Cloud Run spins up significantly faster (2–5 seconds) than Render’s 60-second cold starts.
+2. **Stability:** Cloud SQL is a managed service with 99.9% uptime, automatic backups, and high security.
+3. **Always-On Option:** You can set `--min-instances 1` in Cloud Run to **completely eliminate cold starts** and have 0ms response time 24/7.
+4. **Scalability:** GCP can handle thousands of riders simultaneously without any manual configuration.
+
+---
+
+## 5. Mobile App Configuration
+Update your `mobile-app/constants/Config.ts` with your new GCP service URL:
+```typescript
+API_URL: IS_PRODUCTION 
+  ? 'https://rider-service-[random-hash].a.run.app' 
+  : 'http://[YOUR_LOCAL_IP]:3001'
+```
+
+*Note: GCP Cloud Run provides automatic HTTPS (SSL), which is required for secure mobile app communication.*

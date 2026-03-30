@@ -1,0 +1,8 @@
+{
+  "general": {
+    "vimMode": true
+  },
+  "ui": {
+    "dynamicWindowTitle": false
+  }
+}

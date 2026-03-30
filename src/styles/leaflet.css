@@ -1,0 +1,15 @@
+/* Import Leaflet CSS from node_modules for local consistency */
+@import 'leaflet/dist/leaflet.css';
+
+/* Fix z-index issues with Leaflet in dialogs/modals */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 400;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+}
