@@ -1,9 +1,22 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-// Load .env from the root of the server folder.
-dotenv.config({ path: path.join(process.cwd(), '.env') });
+// Try to load .env from several possible locations
+const envPaths = [
+  path.join(process.cwd(), '.env'),          // Current working directory
+  path.join(__dirname, '.env'),               // Same directory as the script
+  path.join(__dirname, '..', '.env'),        // Parent directory (useful for dist/)
+  path.join(__dirname, '..', '..', '.env'),  // Two levels up (useful for deeper routes)
+];
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 export const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
