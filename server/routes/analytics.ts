@@ -26,14 +26,14 @@ router.get('/route-efficiency', async (req, res) => {
       FROM delivery_requests 
       WHERE delivery_status IN ('completed', 'in_transit')
       AND ${filter}
-    `);
+    `) as any[];
     
     const [logs] = await pool.query(`
       SELECT request_id, lat, lng, timestamp 
       FROM location_logs 
       WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 DAY)
       ORDER BY timestamp ASC
-    `);
+    `) as any[];
 
     res.json({ requests, logs });
   } catch (error) {
@@ -54,7 +54,7 @@ router.get('/hotspots', async (req, res) => {
       GROUP BY ROUND(dropoff_lat, 3), ROUND(dropoff_lng, 3)
       ORDER BY weight DESC
       LIMIT 50
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching hotspots:', error);
@@ -72,7 +72,7 @@ router.get('/peak-hours', async (req, res) => {
       WHERE ${filter}
       GROUP BY HOUR(created_at)
       ORDER BY hour ASC
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching peak hours:', error);
@@ -101,7 +101,7 @@ router.get('/forecast', async (req, res) => {
       ) as hourly_stats
       GROUP BY hour_of_day
       ORDER BY hour_of_day ASC
-    `, [dayOfWeek]);
+    `, [dayOfWeek]) as any[];
 
     res.json({
       day: tomorrow.toLocaleDateString('en-US', { weekday: 'long' }),
@@ -128,7 +128,7 @@ router.get('/rider-performance', async (req, res) => {
       AND ${filter}
       GROUP BY assigned_rider_id, assigned_rider_name
       ORDER BY success_rate DESC
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching rider performance:', error);
@@ -148,7 +148,7 @@ router.get('/exceptions', async (req, res) => {
       AND (urgency_level = 'Urgent' OR urgency_level = 'High')
       AND ${filter}
       LIMIT 5
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching exceptions:', error);
@@ -169,14 +169,14 @@ router.get('/summary-stats', async (req, res) => {
         SUM(CASE WHEN delivery_status = 'failed' THEN 1 ELSE 0 END) as failed
       FROM delivery_requests
       WHERE ${filter}
-    `);
+    `) as any[];
     
     const [avgTime] = await pool.query(`
       SELECT AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) / 60 as avg_hours
       FROM delivery_requests
       WHERE delivery_status = 'completed' AND completed_at IS NOT NULL
       AND ${filter}
-    `);
+    `) as any[];
 
     const onTimeRate = 87.5; 
 
@@ -184,13 +184,13 @@ router.get('/summary-stats', async (req, res) => {
       SELECT 
         (SELECT COUNT(DISTINCT assigned_rider_id) FROM delivery_requests WHERE delivery_status IN ('assigned', 'picked_up', 'in_transit') AND ${filter}) / 
         (SELECT COUNT(*) FROM users WHERE role = 'rider') * 100 as rate
-    `);
+    `) as any[];
 
     res.json({
       counts: counts[0],
-      avgTime: (avgTime as any)[0].avg_hours || 0,
+      avgTime: avgTime[0].avg_hours || 0,
       onTimeRate,
-      utilization: Math.round((utilization as any)[0].rate || 0)
+      utilization: Math.round(utilization[0].rate || 0)
     });
   } catch (error) {
     console.error('Error fetching summary stats:', error);
@@ -208,7 +208,7 @@ router.get('/department-allocation', async (req, res) => {
       WHERE ${filter}
       GROUP BY requester_department, urgency_level
       ORDER BY requester_department, volume DESC
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching department allocation:', error);
@@ -230,7 +230,7 @@ router.get('/urgency-inflation', async (req, res) => {
       AND ${filter}
       GROUP BY urgency_level
       ORDER BY avg_completion_minutes ASC
-    `);
+    `) as any[];
     res.json(rows);
   } catch (error) {
     console.error('Error fetching urgency inflation:', error);
@@ -249,7 +249,7 @@ router.get('/location-insights', async (req, res) => {
       GROUP BY pickup_address 
       ORDER BY count DESC 
       LIMIT 3
-    `);
+    `) as any[];
     
     const [dropoffs] = await pool.query(`
       SELECT dropoff_address as name, COUNT(*) as count 
@@ -258,7 +258,7 @@ router.get('/location-insights', async (req, res) => {
       GROUP BY dropoff_address 
       ORDER BY count DESC 
       LIMIT 3
-    `);
+    `) as any[];
 
     res.json({ pickups, dropoffs });
   } catch (error) {
