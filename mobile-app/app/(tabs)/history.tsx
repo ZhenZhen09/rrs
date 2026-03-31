@@ -154,17 +154,42 @@ export default function HistoryScreen() {
           renderItem={({ item }) => (
             <Card style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.date}>{formatDisplayDate(item.delivery_date)}</Text>
+                <View>
+                  <Text style={styles.idLabel}>REQ #</Text>
+                  <Text style={styles.idValue}>{item.request_id}</Text>
+                </View>
                 <Badge 
                   label={item.delivery_status.toUpperCase()} 
                   status={(item.delivery_status === 'completed' || item.delivery_status === 'delivered') ? 'success' : 'danger'} 
                 />
               </View>
-              <Text style={styles.address} numberOfLines={1}>From: {item.pickup_location.address}</Text>
-              <Text style={styles.address} numberOfLines={1}>To: {item.dropoff_location.address}</Text>
+
+              <View style={styles.divider} />
+
+              <View style={styles.detailsContainer}>
+                <View style={styles.dateTimeRow}>
+                  <MaterialIcons name="event" size={14} color="#64748B" />
+                  <Text style={styles.date}>{formatDisplayDate(item.delivery_date)}</Text>
+                </View>
+
+                <View style={styles.addressRow}>
+                  <View style={styles.addressIconColumn}>
+                    <View style={styles.dot} />
+                    <View style={styles.line} />
+                    <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+                  </View>
+                  <View style={styles.addressTextColumn}>
+                    <Text style={styles.address} numberOfLines={1}>{item.pickup_location.address}</Text>
+                    <Text style={[styles.address, { marginTop: verticalScale(4) }]} numberOfLines={1}>{item.dropoff_location.address}</Text>
+                  </View>
+                </View>
+              </View>
+
               <View style={styles.footer}>
-                <Text style={styles.recipient}>Recipient: {item.recipient_name}</Text>
-                <Text style={styles.id}>ID: {item.request_id}</Text>
+                <View style={styles.recipientContainer}>
+                  <MaterialIcons name="person" size={12} color="#94A3B8" />
+                  <Text style={styles.recipient}>{item.recipient_name}</Text>
+                </View>
               </View>
             </Card>
           )}
@@ -198,39 +223,98 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   card: {
-    marginBottom: verticalScale(12),
-    opacity: 0.8,
+    marginBottom: verticalScale(16),
+    padding: scale(16),
+    backgroundColor: '#FFFFFF',
+    borderRadius: moderateScale(12),
+    // Subtle shadow for better card definition
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: verticalScale(8),
+    alignItems: 'flex-start',
+    marginBottom: verticalScale(12),
+  },
+  idLabel: {
+    fontSize: normalizeFontSize(10),
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  idValue: {
+    fontSize: normalizeFontSize(15),
+    fontWeight: '800',
+    color: '#0F172A', // Deep dark blue/black for high visibility
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: verticalScale(12),
+  },
+  detailsContainer: {
+    marginBottom: verticalScale(12),
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: verticalScale(12),
+    gap: 6,
   },
   date: {
-    fontWeight: '700',
+    fontSize: normalizeFontSize(13),
+    fontWeight: '600',
     color: '#64748B',
+  },
+  addressRow: {
+    flexDirection: 'row',
+  },
+  addressIconColumn: {
+    alignItems: 'center',
+    width: scale(20),
+    marginRight: scale(8),
+    paddingVertical: verticalScale(4),
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#CBD5E1',
+  },
+  line: {
+    width: 1,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 2,
+  },
+  addressTextColumn: {
+    flex: 1,
   },
   address: {
     fontSize: normalizeFontSize(13),
-    color: '#94A3B8',
-    marginBottom: 4,
+    color: '#475569',
+    fontWeight: '500',
   },
   footer: {
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: verticalScale(8),
+    paddingTop: verticalScale(8),
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+  },
+  recipientContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+    gap: 4,
   },
   recipient: {
-    fontSize: normalizeFontSize(11),
+    fontSize: normalizeFontSize(12),
     fontWeight: '600',
-    color: '#94A3B8',
-  },
-  id: {
-    fontSize: normalizeFontSize(10),
-    color: '#CBD5E1',
+    color: '#64748B',
   },
   empty: {
     marginTop: verticalScale(100),

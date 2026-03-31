@@ -5,12 +5,20 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { api } from '@/utils/api';
 
-// Disable push notifications for testing to prevent Expo Go errors
-const DISABLE_PUSH = true; 
+// Config: Allow push notifications
+const DISABLE_PUSH = false; 
+
+// Set how to handle notifications when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 /**
  * Hook to manage push notifications.
- * Currently disabled to prevent errors during Expo Go testing.
  */
 export function usePushNotifications(userId?: string) {
   const [expoPushToken, setExpoPushToken] = useState('');
@@ -29,7 +37,8 @@ export function usePushNotifications(userId?: string) {
     registerForPushNotificationsAsync().then(token => {
       if (token) {
         setExpoPushToken(token);
-        api.post('/api/users/push-token', { userId, pushToken: token })
+        // Updated to use the correct endpoint we just created
+        api.post('/api/notifications/register-token', { userId, token })
           .catch(err => console.error('Failed to register push token:', err));
       }
     });
