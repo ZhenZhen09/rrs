@@ -244,10 +244,40 @@ io.on('connection', (socket) => {
         exceptions: new Set()
       });
     } else {
+      const wasSignalLost = existingState.exceptions.has('signal_lost');
       existingState.lastPing = Date.now();
+      
+      // PROACTIVE CLEARING: If we had a signal_lost exception, clear it immediately
+      if (wasSignalLost) {
+        existingState.exceptions.delete('signal_lost');
+        const remainingExceptions = Array.from(existingState.exceptions);
+        
+        console.log(`📡 Signal recovered for ${requestId}. Clearing exception immediately.`);
+        
+        // Update DB instantly
+        const exceptionsJson = remainingExceptions.length > 0 ? JSON.stringify(remainingExceptions) : null;
+        const severity = remainingExceptions.includes('stagnant') ? 'warning' : null;
+        
+        pool.execute(
+          'UPDATE delivery_requests SET exceptions = ?, exception_severity = ? WHERE request_id = ?',
+          [exceptionsJson, severity, requestId]
+        ).catch(err => console.error('Error clearing signal_lost proactively:', err));
+
+        // Notify Admin UI instantly
+        if (remainingExceptions.length === 0) {
+          io.emit('exception-cleared', { requestId });
+        } else {
+          io.emit('exception-detected', {
+            requestId,
+            exceptions: remainingExceptions,
+            severity
+          });
+        }
+      }
+
       // Only update movement baseline if moved significantly to avoid clearing stagnation by GPS noise
       const dist = getDistance(existingState.lastLat, existingState.lastLng, lat, lng);
-      if (dist > 10) { // Reduced from 30m to 10m for easier testing
+      if (dist > 10) {
         existingState.lastLat = lat;
         existingState.lastLng = lng;
         existingState.stagnantSince = null;

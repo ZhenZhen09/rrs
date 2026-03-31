@@ -12,7 +12,7 @@ export const getJobDetails = async (id: string): Promise<Job> => {
 };
 
 export const updateJobStatus = async (id: string, status: string, remark: string) => {
-  return api.patch(`/api/requests/${id}/status`, {
+  return api.put(`/api/requests/${id}/status`, {
     status,
     remark,
     timestamp: new Date().toISOString(),

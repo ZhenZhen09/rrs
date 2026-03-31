@@ -53,8 +53,13 @@ export const useJobDetails = () => {
       // Snapshot the previous value
       const previousJob = queryClient.getQueryData<Job>(['job', id]);
 
-      // DO NOT optimistically update the main job status here to avoid the badge flickering
-      // if the request fails. Instead, we'll track the pending state via syncStatus.
+      // Optimistically update to the new value
+      if (previousJob) {
+        queryClient.setQueryData(['job', id], {
+          ...previousJob,
+          delivery_status: newStatusData.status
+        });
+      }
       
       return { previousJob };
     },
