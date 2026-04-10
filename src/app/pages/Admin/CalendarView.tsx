@@ -511,6 +511,10 @@ export function CalendarView() {
       {/* Task Details Modal */}
       <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
         <DialogContent className="max-w-[95vw] lg:max-w-6xl h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Request Details</DialogTitle>
+            <DialogDescription>View and manage the details of the selected delivery request.</DialogDescription>
+          </DialogHeader>
           {selectedTask && (
             <RequestDetailsPanel 
               request={selectedTask}

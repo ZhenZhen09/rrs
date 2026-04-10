@@ -242,38 +242,6 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
 
       {/* Scrollable Content (flex-1 overflow-auto min-h-0) */}
       <div className="flex-1 overflow-auto min-h-0">
-        {request.exceptions && request.exceptions.length > 0 && (
-          <div className={cn(
-            "mx-4 md:mx-8 mt-4 p-3 pr-4 rounded-[1.25rem] flex items-center gap-3 animate-in slide-in-from-top-4 duration-500",
-            request.exception_severity === 'critical' ? "bg-rose-50 border border-rose-100/50" : "bg-amber-50 border border-amber-100/50"
-          )}>
-            <div className="relative flex h-3 w-3 ml-2">
-              {request.exception_severity === 'critical' && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              )}
-              <span className={cn(
-                "relative inline-flex rounded-full h-3 w-3 shadow-sm",
-                request.exception_severity === 'critical' ? "bg-rose-500" : "bg-amber-500"
-              )}></span>
-            </div>
-            
-            <div className="flex-1">
-              <p className={cn("text-[11px] font-black uppercase tracking-tight", request.exception_severity === 'critical' ? "text-rose-900" : "text-amber-900")}>
-                {request.exceptions.includes('signal_lost') ? "SIGNAL LOST" : "RIDER STAGNANT"}
-              </p>
-            </div>
-
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => window.open(`tel:${request.recipient_contact}`)}
-              className={cn("h-7 px-3 rounded-lg font-black text-[9px] uppercase tracking-widest", request.exception_severity === 'critical' ? "text-rose-600 hover:bg-rose-100 hover:text-rose-700" : "text-amber-600 hover:bg-amber-100 hover:text-amber-700")}
-            >
-              Call Rider
-            </Button>
-          </div>
-        )}
-
         <div className="p-4 md:p-8 space-y-6 md:space-y-8">
           {/* Map Section */}
           <div className="h-[250px] md:h-[350px] w-full shrink-0">
@@ -403,10 +371,10 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                            <div className="absolute top-0 right-0 p-3 opacity-20">
                               <MessageSquare className="h-10 w-10 text-white" />
                            </div>
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                           <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                               Rider's Remarks
-                           </p>
+                           </div>
                            <p className="text-xs md:text-sm font-bold text-white/95 leading-relaxed italic relative z-10 break-words">
                              "{request.rider_remark}"
                            </p>

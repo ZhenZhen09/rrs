@@ -1,8 +1,22 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '@/utils/api';
+import { api, wakeUpServer } from '@/utils/api';
 import { useRouter, useSegments } from 'expo-router';
-import { Alert } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
+import * as TaskManager from 'expo-task-manager';
+
+const BACKGROUND_FETCH_TASK = 'BACKGROUND_SERVER_WAKEUP';
+
+// Priority 2: Define the background task to keep server awake
+TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
+  try {
+    console.log('[BackgroundFetch] Heartbeat triggered to keep Render awake...');
+    await wakeUpServer();
+    return TaskManager.TaskResult.NewData;
+  } catch (error) {
+    return TaskManager.TaskResult.Failed;
+  }
+});
 
 type User = {
   id: string;
@@ -14,6 +28,7 @@ type User = {
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
+  isServerReady: boolean;
   login: (email: string, password: string) => Promise<{ 
     success: boolean; 
     requirePasswordReset?: boolean; 
@@ -28,10 +43,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    console.warn('AuthContext used outside of Provider');
     return {
       user: null,
       isLoading: true,
+      isServerReady: false,
       login: async () => ({ success: false, error: 'Auth uninitialized' }),
       logout: async () => {},
     } as any;
@@ -47,16 +62,11 @@ function useProtectedRoute(user: User | null, isLoading: boolean) {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === 'login';
-    const inTabsGroup = segments[0] === '(tabs)';
-
-    console.log('Navigation State - User:', !!user, 'Segment:', segments[0]);
-
+    
+    // Priority 1: Optimistic Navigation
     if (!user && !inAuthGroup) {
-      // Not logged in, go to login
       router.replace('/login');
     } else if (user && (inAuthGroup || segments[0] === undefined)) {
-      // Logged in but on login screen or root, go to dashboard
-      console.log('User detected, redirecting to Dashboard...');
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments]);
@@ -65,8 +75,26 @@ function useProtectedRoute(user: User | null, isLoading: boolean) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null); 
   const [isLoading, setIsLoading] = useState(true);
+  const [isServerReady, setIsServerReady] = useState(false);
 
   useProtectedRoute(user, isLoading);
+
+  // Priority 2: Background Heartbeat & Server Readiness
+  useEffect(() => {
+    const handleWakeup = async () => {
+      await wakeUpServer();
+      setIsServerReady(true);
+    };
+    handleWakeup();
+
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        wakeUpServer(); // Re-ping when app comes to foreground
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -74,13 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await AsyncStorage.getItem('userToken');
         const userData = await AsyncStorage.getItem('userData');
         if (token && userData) {
-          console.log('Found saved session for:', JSON.parse(userData).email);
+          // Priority 1: Instant load from cache
           setUser(JSON.parse(userData));
         }
       } catch (e) {
-        console.error('Failed to load session or corrupted data. Clearing session.', e);
-        await AsyncStorage.removeItem('userToken');
-        await AsyncStorage.removeItem('userData');
+        console.error('Session error', e);
       } finally {
         setIsLoading(false);
       }
@@ -90,61 +116,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      console.log(`Mobile app contacting server at: ${api.defaults.baseURL}`);
-      const response = await api.post('/api/auth/login', { email, password });
-      
+      // Increase timeout for login specifically
+      const response = await api.post('/api/auth/login', { email, password }, { timeout: 60000 });
       const data = response.data;
 
       if (data.require_password_reset) {
         return { success: false, requirePasswordReset: true, userId: data.userId };
       }
 
-      console.log('Server login successful. Received user:', data.name);
-      
       const token = data.id || 'rider-session-token'; 
-
       await AsyncStorage.setItem('userToken', token);
       await AsyncStorage.setItem('userData', JSON.stringify(data));
       
       setUser(data);
       return { success: true };
     } catch (error: any) {
-      let errorMessage = "An unknown error occurred.";
-      if (error.response) {
-        errorMessage = error.response.data?.error || 'Invalid credentials';
-      } else if (error.request) {
-        errorMessage = "Network Error: Could not connect to server.";
-      } else {
-        errorMessage = error.message;
-      }
-      console.error('Login error detail:', errorMessage);
+      let errorMessage = error.response?.data?.error || "Network Error: Could not connect to server.";
       return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
     try {
-      // Clear storage first
       await AsyncStorage.multiRemove(['userToken', 'userData']);
-      
-      // Small delay to ensure storage is fully committed before state change
-      // which triggers navigation redirection via useProtectedRoute
-      setTimeout(() => {
-        setUser(null);
-        console.log('User logged out and session cleared.');
-      }, 500);
+      setUser(null);
     } catch (e) {
-      console.error('Logout failed', e);
-      setUser(null); // Force logout anyway
+      setUser(null);
     }
   };
 
   const contextValue = React.useMemo(() => ({
     user,
     isLoading,
+    isServerReady,
     login,
     logout
-  }), [user, isLoading]);
+  }), [user, isLoading, isServerReady]);
 
   return (
     <AuthContext.Provider value={contextValue}>

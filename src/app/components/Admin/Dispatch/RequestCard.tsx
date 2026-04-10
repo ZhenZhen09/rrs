@@ -3,11 +3,12 @@ import { Badge } from '../../ui/badge';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
-import { Clock, MapPin, Package, Truck, Bike, Loader2, AlertTriangle, WifiOff, User, CheckCheck } from 'lucide-react';
+import { Clock, MapPin, Package, Truck, Bike, Loader2, AlertTriangle, WifiOff, User, CheckCheck, Signal, SignalHigh } from 'lucide-react';
 import { cn } from '../../ui/utils';
 import { DeliveryRequest } from '../../../types';
 import { formatLocalDate } from '../../../utils/dateUtils';
 import { getTypeIcon, getTypeColor } from '../../../utils/categoryUtils';
+import { useData } from '../../../context/DataContext';
 
 interface RequestCardProps {
   request: DeliveryRequest;
@@ -24,6 +25,8 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   isMultiSelected = false,
   onToggleSelection
 }) => {
+  const { riderPresence } = useData();
+  
   const getStatusConfig = (status: string, deliveryStatus?: string, isOptimistic?: boolean) => {
     if (isOptimistic) {
       return { label: 'PROCESSING', color: 'bg-amber-50 text-amber-700 border-amber-100', dot: 'bg-amber-500 animate-pulse' };
@@ -50,8 +53,8 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   const isRevision = request.status === 'returned_for_revision';
   const isResubmitted = request.status === 'submitted_waiting';
 
-  const hasException = request.exceptions && request.exceptions.length > 0;
-  const isCritical = request.exception_severity === 'critical';
+  // Real-time Presence for assigned rider
+  const riderStatus = request.assigned_rider_id ? (riderPresence[request.assigned_rider_id] || 'offline') : null;
 
   return (
     <Card 
@@ -60,12 +63,8 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         isSelected 
           ? "border-primary bg-white shadow-xl shadow-primary/10 ring-4 ring-primary/5" 
           : "border-transparent bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-lg",
-        // Senior UX: Resubmitted items (submitted_waiting) get full opacity immediately to signal restoration,
-        // while other optimistic states (like initial submission or approval) stay dimmed during sync.
         request.is_optimistic && !isResubmitted ? "opacity-70 grayscale-[0.3] pointer-events-none" : "",
         isRevision ? "opacity-50 grayscale-[0.2]" : "",
-        hasException && isCritical ? "border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.15)] animate-pulse" : "",
-        hasException && !isCritical ? "border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.15)]" : ""
       )}
       onClick={onClick}
     >
@@ -106,23 +105,23 @@ export const RequestCard: React.FC<RequestCardProps> = ({
             )}
           </div>
         
-        {/* Minimalist Status Pip (Watchdog Indicator) */}
-        {hasException && (
-          <div className="flex items-center gap-2">
-            <div className="relative flex h-3 w-3">
-              {isCritical && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              )}
-              <span 
-                className={cn(
-                  "relative inline-flex rounded-full h-3 w-3 shadow-sm border border-white",
-                  isCritical ? "bg-rose-500" : "bg-amber-500"
-                )}
-                title={Array.isArray(request.exceptions) ? request.exceptions.map(e => e.replace('_', ' ')).join(' & ') : 'Exception detected'}
-              />
+        {/* Senior Status Indicator: Exception vs Presence */}
+        <div className="flex items-center gap-2">
+          {request.assigned_rider_id && (
+            <div className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-lg border",
+              riderStatus === 'online' ? "bg-emerald-50 border-emerald-100" : "bg-slate-100 border-slate-200"
+            )}>
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                riderStatus === 'online' ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+              )} />
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                {riderStatus === 'online' ? 'LIVE' : 'OFF'}
+              </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Time & Type Badge */}
@@ -152,13 +151,23 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         <h4 className="text-base font-[900] text-slate-900 tracking-tight group-hover:text-primary transition-colors">
           {request.requester_name}
         </h4>
-        <div className="flex items-center gap-1.5 mt-1">
-          <div className="w-1 h-1 rounded-full bg-slate-300" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{request.requester_department}</p>
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-slate-300" />
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{request.requester_department}</p>
+          </div>
+          {request.assigned_rider_name && (
+            <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded-md">
+              <Bike className="h-3 w-3 text-slate-500" />
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-tight truncate max-w-[80px]">
+                {request.assigned_rider_name.split(' ')[0]}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Location Route - Updated to match design */}
+      {/* Location Route */}
       <div className="space-y-4 relative py-1">
         <div className="absolute left-[7px] top-[12px] bottom-[12px] w-[1px] border-l border-dashed border-slate-200" />
         

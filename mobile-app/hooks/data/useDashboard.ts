@@ -105,15 +105,18 @@ export const useDashboard = () => {
     if (!user?.id) return;
     
     socketRef.current = io(Config.API_URL, {
-      transports: ['websocket'],
-      reconnectionAttempts: 5
+      transports: ['websocket', 'polling'], // Allow polling fallback for Expo Go
+      reconnectionAttempts: 10,
+      timeout: 10000,
     });
 
     const socket = socketRef.current;
 
     socket.on('connect', () => {
       console.log('Socket connected - Dashboard');
-      socket.emit('join', user.id);
+      if (user?.id) {
+        socket.emit('join', user.id);
+      }
     });
 
     socket.on('new_assignment', (data) => {

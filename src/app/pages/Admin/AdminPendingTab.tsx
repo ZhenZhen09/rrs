@@ -130,10 +130,10 @@ export function AdminPendingTab({
                   <h4 className="font-[900] text-slate-900 text-lg leading-none tracking-tight">
                     {req.requester_name}
                   </h4>
-                  <p className="text-[10px] text-primary font-black mt-2 uppercase tracking-widest flex items-center gap-1.5">
+                  <div className="text-[10px] text-primary font-black mt-2 uppercase tracking-widest flex items-center gap-1.5">
                     <div className="w-1 h-1 rounded-full bg-primary" />
                     {req.requester_department}
-                  </p>
+                  </div>
                 </div>
               </div>
             </div>

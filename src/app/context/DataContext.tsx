@@ -6,6 +6,7 @@ import { io, Socket } from 'socket.io-client';
 interface DataContextType {
   requests: DeliveryRequest[];
   notifications: Notification[];
+  riderPresence: Record<string, 'online' | 'offline'>;
   submitRequest: (request: Omit<DeliveryRequest, 'request_id' | 'requester_id' | 'created_at' | 'status'>) => Promise<void>;
   resubmitRequest: (requestId: string, request: Omit<DeliveryRequest, 'request_id' | 'requester_id' | 'created_at' | 'status'>) => Promise<void>;
   approveRequest: (requestId: string, riderId: string, adminRemark?: string) => Promise<void>;
@@ -26,6 +27,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [riderPresence, setRiderPresence] = useState<Record<string, 'online' | 'offline'>>({});
   const socketRef = React.useRef<Socket | null>(null);
   const pendingOptimisticIds = React.useRef<Set<string>>(new Set());
 
@@ -135,6 +137,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       console.log('Web Socket connected');
       socket.emit('join-room', user.id); // For general user updates
       socket.emit('join-room', 'admin-room'); // If admin, join admin broadcast
+    });
+
+    socket.on('presence-sync', (data: { exceptions: any[], onlineRiders: string[] }) => {
+      setRiderPresence(prev => {
+        const newState = { ...prev };
+        data.onlineRiders.forEach(id => {
+          newState[id] = 'online';
+        });
+        return newState;
+      });
+
+      // Also sync exceptions if they exist
+      if (data.exceptions && data.exceptions.length > 0) {
+        setRequests(prev => {
+          const updated = [...(prev || [])];
+          data.exceptions.forEach(item => {
+            const idx = updated.findIndex(r => r.request_id === item.requestId);
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], exceptions: item.exceptions, exception_severity: item.severity };
+            }
+          });
+          return updated;
+        });
+      }
+    });
+
+    socket.on('rider-presence-changed', (data: { riderId: string, status: 'online' | 'offline' }) => {
+      setRiderPresence(prev => ({ ...prev, [data.riderId]: data.status }));
     });
 
     socket.on('rider-location-updated', (data: { requestId: string, lat: number, lng: number }) => {
@@ -478,6 +508,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       value={{
         requests,
         notifications,
+        riderPresence,
         submitRequest,
         resubmitRequest,
         approveRequest,

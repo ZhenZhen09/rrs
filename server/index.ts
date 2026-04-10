@@ -84,6 +84,10 @@ interface RequestPingState {
 }
 const requestPingState = new Map<string, RequestPingState>();
 
+// --- REAL-TIME PRESENCE ENGINE ---
+const onlineRiders = new Map<string, { socketId: string, lastSeen: number }>();
+const DISCONNECT_GRACE_PERIOD = 30000; // 30 seconds grace period for brief signal drops
+
 class RequestWatchdog {
   private interval: NodeJS.Timeout | null = null;
   private io: Server;
@@ -99,7 +103,7 @@ class RequestWatchdog {
 
   async check() {
     const now = Date.now();
-    const SIGNAL_LOST_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+    const SIGNAL_LOST_THRESHOLD = 5 * 60 * 1000; // 5 minutes (Fallback threshold)
     const STAGNANT_THRESHOLD = 10 * 60 * 1000;  // 10 minutes
 
     try {
@@ -114,41 +118,58 @@ class RequestWatchdog {
       for (const req of activeRequests) {
         const state = requestPingState.get(req.request_id);
         const currentExceptions = new Set<string>();
+        
+        // Check Presence Engine for instant signal loss detection
+        const isOnline = onlineRiders.has(req.assigned_rider_id);
 
         if (!state) {
-          // If no state yet and request is in progress, it might already be "lost" if it was approved long ago
-          continue; 
-        }
+          // Initialize state if it doesn't exist
+          if (!isOnline && req.assigned_rider_id) {
+             currentExceptions.add('signal_lost');
+          }
+        } else {
+          // 1. Check Signal Loss (Presence Check + Watchdog Fallback)
+          if (!isOnline || (now - state.lastPing > SIGNAL_LOST_THRESHOLD)) {
+            currentExceptions.add('signal_lost');
+          }
 
-        // 1. Check Signal Loss
-        if (now - state.lastPing > SIGNAL_LOST_THRESHOLD) {
-          currentExceptions.add('signal_lost');
-        }
-
-        // 2. Check Stagnation (Rider is in_progress but not moving)
-        if (req.delivery_status === 'in_progress' || req.delivery_status === 'in_transit') {
-          const distance = getDistance(state.lastLat, state.lastLng, Number(req.current_lat || 0), Number(req.current_lng || 0));
-          
-          if (distance < 20) { // Less than 20m movement
-            if (!state.stagnantSince) {
-              state.stagnantSince = now;
-            } else if (now - state.stagnantSince > STAGNANT_THRESHOLD) {
-              currentExceptions.add('stagnant');
+          // 2. Check Stagnation (Rider is in_progress but not moving)
+          if (req.delivery_status === 'in_progress' || req.delivery_status === 'in_transit') {
+            const distance = getDistance(state.lastLat, state.lastLng, Number(req.current_lat || 0), Number(req.current_lng || 0));
+            
+            if (distance < 20) { // Less than 20m movement
+              if (!state.stagnantSince) {
+                state.stagnantSince = now;
+              } else if (now - state.stagnantSince > STAGNANT_THRESHOLD) {
+                currentExceptions.add('stagnant');
+              }
+            } else {
+              state.stagnantSince = null;
+              state.lastLat = Number(req.current_lat);
+              state.lastLng = Number(req.current_lng);
             }
-          } else {
-            state.stagnantSince = null;
-            state.lastLat = Number(req.current_lat);
-            state.lastLng = Number(req.current_lng);
           }
         }
 
         // 3. Emit if exceptions changed or exist
-        const oldExceptions = Array.from(state.exceptions).sort().join(',');
+        const stateWithExceptions = state || { exceptions: new Set() };
+        const oldExceptions = Array.from(stateWithExceptions.exceptions).sort().join(',');
         const newExceptionsList = Array.from(currentExceptions).sort();
         const newExceptionsStr = newExceptionsList.join(',');
 
         if (newExceptionsStr !== oldExceptions) {
-          state.exceptions = currentExceptions as any;
+          if (state) {
+            state.exceptions = currentExceptions as any;
+          } else {
+            requestPingState.set(req.request_id, {
+              lastPing: now,
+              lastLat: Number(req.current_lat || 0),
+              lastLng: Number(req.current_lng || 0),
+              stagnantSince: null,
+              exceptions: currentExceptions as any
+            });
+          }
+
           if (newExceptionsList.length > 0) {
             const severity = currentExceptions.has('signal_lost') ? 'critical' : 'warning';
             console.log(`⚠️ Exception detected for ${req.request_id}: ${newExceptionsStr}`);
@@ -186,13 +207,14 @@ class RequestWatchdog {
 // Socket.io logic for real-time tracking
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  let sessionRiderId: string | null = null;
 
   // Support for Web-app "join-room"
   socket.on('join-room', (room) => {
     socket.join(room);
     console.log(`User ${socket.id} joined room: ${room}`);
     
-    // MBE Sync: Send current active exceptions to the newly joined admin
+    // MBE Sync: Send current active exceptions and presence to the newly joined admin
     if (room === 'admin-room') {
       const activeExceptions = Array.from(requestPingState.entries())
         .filter(([id, state]) => state.exceptions.size > 0)
@@ -202,9 +224,12 @@ io.on('connection', (socket) => {
           severity: state.exceptions.has('signal_lost') ? 'critical' : 'warning'
         }));
       
-      if (activeExceptions.length > 0) {
-        socket.emit('mbe-sync', activeExceptions);
-      }
+      const onlineRiderIds = Array.from(onlineRiders.keys());
+      
+      socket.emit('presence-sync', {
+        exceptions: activeExceptions,
+        onlineRiders: onlineRiderIds
+      });
     }
   });
 
@@ -212,7 +237,18 @@ io.on('connection', (socket) => {
   socket.on('join',(userID) => {
     if (userID){
       socket.join(userID);
-      console.log(`Rider ${userID} joined personal room`); 
+      sessionRiderId = userID;
+      onlineRiders.set(userID, { socketId: socket.id, lastSeen: Date.now() });
+      console.log(`Rider ${userID} is online`); 
+
+      // Notify admins immediately
+      io.to('admin-room').emit('rider-presence-changed', {
+        riderId: userID,
+        status: 'online'
+      });
+
+      // Instantly trigger watchdog check to clear signal_lost
+      watchdog.check();
     }
   });
 
@@ -225,74 +261,69 @@ io.on('connection', (socket) => {
   });
 
   socket.on('update-location', async (data) => {
-    // data: { riderId, lat, lng, requestId }
     const { requestId, lat, lng, riderId } = data;
-    
-    // Broadcast to all (Admin map movement)
-    io.emit('rider-location-updated', data);
-
     if (!requestId || !lat || !lng || !riderId) return;
 
-    // MBE Update: Heartbeat tracking
-    const existingState = requestPingState.get(requestId);
-    if (!existingState) {
-      requestPingState.set(requestId, {
-        lastPing: Date.now(),
-        lastLat: lat,
-        lastLng: lng,
-        stagnantSince: null,
-        exceptions: new Set()
-      });
-    } else {
-      const wasSignalLost = existingState.exceptions.has('signal_lost');
-      existingState.lastPing = Date.now();
-      
-      // PROACTIVE CLEARING: If we had a signal_lost exception, clear it immediately
-      if (wasSignalLost) {
-        existingState.exceptions.delete('signal_lost');
-        const remainingExceptions = Array.from(existingState.exceptions);
-        
-        console.log(`📡 Signal recovered for ${requestId}. Clearing exception immediately.`);
-        
-        // Update DB instantly
-        const exceptionsJson = remainingExceptions.length > 0 ? JSON.stringify(remainingExceptions) : null;
-        const severity = remainingExceptions.includes('stagnant') ? 'warning' : null;
-        
-        pool.execute(
-          'UPDATE delivery_requests SET exceptions = ?, exception_severity = ? WHERE request_id = ?',
-          [exceptionsJson, severity, requestId]
-        ).catch(err => console.error('Error clearing signal_lost proactively:', err));
+    try {
+      // 1. SECURITY & INTEGRITY CHECK: Only track if the request is still active
+      const [statusRows] = await pool.execute(
+        'SELECT delivery_status FROM delivery_requests WHERE request_id = ?',
+        [requestId]
+      );
+      const requestStatus = (statusRows as any[])[0]?.delivery_status;
 
-        // Notify Admin UI instantly
-        if (remainingExceptions.length === 0) {
-          io.emit('exception-cleared', { requestId });
-        } else {
-          io.emit('exception-detected', {
-            requestId,
-            exceptions: remainingExceptions,
-            severity
-          });
+      if (['completed', 'failed', 'cancelled', 'disapproved'].includes(requestStatus)) {
+        return;
+      }
+
+      // 2. Broadcast movement to Admin Dashboard
+      io.emit('rider-location-updated', data);
+
+      // 3. Heartbeat Tracking & Exception Clearing
+      const existingState = requestPingState.get(requestId);
+      if (!existingState) {
+        requestPingState.set(requestId, {
+          lastPing: Date.now(),
+          lastLat: lat,
+          lastLng: lng,
+          stagnantSince: null,
+          exceptions: new Set()
+        });
+      } else {
+        const wasSignalLost = existingState.exceptions.has('signal_lost');
+        existingState.lastPing = Date.now();
+        
+        if (wasSignalLost) {
+          existingState.exceptions.delete('signal_lost');
+          const remainingExceptions = Array.from(existingState.exceptions);
+          const exceptionsJson = remainingExceptions.length > 0 ? JSON.stringify(remainingExceptions) : null;
+          const severity = remainingExceptions.includes('stagnant') ? 'warning' : null;
+          
+          await pool.execute(
+            'UPDATE delivery_requests SET exceptions = ?, exception_severity = ? WHERE request_id = ?',
+            [exceptionsJson, severity, requestId]
+          );
+
+          if (remainingExceptions.length === 0) {
+            io.emit('exception-cleared', { requestId });
+          } else {
+            io.emit('exception-detected', { requestId, exceptions: remainingExceptions, severity });
+          }
+        }
+
+        const dist = getDistance(existingState.lastLat, existingState.lastLng, lat, lng);
+        if (dist > 10) {
+          existingState.lastLat = lat;
+          existingState.lastLng = lng;
+          existingState.stagnantSince = null;
         }
       }
 
-      // Only update movement baseline if moved significantly to avoid clearing stagnation by GPS noise
-      const dist = getDistance(existingState.lastLat, existingState.lastLng, lat, lng);
-      if (dist > 10) {
-        existingState.lastLat = lat;
-        existingState.lastLng = lng;
-        existingState.stagnantSince = null;
-      }
-    }
-
-    try {
+      // 4. Geofencing & Database Logging
       const now = Date.now();
       const stateKey = `${requestId}_${riderId}`;
       let state = riderLocationState.get(stateKey);
-      let shouldLogToDB = false;
-
-
-      // --- GEOFENCING LOGIC ---
-      // Fetch request details to get dropoff coordinates and current status
+      
       const [rows] = await pool.execute(
         'SELECT dropoff_lat, dropoff_lng, delivery_status FROM delivery_requests WHERE request_id = ?',
         [requestId]
@@ -301,73 +332,48 @@ io.on('connection', (socket) => {
 
       if (request && request.delivery_status === 'in_progress') {
         const distanceToDropoff = getDistance(lat, lng, Number(request.dropoff_lat), Number(request.dropoff_lng));
-        
         if (distanceToDropoff <= GEOFENCE_RADIUS_M) {
-          console.log(`🎯 Geofence Triggered: Rider ${riderId} arrived at destination for Request ${requestId}`);
-          
-          // 1. Update status in database
-          await pool.execute(
-            'UPDATE delivery_requests SET delivery_status = ? WHERE request_id = ?',
-            ['arrived', requestId]
-          );
-
-          // 2. Log status change
-          await pool.execute(
-            'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
-            [requestId, riderId, 'arrived', `Automated Geofence: Rider within ${GEOFENCE_RADIUS_M}m of destination`]
-          );
-
-          // 3. Emit real-time status update to all clients
-          io.emit('delivery-status-updated', { 
-            requestId, 
-            status: 'arrived', 
-            remark: 'Automated: Rider Arrived' 
-          });
-
-          // 4. Sync with specific job room (Mobile app)
-          io.to(`job_${requestId}`).emit('job-status-changed', {
-            requestId,
-            status: 'arrived',
-            updatedBy: 'system',
-            message: 'Rider has arrived at the destination.'
-          });
+          await pool.execute('UPDATE delivery_requests SET delivery_status = ? WHERE request_id = ?', ['arrived', requestId]);
+          await pool.execute('INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)', 
+            [requestId, riderId, 'arrived', `Automated Geofence: Rider within ${GEOFENCE_RADIUS_M}m of destination`]);
+          io.emit('delivery-status-updated', { requestId, status: 'arrived', remark: 'Automated: Rider Arrived' });
+          io.to(`job_${requestId}`).emit('job-status-changed', { requestId, status: 'arrived', updatedBy: 'system', message: 'Rider has arrived.' });
         }
       }
-      // --- END GEOFENCING LOGIC ---
 
-      if (!state) {
-        shouldLogToDB = true;
-      } else {
-        const timeElapsed = now - state.lastLogTime;
-        const distanceMoved = getDistance(state.lat, state.lng, lat, lng);
-
-        // Log every 60s or if moved 50m
-        if ((timeElapsed >= DB_LOG_INTERVAL_MS && distanceMoved > 10) || distanceMoved >= DB_LOG_DISTANCE_M) {
-          shouldLogToDB = true;
-        }
-      }
+      let shouldLogToDB = !state || (now - state.lastLogTime >= DB_LOG_INTERVAL_MS && getDistance(state.lat, state.lng, lat, lng) > 10) || getDistance(state.lat, state.lng, lat, lng) >= DB_LOG_DISTANCE_M;
 
       if (shouldLogToDB) {
-        await pool.execute(
-          'INSERT INTO location_logs (request_id, rider_id, lat, lng) VALUES (?, ?, ?, ?)',
-          [requestId, riderId, lat, lng]
-        );
-        await pool.execute(
-          'UPDATE delivery_requests SET current_lat = ?, current_lng = ? WHERE request_id = ?',
-          [lat, lng, requestId]
-        );
-
-        // Update in-memory state
+        await pool.execute('INSERT INTO location_logs (request_id, rider_id, lat, lng) VALUES (?, ?, ?, ?)', [requestId, riderId, lat, lng]);
+        await pool.execute('UPDATE delivery_requests SET current_lat = ?, current_lng = ? WHERE request_id = ?', [lat, lng, requestId]);
         riderLocationState.set(stateKey, { lat, lng, lastLogTime: now });
       }
-
     } catch (err) {
-      console.error('Error in location update / geofencing:', err);
+      console.error('Error in location update handler:', err);
     }
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+    if (sessionRiderId) {
+      // Small delay before marking offline to handle quick reconnections (refresh/flaky signal)
+      const riderIdToClear = sessionRiderId;
+      setTimeout(() => {
+        const currentSocket = onlineRiders.get(riderIdToClear);
+        if (currentSocket && currentSocket.socketId === socket.id) {
+          onlineRiders.delete(riderIdToClear);
+          console.log(`Rider ${riderIdToClear} marked OFFLINE after grace period`);
+          
+          io.to('admin-room').emit('rider-presence-changed', {
+            riderId: riderIdToClear,
+            status: 'offline'
+          });
+
+          // Trigger watchdog to immediately flag active requests
+          watchdog.check();
+        }
+      }, DISCONNECT_GRACE_PERIOD);
+    }
   });
 });
 

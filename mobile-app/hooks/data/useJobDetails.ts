@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Linking, Platform } from 'react-native';
-import * as Location from 'expo-location';
 import { io, Socket } from 'socket.io-client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getJobDetails, updateJobStatus } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
+import { useLocation } from '@/context/LocationContext';
 import { Job } from '@/types';
 import { Config } from '@/constants/Config';
 
@@ -17,9 +17,9 @@ export const useJobDetails = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { startTracking, stopTracking, isTracking } = useLocation();
   const queryClient = useQueryClient();
   
-  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [statusType, setStatusType] = useState<'completed' | 'failed' | null>(null);
   const [selectedReason, setSelectedReason] = useState<string>('');
@@ -91,7 +91,7 @@ export const useJobDetails = () => {
     onSuccess: (data, variables) => {
       setSyncStatus('synced');
       if (variables.status === 'in_progress') {
-        startTracking();
+        startTracking(id as string);
       } else if (['completed', 'failed', 'cancelled'].includes(variables.status)) {
         stopTracking();
       }
@@ -102,8 +102,6 @@ export const useJobDetails = () => {
 
   const updating = updateMutation.isPending || syncStatus === 'pending' || syncStatus === 'verifying';
   const socketRef = useRef<Socket | null>(null);
-  const watchId = useRef<Location.LocationSubscription | null>(null);
-  const isMounted = useRef(true);
 
   const COMPLETED_REASONS = [
     'Handed directly to recipient',
@@ -120,58 +118,6 @@ export const useJobDetails = () => {
     'Vehicle issue',
     'Client cancelled',
   ];
-
-  const requestLocationPermission = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    setLocationPermission(status === 'granted');
-  };
-
-  const startTracking = async () => {
-    if (!locationPermission) {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      setLocationPermission(true);
-    }
-
-    if (watchId.current) return;
-
-    try {
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 20,
-          timeInterval: 15000,
-        },
-        (location) => {
-          const { latitude, longitude } = location.coords;
-          if (socketRef.current && job) {
-            socketRef.current.emit('update-location', {
-              riderId: user?.id,
-              riderName: user?.name,
-              lat: latitude,
-              lng: longitude,
-              requestId: job.request_id,
-            });
-          }
-        }
-      );
-
-      if (!isMounted.current) {
-        subscription.remove();
-      } else {
-        watchId.current = subscription;
-      }
-    } catch (err) {
-      console.error('Error starting location tracking:', err);
-    }
-  };
-
-  const stopTracking = () => {
-    if (watchId.current) {
-      watchId.current.remove();
-      watchId.current = null;
-    }
-  };
 
   const handleUpdateStatus = (newStatus: string) => {
     if (newStatus === 'in_progress') {
@@ -208,23 +154,29 @@ export const useJobDetails = () => {
   };
 
   useEffect(() => {
-    isMounted.current = true;
-    requestLocationPermission();
-
     socketRef.current = io(Config.API_URL, { 
-      transports: ['websocket'],
-      reconnectionAttempts: 3
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      timeout: 10000,
+    });
+
+    const socket = socketRef.current;
+
+    socket.on('connect', () => {
+      console.log('Socket connected - Job Details');
+      if (user?.id) {
+        socket.emit('join', user.id);
+      }
     });
 
     return () => {
-      isMounted.current = false;
-      stopTracking();
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      if (socket) {
+        socket.off('connect');
+        socket.disconnect();
         socketRef.current = null;
       }
     };
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     if (socketRef.current && id) {
@@ -241,10 +193,10 @@ export const useJobDetails = () => {
   }, [id, queryClient]);
 
   useEffect(() => {
-    if (job?.delivery_status === 'in_progress') {
-      startTracking();
+    if (job?.delivery_status === 'in_progress' && !isTracking) {
+      startTracking(id as string);
     }
-  }, [job?.delivery_status]);
+  }, [job?.delivery_status, isTracking, id]);
 
   const openInNativeMaps = (lat: number, lng: number, label: string) => {
     const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
@@ -291,5 +243,6 @@ export const useJobDetails = () => {
     callPickupContact,
     router,
     syncStatus,
+    isTracking,
   };
 };

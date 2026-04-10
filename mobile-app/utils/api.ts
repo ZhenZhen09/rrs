@@ -17,7 +17,8 @@ export const api = axios.create({
 export const wakeUpServer = async () => {
   try {
     console.log('[WakeUp] Pinging server to trigger spin-up...');
-    await api.get('/ping', { timeout: 30000 }); // Longer timeout only for wakeup
+    // Use /api/ping which is a real route on the server
+    await api.get('/api/ping', { timeout: 45000 }); 
     console.log('[WakeUp] Server responded! Ready for action.');
   } catch (error) {
     console.log('[WakeUp] Ping sent, server warming up in background...');

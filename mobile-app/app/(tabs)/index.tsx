@@ -7,6 +7,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useDashboard } from '@/hooks/data/useDashboard';
+import { useLocation } from '@/context/LocationContext';
 import Bugsnag from '@bugsnag/expo';
 
 export default function DashboardScreen() {
@@ -28,6 +29,8 @@ export default function DashboardScreen() {
     refreshing,
     router,
   } = useDashboard();
+
+  const { isTracking } = useLocation();
 
   const isDark = useThemeColor({ light: '', dark: '' }, 'background') === Colors.dark.background;
   const themeColors = isDark ? Colors.dark : Colors.light;
@@ -58,7 +61,15 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.appBarTitles}>
              <Text style={styles.appBarTitle}>Rider Scheduling System</Text>
-             <Text style={styles.appBarSubtitle}>Rider Dashboard</Text>
+             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.appBarSubtitle}>Rider Dashboard</Text>
+                {isTracking && (
+                  <View style={styles.liveIndicator}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>LIVE GPS</Text>
+                  </View>
+                )}
+             </View>
           </View>
         </View>
         <View style={styles.appBarRight}>
@@ -399,11 +410,36 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.3,
   },
-  appBarSubtitle: {
+  app_bar_subtitle: {
     fontSize: normalizeFontSize(13),
     color: '#64748B',
     marginTop: verticalScale(2),
     fontWeight: '500',
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(2),
+    borderRadius: moderateScale(10),
+    marginLeft: scale(8),
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginTop: verticalScale(2),
+  },
+  liveDot: {
+    width: moderateScale(6),
+    height: moderateScale(6),
+    borderRadius: moderateScale(3),
+    backgroundColor: '#EF4444',
+    marginRight: scale(4),
+  },
+  liveText: {
+    fontSize: normalizeFontSize(10),
+    color: '#EF4444',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   appBarRight: {
     flexDirection: 'row',
