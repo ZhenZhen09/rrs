@@ -70,9 +70,15 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => {
       console.log('Socket connected - System Ready');
       setIsSocketConnected(true);
-      // If user is already logged in (optimistic load), join immediately
       if (user?.id) {
         socket.emit('join', user.id);
+      }
+    });
+
+    socket.on('reconnect', () => {
+      console.log('Socket reconnected');
+      if (user?.id) {
+        socketRef.current?.emit('join', user.id);
       }
     });
 
@@ -118,6 +124,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     }
 
     // If already tracking this request, don't restart
+    if (isTracking && activeRequestId.current === requestId) return;
+
     activeRequestId.current = requestId;
 
     // --- IMMEDIATE LOCATION PING ---
@@ -139,38 +147,53 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Foreground tracking (higher frequency for active UI)
-
-    foregroundSubscription.current = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.High,
-        distanceInterval: 20,
-        timeInterval: 15000,
-      },
-      (location) => {
-        const { latitude, longitude } = location.coords;
-        if (socketRef.current && user && activeRequestId.current) {
-          socketRef.current.emit('update-location', {
-            riderId: user.id,
-            riderName: user.name,
-            lat: latitude,
-            lng: longitude,
-            requestId: activeRequestId.current,
-          });
+    try {
+      foregroundSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 10, // Increased sensitivity for production
+          timeInterval: 10000,  // Every 10 seconds
+        },
+        (location) => {
+          const { latitude, longitude } = location.coords;
+          console.log('📍 Foreground location update:', latitude, longitude);
+          if (socketRef.current && user && activeRequestId.current) {
+            socketRef.current.emit('update-location', {
+              riderId: user.id,
+              riderName: user.name,
+              lat: latitude,
+              lng: longitude,
+              requestId: activeRequestId.current,
+            });
+          }
         }
-      }
-    );
+      );
+      console.log('✅ Foreground tracking started');
+    } catch (err) {
+      console.error('❌ Failed to start foreground tracking:', err);
+    }
 
-    // Background tracking
-    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 50, // Slightly less frequent in background to save battery
-      deferredUpdatesInterval: 60000,
-      foregroundService: {
-        notificationTitle: "Delivery in Progress",
-        notificationBody: "Your location is being shared with the dispatcher.",
-        notificationColor: "#0F172A",
-      },
-    });
+    // Background tracking - Wrapped in try/catch to prevent total failure if background perm denied
+    try {
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+      if (bgStatus === 'granted') {
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 50,
+          deferredUpdatesInterval: 60000,
+          foregroundService: {
+            notificationTitle: "CFA-Rss: Delivery Active",
+            notificationBody: "Sharing your live location with dispatch.",
+            notificationColor: "#0F172A",
+          },
+        });
+        console.log('✅ Background tracking started');
+      } else {
+        console.warn('⚠️ Background permission NOT granted. Tracking will stop if app is closed.');
+      }
+    } catch (err) {
+      console.warn('⚠️ Background tracking failed to start:', err);
+    }
 
     setIsTracking(true);
   };

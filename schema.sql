@@ -28,17 +28,17 @@ CREATE TABLE IF NOT EXISTS delivery_requests (
     time_window VARCHAR(50) NOT NULL,
     
     -- Pickup Location details
-    pickup_lat DECIMAL(10, 8),
+    pickup_lat DECIMAL(11, 8),
     pickup_lng DECIMAL(11, 8),
     pickup_address TEXT NOT NULL,
     
     -- Dropoff Location details
-    dropoff_lat DECIMAL(10, 8),
+    dropoff_lat DECIMAL(11, 8),
     dropoff_lng DECIMAL(11, 8),
     dropoff_address TEXT NOT NULL,
 
     -- Live Tracking details (Grab-like feature)
-    current_lat DECIMAL(10, 8),
+    current_lat DECIMAL(11, 8),
     current_lng DECIMAL(11, 8),
     
     recipient_name VARCHAR(255) NOT NULL,
