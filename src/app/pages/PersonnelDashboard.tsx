@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea';
 import { Plus, Calendar, MapPin, Clock, User as UserIcon, Package, CheckCircle2, XCircle, Loader2, Bike, ListFilter, History as HistoryIcon, Search, ChevronLeft, ChevronRight, AlertTriangle, Banknote, FileText, Building2, Info, Check, ShieldCheck, ShoppingCart, Briefcase, FileSignature, Wallet, ClipboardCheck, Truck, MoveRight, Landmark, RotateCcw, Zap } from 'lucide-react';
 import { format } from 'date-fns';
-import { formatLocalDate } from '../utils/dateUtils';
+import { formatLocalDate, formatDateTime } from '../utils/dateUtils';
 import { TIME_SLOTS, type Location, DeliveryRequest, RequestType, REQUEST_CATEGORIES } from '../types';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
