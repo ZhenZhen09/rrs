@@ -32,19 +32,22 @@ export const getLocalDateStr = (date: Date = new Date()): string => {
   return `${y}-${m}-${d}`;
 };
 
-/**
- * Formats a full timestamp (ISO or MySQL format) into a human-readable date and time.
- */
 export const formatDateTime = (dateStr: string, formatStr: string = 'MMM d, yyyy h:mm a'): string => {
   if (!dateStr) return 'N/A';
   try {
     let date: Date;
     if (dateStr.includes(' ') && !dateStr.includes('T') && !dateStr.includes('Z')) {
-      // Handle MySQL "YYYY-MM-DD HH:MM:SS" format
-      date = new Date(dateStr.replace(' ', 'T') + 'Z');
+      // MySQL format: "YYYY-MM-DD HH:MM:SS"
+      // Replace space with T but do NOT append Z. 
+      // This allows the browser to parse it as LOCAL time if it was stored as local,
+      // or we can just pass the string directly to new Date() which works in most modern browsers.
+      date = new Date(dateStr.replace(' ', 'T'));
     } else {
       date = new Date(dateStr);
     }
+    
+    if (isNaN(date.getTime())) return dateStr;
+    
     return format(date, formatStr);
   } catch (e) {
     return dateStr;

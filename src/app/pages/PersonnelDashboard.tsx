@@ -959,10 +959,10 @@ export function PersonnelDashboard() {
                             {request.completed_at ? (
                               <div className="flex flex-col">
                                 <p className="text-sm font-bold text-slate-700">
-                                  {format(new Date(request.completed_at), "MMM d, yyyy")}
+                                  {formatDateTime(request.completed_at, "MMM d, yyyy")}
                                 </p>
                                 <p className="text-[10px] text-slate-400">
-                                  {format(new Date(request.completed_at), "hh:mm a")}
+                                  {formatDateTime(request.completed_at, "hh:mm a")}
                                 </p>
                               </div>
                             ) : (
@@ -1083,7 +1083,7 @@ export function PersonnelDashboard() {
                   statusLogs.map((l, i) => (
                     <TableRow key={i} className="border-slate-100/50">
                       <TableCell className="px-6 py-4 text-xs font-bold text-slate-600 whitespace-nowrap align-top">
-                        {format(new Date(l.timestamp), "MMM d, HH:mm:ss")}
+                        {formatDateTime(l.timestamp, "MMM d, HH:mm:ss")}
                       </TableCell>
                       <TableCell className="text-[10px] font-black uppercase text-slate-600 whitespace-nowrap align-top pt-5 tracking-wider">
                         <Badge variant="outline">{l.status?.replace('_', ' ')}</Badge>

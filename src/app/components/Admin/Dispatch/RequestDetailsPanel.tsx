@@ -361,7 +361,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                         {request.completed_at && (
                           <div className="text-right">
                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Completed At</p>
-                             <p className="text-xs font-bold text-white/90">{formatLocalDate(request.completed_at, 'MMM d, h:mm a')}</p>
+                             <p className="text-xs font-bold text-white/90">{formatDateTime(request.completed_at, 'MMM d, h:mm a')}</p>
                           </div>
                         )}
                       </div>
