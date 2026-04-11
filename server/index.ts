@@ -262,7 +262,7 @@ io.on('connection', (socket) => {
 
   socket.on('update-location', async (data) => {
     const { requestId, lat, lng, riderId } = data;
-    if (!requestId || !lat || !lng || !riderId) return;
+    if (!requestId || lat === undefined || lat === null || lng === undefined || lng === null || !riderId) return;
 
     try {
       // 1. SECURITY & INTEGRITY CHECK: Only track if the request is still active

@@ -60,9 +60,9 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   // Priority 3: Establish Socket IMMEDIATELY on boot
   useEffect(() => {
     socketRef.current = io(Config.API_URL, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      timeout: 10000,
+      transports: ['websocket'], // Force websocket for production reliability
+      reconnectionAttempts: 20,
+      timeout: 20000,
     });
 
     const socket = socketRef.current;
@@ -118,16 +118,28 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     }
 
     // If already tracking this request, don't restart
-    if (isTracking && activeRequestId.current === requestId) return;
-
-    // Clean up existing watcher if any
-    if (foregroundSubscription.current) {
-      foregroundSubscription.current.remove();
-    }
-
     activeRequestId.current = requestId;
 
+    // --- IMMEDIATE LOCATION PING ---
+    // Fetch current location once to send it immediately instead of waiting for distanceInterval
+    try {
+      const initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (socketRef.current && user) {
+        console.log('🛰️ Sending initial tracking ping:', initialLocation.coords.latitude, initialLocation.coords.longitude);
+        socketRef.current.emit('update-location', {
+          riderId: user.id,
+          riderName: user.name,
+          lat: initialLocation.coords.latitude,
+          lng: initialLocation.coords.longitude,
+          requestId: requestId,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to get initial location ping:', err);
+    }
+
     // Foreground tracking (higher frequency for active UI)
+
     foregroundSubscription.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,

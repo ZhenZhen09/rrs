@@ -19,37 +19,55 @@ import { format } from "date-fns";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 
-// Custom icons using Lucide
-const createIcon = (IconComponent: any, color: string, isPulsing = false, label?: string) => {
+// Custom icons using Leaflet's divIcon with raw HTML strings for reliability
+const createRiderIcon = (label?: string) => {
   return L.divIcon({
-    html: renderToString(
-      <div className="relative flex flex-col items-center">
-        {label && (
-          <div className="bg-white px-1.5 py-0.5 rounded shadow-md border border-slate-200 mb-1">
-            <p className="text-[8px] font-black text-slate-700 leading-none uppercase tracking-tighter">{label}</p>
+    html: `
+      <div class="relative flex flex-col items-center">
+        ${label ? `
+          <div class="bg-white px-1.5 py-0.5 rounded shadow-md border border-slate-200 mb-1">
+            <p class="text-[8px] font-black text-slate-700 leading-none uppercase tracking-tighter">${label}</p>
           </div>
-        )}
-        <div
-          className={`relative ${isPulsing ? "animate-bounce-short" : ""}`}
-          style={{ color }}
-        >
-          <IconComponent size={32} fill="white" strokeWidth={2.5} />
-          {isPulsing && (
-            <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-30 -z-10"></div>
-          )}
+        ` : ''}
+        <div class="relative animate-bounce-short" style="color: #3b82f6;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>
+          </svg>
+          <div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-30 -z-10"></div>
         </div>
-      </div>,
-    ),
+      </div>
+    `,
     className: "custom-map-icon smooth-marker-move",
     iconSize: [60, 60],
     iconAnchor: [30, 60],
   });
 };
 
-const riderIcon = createIcon(Bike, "#3b82f6", true, "Rider");
-const pickupIcon = createIcon(MapPin, "#10b981");
-const dropoffIcon = createIcon(MapPinned, "#ef4444");
-const searchIcon = createIcon(Search, "#6366f1");
+const createStaticIcon = (type: 'pickup' | 'dropoff' | 'search') => {
+  const color = type === 'pickup' ? '#10b981' : type === 'dropoff' ? '#ef4444' : '#6366f1';
+  const iconPath = type === 'pickup' 
+    ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'
+    : type === 'dropoff'
+    ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><path d="M12 13V7l-2 2"/>'
+    : '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>';
+
+  return L.divIcon({
+    html: `
+      <div style="color: ${color};">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          ${iconPath}
+        </svg>
+      </div>
+    `,
+    className: "custom-map-icon",
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+  });
+};
+
+const pickupIcon = createStaticIcon('pickup');
+const dropoffIcon = createStaticIcon('dropoff');
+const searchIcon = createStaticIcon('search');
 
 interface LiveTrackingMapProps {
   requestId?: string;
@@ -251,10 +269,32 @@ export function LiveTrackingMap({
 
   return (
     <div className={`w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-slate-100 relative group ${containerClassName}`}>
-      {/* GLOBAL CSS FOR SMOOTH MARKERS */}
+      {/* GLOBAL CSS FOR SMOOTH MARKERS AND ANIMATIONS */}
       <style dangerouslySetInnerHTML={{ __html: `
         .smooth-marker-move {
           transition: transform 2s linear !important;
+        }
+        @keyframes ping-custom {
+          75%, 100% {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+        .animate-ping-custom {
+          animation: ping-custom 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        @keyframes bounce-short {
+          0%, 100% {
+            transform: translateY(-5%);
+            animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+          }
+          50% {
+            transform: translateY(0);
+            animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+          }
+        }
+        .animate-bounce-short {
+          animation: bounce-short 1s infinite;
         }
       `}} />
 
@@ -291,12 +331,15 @@ export function LiveTrackingMap({
           <Popup>Destination: {dropoff.address}</Popup>
         </Marker>
 
-        {smoothPos && (
+        {(smoothPos || current) && (
           <>
-            <ChangeView center={smoothPos} />
-            <Marker position={smoothPos} icon={riderIcon}>
+            <ChangeView center={smoothPos || [Number(current!.lat), Number(current!.lng)]} />
+            <Marker 
+              position={smoothPos || [Number(current!.lat), Number(current!.lng)]} 
+              icon={createRiderIcon(riderName)}
+            >
               <Tooltip permanent direction="top" offset={[0, -40]} className="bg-white border-none shadow-none text-[10px] font-bold">
-                {riderName}
+                {riderName || 'Rider'}
               </Tooltip>
             </Marker>
           </>

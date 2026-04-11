@@ -115,7 +115,7 @@ export function LiveTrackingDashboard() {
              requestId={trackingRequest.request_id}
              pickup={trackingRequest.pickup_location}
              dropoff={trackingRequest.dropoff_location}
-             current={trackingRequest.current_lat && trackingRequest.current_lng ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) } : undefined}
+             current={(trackingRequest.current_lat !== null && trackingRequest.current_lat !== undefined && trackingRequest.current_lng !== null && trackingRequest.current_lng !== undefined) ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) } : undefined}
              riderName={trackingRequest.assigned_rider_name}
              status={trackingRequest.delivery_status}
              timeWindow={trackingRequest.time_window}
