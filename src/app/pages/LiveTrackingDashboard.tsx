@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from "react-router";
 import { useData } from "../context/DataContext";
 import { LiveTrackingMap } from "../components/LiveTrackingMap";
@@ -10,9 +11,29 @@ import { formatLocalDate } from "../utils/dateUtils";
 export function LiveTrackingDashboard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { requests, refreshData } = useData();
+  const { requests, fetchRequestById, refreshData } = useData();
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const trackingRequest = requests.find((r) => r.request_id === id);
+
+  // Effect to fetch the specific request if not found in the global list
+  useEffect(() => {
+    if (id && !trackingRequest) {
+      console.log('🔍 Request not in local state, fetching specifically:', id);
+      fetchRequestById(id).finally(() => setIsInitialLoading(false));
+    } else if (trackingRequest) {
+      setIsInitialLoading(false);
+    }
+  }, [id, trackingRequest, fetchRequestById]);
+
+  if (isInitialLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-500 font-bold">Initializing tracking...</p>
+      </div>
+    );
+  }
 
   if (!trackingRequest) {
     return (
@@ -28,6 +49,14 @@ export function LiveTrackingDashboard() {
       </div>
     );
   }
+
+  console.log('📍 Tracking Request Info:', {
+    id: trackingRequest.request_id,
+    status: trackingRequest.delivery_status,
+    lat: trackingRequest.current_lat,
+    lng: trackingRequest.current_lng,
+    hasCurrent: !!(trackingRequest.current_lat && trackingRequest.current_lng)
+  });
 
   const isCompleted = trackingRequest.delivery_status === 'completed';
   const isFailed = trackingRequest.delivery_status === 'failed';
@@ -83,6 +112,7 @@ export function LiveTrackingDashboard() {
         {/* Main Map View */}
         <div className="flex-1 relative bg-slate-200">
            <LiveTrackingMap 
+             requestId={trackingRequest.request_id}
              pickup={trackingRequest.pickup_location}
              dropoff={trackingRequest.dropoff_location}
              current={trackingRequest.current_lat && trackingRequest.current_lng ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) } : undefined}

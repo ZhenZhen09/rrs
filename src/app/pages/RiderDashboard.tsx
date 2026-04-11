@@ -80,17 +80,31 @@ export function RiderDashboard() {
       await updateDeliveryStatus(selectedRequest.request_id, newStatus, statusNote);
       toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
       setShowStatusDialog(false);
-      setSelectedRequest(null);
-      setStatusNote('');
       
-      // If completed or failed, stop tracking
-      if (newStatus === 'completed' || newStatus === 'failed') {
+      // Handle tracking transitions
+      if (newStatus === 'in_progress') {
+        startTracking(selectedRequest);
+      } else if (isTracking) {
         stopTracking();
       }
+
+      setSelectedRequest(null);
+      setStatusNote('');
     } catch (error) {
       toast.error('Failed to update status');
     }
   };
+
+  // Auto-resume tracking for in_progress jobs
+  useEffect(() => {
+    if (todayDeliveries.length > 0 && !isTracking) {
+      const activeJob = todayDeliveries.find(req => req.delivery_status === 'in_progress');
+      if (activeJob) {
+        console.log('🔄 Auto-resuming tracking for job:', activeJob.request_id);
+        startTracking(activeJob);
+      }
+    }
+  }, [todayDeliveries, isTracking]);
 
   const startTracking = (request: DeliveryRequest) => {
     if (!("geolocation" in navigator)) {

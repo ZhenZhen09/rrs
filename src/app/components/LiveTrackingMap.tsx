@@ -114,19 +114,28 @@ export function LiveTrackingMap({
       const newLat = Number(current.lat);
       const newLng = Number(current.lng);
       
+      console.log('🛰️ Map received current location:', { newLat, newLng });
+
+      if (isNaN(newLat) || isNaN(newLng)) {
+        console.error('❌ Invalid coordinates received:', current);
+        return;
+      }
+      
       if (!smoothPos) {
+        console.log('✅ Initializing smoothPos to:', [newLat, newLng]);
         setSmoothPos([newLat, newLng]);
       } else {
-        // Simple smoothing filter: only move if difference is significant 
-        // to avoid "dancing" markers on the map
         const latDiff = Math.abs(smoothPos[0] - newLat);
         const lngDiff = Math.abs(smoothPos[1] - newLng);
         
         if (latDiff > 0.00001 || lngDiff > 0.00001) {
+           console.log('📍 Updating smoothPos (movement detected)');
            setSmoothPos([newLat, newLng]);
            setLastUpdate(new Date());
         }
       }
+    } else {
+      console.log('❓ Map received null/undefined current location');
     }
   }, [current]);
 

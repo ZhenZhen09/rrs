@@ -17,6 +17,7 @@ interface DataContextType {
   markNotificationRead: (notificationId: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   getRequestById: (requestId: string) => DeliveryRequest | undefined;
+  fetchRequestById: (requestId: string) => Promise<DeliveryRequest | null>;
   refreshData: () => Promise<void>;
 }
 
@@ -33,7 +34,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const fetchRequests = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/requests`);
+      const res = await fetch(`${API_URL}/requests?limit=100`);
       if (res.ok) {
         const json = await res.json();
         let data: DeliveryRequest[] = Array.isArray(json) ? json : (json.data || []);
@@ -101,6 +102,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       console.error("Failed to fetch requests", err);
     }
   }, []);
+
+  const fetchRequestById = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/requests/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRequests(prev => {
+          const arr = prev || [];
+          const exists = arr.find(r => r.request_id === id);
+          if (exists) {
+            return arr.map(r => r.request_id === id ? data : r);
+          }
+          return [...arr, data];
+        });
+        return data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch request ${id}:`, error);
+    }
+    return null;
+  }, [API_URL]);
 
   const fetchNotifications = useCallback(async () => {
     if (!user?.id) return;
@@ -519,6 +541,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         markNotificationRead,
         markAllNotificationsRead,
         getRequestById,
+        fetchRequestById,
         refreshData
       }}
     >
