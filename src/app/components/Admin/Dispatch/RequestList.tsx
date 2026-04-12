@@ -7,29 +7,33 @@ import { Package } from 'lucide-react';
 
 interface RequestListProps {
   requests: DeliveryRequest[];
-  filteredRequests: DeliveryRequest[];
+  filteredRequests?: DeliveryRequest[];
   selectedId: string | null;
-  onSelect: (req: DeliveryRequest) => void;
-  filter: string;
-  onFilterChange: (filter: string) => void;
+  onSelect: (id: string) => void;
+  filter?: string;
+  onFilterChange?: (filter: string) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
-  selectedRequestIds?: string[];
-  onToggleSelection?: (requestId: string) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: () => void;
 }
 
 export const RequestList: React.FC<RequestListProps> = ({ 
-  requests,
+  requests = [],
   filteredRequests,
   selectedId, 
   onSelect,
-  filter,
-  onFilterChange,
+  filter = 'pending',
+  onFilterChange = () => {},
   sortBy,
   onSortChange,
-  selectedRequestIds = [],
-  onToggleSelection
+  selectedIds = [],
+  onToggleSelect = () => {},
+  onSelectAll = () => {}
 }) => {
+  const displayRequests = filteredRequests || requests;
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-slate-100 shadow-sm overflow-hidden">
       {/* List Header / Filters */}
@@ -73,7 +77,7 @@ export const RequestList: React.FC<RequestListProps> = ({
       {/* Scrollable List with Horizontal Support */}
       <ScrollArea className="flex-1 overflow-x-auto">
         <div className="px-6 pb-6 mt-4 min-w-[320px]">
-          {filteredRequests.length === 0 ? (
+          {displayRequests.length === 0 ? (
             <div className="py-20 text-center">
               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Package className="h-6 w-6 text-slate-200" />
@@ -81,14 +85,14 @@ export const RequestList: React.FC<RequestListProps> = ({
               <p className="text-slate-400 font-bold text-sm tracking-tight">No requests found</p>
             </div>
           ) : (
-            filteredRequests.map(req => (
+            displayRequests.map(req => (
               <RequestCard 
                 key={req.request_id}
                 request={req}
                 isSelected={selectedId === req.request_id}
-                onClick={() => onSelect(req)}
-                isMultiSelected={selectedRequestIds.includes(req.request_id)}
-                onToggleSelection={onToggleSelection}
+                onClick={() => onSelect(req.request_id)}
+                isMultiSelected={selectedIds.includes(req.request_id)}
+                onToggleSelection={onToggleSelect}
               />
             ))
           )}

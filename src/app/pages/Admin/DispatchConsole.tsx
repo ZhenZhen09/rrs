@@ -327,7 +327,8 @@ export function DispatchConsole() {
               )}
 
               <RequestList 
-                requests={filteredRequests}
+                requests={requests || []}
+                filteredRequests={filteredRequests}
                 selectedId={selectedRequestId}
                 onSelect={(id) => setSelectedRequestId(id)}
                 selectedIds={selectedRequestIds}
@@ -335,6 +336,8 @@ export function DispatchConsole() {
                 onSelectAll={selectAll}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
+                filter={filterTab}
+                onFilterChange={setFilterTab}
               />
             </div>
           </ResizablePanel>
