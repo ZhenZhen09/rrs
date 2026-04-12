@@ -15,6 +15,7 @@ import { useEffect, useState, useRef } from "react";
 import { Bike, MapPin, MapPinned, Clock, ShieldCheck, Activity, Search, X, Loader2 } from "lucide-react";
 import { renderToString } from "react-dom/server";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
