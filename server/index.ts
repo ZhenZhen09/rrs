@@ -356,7 +356,8 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error in location update handler:', err);
     }
-  });
+  }
+});
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
