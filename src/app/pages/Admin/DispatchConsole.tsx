@@ -40,6 +40,7 @@ import {
 import { Textarea } from "../../components/ui/textarea";
 import { Label } from "../../components/ui/label";
 import { Checkbox } from "../../components/ui/checkbox";
+import { MapPin } from "lucide-react";
 
 export function DispatchConsole() {
   const { 
@@ -666,6 +667,71 @@ export function DispatchConsole() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* GLOBAL FLOATING DRIVER LOCATOR BUTTON (MATCHING CONCEPT) */}
+      <div className="fixed bottom-8 right-8 z-[1000] flex items-center gap-4">
+        {/* Tooltip Speech Bubble */}
+        <div className="bg-white px-5 py-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-50 animate-in fade-in slide-in-from-right-4 duration-500">
+          <p className="text-[11px] font-[900] text-slate-800 uppercase tracking-widest whitespace-nowrap">Track Driver Location</p>
+          {/* Bubble Tail */}
+          <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-white border-r border-t border-slate-50 rotate-45" />
+        </div>
+
+        <div className="relative group">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes sonar-ping {
+              0% { transform: scale(1); opacity: 0.6; }
+              100% { transform: scale(2.2); opacity: 0; }
+            }
+            .sonar-ripple::before {
+              content: "";
+              position: absolute;
+              inset: 0;
+              background: linear-gradient(to bottom right, #ec4899, #9333ea);
+              border-radius: 9999px;
+              animation: sonar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+              z-index: -1;
+            }
+          `}} />
+          
+          <Button
+            onClick={() => {
+              // Priority 1: In Progress Jobs
+              const activeTracking = requests.find(r => 
+                r.delivery_status === 'in_progress' && 
+                r.current_lat !== null && 
+                r.current_lng !== null
+              );
+              
+              if (activeTracking) {
+                setFilterTab('active');
+                setSelectedRequestId(activeTracking.request_id);
+                toast.success(`Tracking Rider: ${activeTracking.assigned_rider_name}`);
+                return;
+              }
+
+              // Priority 2: Any Job with active coordinates (even if not 'in_progress' yet)
+              const anyJobWithCoords = requests.find(r => 
+                r.current_lat !== null && 
+                r.current_lng !== null &&
+                (r.delivery_status === 'assigned' || r.delivery_status === 'picked_up')
+              );
+
+              if (anyJobWithCoords) {
+                setFilterTab('active');
+                setSelectedRequestId(anyJobWithCoords.request_id);
+                toast.success(`Locating Rider for Job #${anyJobWithCoords.request_id.slice(-6).toUpperCase()}`);
+                return;
+              }
+
+              toast.info("No active GPS signals detected from riders.");
+            }}
+            className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-[0_10px_40px_rgba(236,72,153,0.4)] border-none p-0 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 sonar-ripple group-hover:shadow-[0_15px_50px_rgba(236,72,153,0.6)]"
+          >
+            <MapPin size={28} className="drop-shadow-md text-white" strokeWidth={2.5} fill="white" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

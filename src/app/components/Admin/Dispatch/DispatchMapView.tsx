@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Location } from '../../../types';
 import { Bike } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
+import { Button } from '../../ui/button';
 
 // Fix for default Leaflet icons in React
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -81,16 +82,40 @@ function RecenterMap({ origin, destination, current }: DispatchMapViewProps) {
 }
 
 export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destination, current }) => {
+  const mapRef = useRef<L.Map | null>(null);
   const polylinePositions: [number, number][] = [
     [origin.lat, origin.lng],
     [destination.lat, destination.lng]
   ];
 
   return (
-    <div className="w-full h-full rounded-[2rem] overflow-hidden border border-slate-100 shadow-inner bg-slate-50 relative">
+    <div className="w-full h-full rounded-[2rem] overflow-hidden border border-slate-100 shadow-inner bg-slate-50 relative group">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes sonar-ripple-mini {
+          0% { transform: scale(1); opacity: 0.8; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+        .ripple-mini::after {
+          content: "";
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          top: 0;
+          left: 0;
+          background: inherit;
+          border-radius: inherit;
+          animation: sonar-ripple-mini 2s ease-out infinite;
+          z-index: -1;
+        }
+        .fab-glow-mini {
+          box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+        }
+      `}} />
+
       <MapContainer 
         center={[origin.lat, origin.lng]} 
         zoom={13} 
+        ref={mapRef}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
         attributionControl={false}
@@ -121,6 +146,25 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         
         <RecenterMap origin={origin} destination={destination} current={current} />
       </MapContainer>
+
+      {/* Floating Driver Locator Button - Dashboard Version */}
+      {current && (
+        <div className="absolute bottom-4 right-4 z-[1000]">
+          <div className="group/fab relative">
+            <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest rounded-md opacity-0 group-hover/fab:opacity-100 transition-all pointer-events-none whitespace-nowrap shadow-lg">
+              Locate Rider
+            </div>
+            <Button
+              onClick={() => {
+                mapRef.current?.flyTo([current.lat, current.lng], 16, { duration: 1.2 });
+              }}
+              className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg transition-all hover:scale-110 active:scale-90 ripple-mini fab-glow-mini flex items-center justify-center border-none p-0 overflow-visible"
+            >
+              <Bike size={18} md:size={20} strokeWidth={2.5} className="drop-shadow-md" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Map Overlays */}
       <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">

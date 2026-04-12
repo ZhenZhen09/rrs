@@ -125,6 +125,7 @@ export function LiveTrackingMap({
   const [searchLabel, setSearchLabel] = useState("");
   
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
 
   // Effect to smooth out incoming GPS data
   useEffect(() => {
@@ -290,17 +291,62 @@ export function LiveTrackingMap({
           }
           50% {
             transform: translateY(0);
-            animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+            animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
           }
         }
         .animate-bounce-short {
           animation: bounce-short 1s infinite;
         }
-      `}} />
+        @keyframes sonar-ripple {
+          0% { transform: scale(1); opacity: 0.8; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+        .ripple-effect::after {
+          content: "";
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          top: 0;
+          left: 0;
+          background: inherit;
+          border-radius: inherit;
+          animation: sonar-ripple 2s ease-out infinite;
+          z-index: -1;
+        }
+        .fab-glow {
+          box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+        }
+        .fab-glow:hover {
+          box-shadow: 0 0 30px rgba(236, 72, 153, 0.5);
+        }
+        `}} />
+
+        {/* Floating Driver Locator Button */}
+        <div className="absolute bottom-8 right-8 z-[1000] flex flex-col items-end gap-3">
+        <div className="group relative">
+          <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap shadow-xl">
+            Locate Driver
+          </div>
+          <Button
+            onClick={() => {
+              if (smoothPos) {
+                mapRef.current?.flyTo(smoothPos as [number, number], 16, { duration: 1.5 });
+              } else if (current) {
+                mapRef.current?.flyTo([Number(current.lat), Number(current.lng)], 16, { duration: 1.5 });
+              }
+            }}
+            className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-90 ripple-effect fab-glow flex items-center justify-center border-none p-0 overflow-visible"
+          >
+            <Bike size={24} strokeWidth={2.5} className="drop-shadow-md" />
+          </Button>
+        </div>
+        </div>
+
 
       <MapContainer
         center={center}
         zoom={15}
+        ref={mapRef}
         style={{ height: "100%", width: "100%" }}
         zoomControl={false}
         attributionControl={false}
