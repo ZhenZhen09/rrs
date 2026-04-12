@@ -36,13 +36,15 @@ export const formatDateTime = (dateStr: string, formatStr: string = 'MMM d, yyyy
   if (!dateStr) return 'N/A';
   try {
     let date: Date;
-    if (dateStr.includes(' ') && !dateStr.includes('T') && !dateStr.includes('Z')) {
-      // MySQL format: "YYYY-MM-DD HH:MM:SS"
-      // Replace space with T but do NOT append Z. 
-      // This allows the browser to parse it as LOCAL time if it was stored as local,
-      // or we can just pass the string directly to new Date() which works in most modern browsers.
+    
+    // If it's a MySQL format "YYYY-MM-DD HH:MM:SS"
+    if (dateStr.includes(' ') && !dateStr.includes('T')) {
+      // Browsers often treat "YYYY-MM-DD HH:MM:SS" as local time.
+      // We replace the space with T to make it a standard format.
       date = new Date(dateStr.replace(' ', 'T'));
-    } else {
+    } 
+    // If it's already an ISO string with Z or +/- offset, new Date() handles it as UTC/Offset
+    else {
       date = new Date(dateStr);
     }
     
