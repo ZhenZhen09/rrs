@@ -40,7 +40,8 @@ import {
 import { Textarea } from "../../components/ui/textarea";
 import { Label } from "../../components/ui/label";
 import { Checkbox } from "../../components/ui/checkbox";
-import { MapPin } from "lucide-react";
+import { MapPin, X, Bike as BikeIcon } from "lucide-react";
+import { LiveTrackingMap } from "../../components/LiveTrackingMap";
 
 export function DispatchConsole() {
   const { 
@@ -54,6 +55,8 @@ export function DispatchConsole() {
   } = useGlobalData();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  const [trackingRequest, setTrackingRequest] = useState<DeliveryRequest | null>(null);
   const [filterTab, setFilterTab] = useState<"pending" | "active" | "completed">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [riders, setRiders] = useState<UserType[]>([]);
@@ -705,8 +708,8 @@ export function DispatchConsole() {
               );
               
               if (jobTracking) {
-                setFilterTab('active');
-                setSelectedRequestId(jobTracking.request_id);
+                setTrackingRequest(jobTracking);
+                setIsTrackingModalOpen(true);
                 toast.success(`Tracking Rider: ${jobTracking.assigned_rider_name}`);
                 return;
               }
@@ -717,17 +720,25 @@ export function DispatchConsole() {
                 const firstRiderId = onlineRiderIds[0];
                 const loc = riderLocations[firstRiderId];
                 
-                // See if this rider has any assigned job we can select
+                // Find any job assigned to this rider to provide context to the map
                 const assignedJob = requests.find(r => r.assigned_rider_id === firstRiderId && r.status === 'approved');
                 
                 if (assignedJob) {
-                  setFilterTab('active');
-                  setSelectedRequestId(assignedJob.request_id);
-                  toast.success(`Locating ${loc.name} (Assigned to #${assignedJob.request_id.slice(-6).toUpperCase()})`);
+                  setTrackingRequest(assignedJob);
                 } else {
-                  toast.success(`${loc.name} is online but has no active job. Showing current position.`);
-                  // If no job, we might need a global map view, but for now we've located them.
+                  // Fallback: Create a dummy request object just for the map view
+                  setTrackingRequest({
+                    request_id: 'IDLE',
+                    assigned_rider_name: loc.name,
+                    assigned_rider_id: firstRiderId,
+                    current_lat: loc.lat,
+                    current_lng: loc.lng,
+                    pickup_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
+                    dropoff_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
+                    delivery_status: 'online' as any
+                  } as any);
                 }
+                setIsTrackingModalOpen(true);
                 return;
               }
 
@@ -739,6 +750,58 @@ export function DispatchConsole() {
           </Button>
         </div>
       </div>
+
+      {/* GLOBAL LIVE TRACKING MODAL */}
+      <Dialog open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen}>
+        <DialogContent className="max-w-[95vw] w-[1200px] h-[85vh] p-0 overflow-hidden border-none bg-white rounded-[2.5rem] shadow-2xl">
+          <div className="h-full flex flex-col">
+            {/* Modal Header */}
+            <div className="shrink-0 px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white/80 backdrop-blur-md z-20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/10">
+                  <BikeIcon size={24} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
+                    {trackingRequest?.assigned_rider_name || 'Rider Location'}
+                    <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-emerald-100 animate-pulse">
+                      Live
+                    </span>
+                  </h2>
+                  <p className="text-xs font-bold text-slate-400 mt-0.5">
+                    {trackingRequest?.request_id === 'IDLE' ? 'Offline / Waiting for Job' : `Transaction: #${trackingRequest?.request_id.slice(-8).toUpperCase()}`}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsTrackingModalOpen(false)}
+                className="rounded-full hover:bg-slate-50 h-10 w-10"
+              >
+                <X size={20} className="text-slate-400" />
+              </Button>
+            </div>
+
+            {/* Modal Map Body */}
+            <div className="flex-1 relative bg-slate-50">
+              {trackingRequest && (
+                <LiveTrackingMap 
+                  requestId={trackingRequest.request_id}
+                  pickup={trackingRequest.pickup_location}
+                  dropoff={trackingRequest.dropoff_location}
+                  current={trackingRequest.current_lat && trackingRequest.current_lng ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) } : null}
+                  riderName={trackingRequest.assigned_rider_name}
+                  status={trackingRequest.delivery_status}
+                  timeWindow={trackingRequest.time_window}
+                  hideSearch={false}
+                  containerClassName="h-full w-full rounded-none border-none shadow-none"
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
