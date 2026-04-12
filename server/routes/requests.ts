@@ -204,8 +204,8 @@ router.post('/', validate(createRequestSchema), async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM delivery_requests WHERE request_id = ?', [request_id]);
     const newRequest = (rows as any[])[0];
 
-    // SCHEDULE ADMIN NOTIFICATION AFTER 60 SECONDS
-    setTimeout(async () => {
+    // SCHEDULE ADMIN NOTIFICATION AFTER 60 SECONDS (FAST-PATH)
+    const transitionTimer = setTimeout(async () => {
       try {
         // Check if the request still exists and is still in 'submitted_waiting' status
         const [currentStatusRows] = await pool.query('SELECT status FROM delivery_requests WHERE request_id = ?', [request_id]) as any[];
@@ -219,6 +219,11 @@ router.post('/', validate(createRequestSchema), async (req, res) => {
           
           const notifMessage = `New request from ${requester_name} (${requester_department})`;
           const io = req.app.get('io');
+
+          if (io) {
+            // Emit update to everyone so it appears in Admin list immediately
+            io.emit('request-updated', { request_id, status: 'pending' });
+          }
 
           for (const admin of admins) {
             const notifId = `notif_${Date.now()}_1_${Math.random().toString(36).substring(2, 9)}`;
@@ -237,20 +242,16 @@ router.post('/', validate(createRequestSchema), async (req, res) => {
                 type: 'request_submitted', 
                 request_id 
               });
-              // Also ensure admin dashboard list updates
-              io.to(admin.id).emit('request-updated'); 
             }
-          }
-          
-          // Notify the original requester so their UI updates to 'pending'
-          if (io) {
-            io.to(requester_id).emit('request-updated', { request_id, status: 'pending' });
           }
         }
       } catch (err) {
-        console.error('Error in delayed admin notification:', err);
+        console.error('Error in status transition timer:', err);
       }
-    }, 60000); // 60-second delay
+    }, 61000);
+
+    // Prevent this timer from holding the Node.js process open
+    if (transitionTimer.unref) transitionTimer.unref();
 
     res.json(newRequest);
   } catch (error) {

@@ -6,34 +6,30 @@ const path = require('path');
 // Load env from the server folder (where the DB config is)
 dotenv.config({ path: path.join(__dirname, 'server', '.env') });
 
-async function updateAdmin() {
+async function updateJohn() {
   console.log('Connecting to database...');
   
-  // Use same logic as server/db.ts
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'rider_scheduling',
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
     port: parseInt(process.env.DB_PORT || '3306')
   });
 
   try {
-    console.log('Hashing password...');
+    console.log('Hashing password for john.hr@company.com...');
     const hashedPassword = await argon2.hash('password');
 
-    console.log('Updating user: admin@company.com');
-    // Update the super admin account
     const [result] = await connection.execute(
       'UPDATE users SET password_hash = ?, require_password_reset = 0, status = \'active\' WHERE email = ?',
-      [hashedPassword, 'admin@company.com']
+      [hashedPassword, 'john.hr@company.com']
     );
 
     if (result.affectedRows > 0) {
-      console.log('✅ SUCCESS: admin@company.com password is now "password"');
-      console.log('✅ Verification bypassed and account activated.');
+      console.log('✅ SUCCESS: john.hr@company.com password is now "password"');
     } else {
-      console.log('❌ ERROR: admin@company.com not found in the users table.');
+      console.log('❌ ERROR: john.hr@company.com not found.');
     }
 
   } catch (error) {
@@ -43,4 +39,4 @@ async function updateAdmin() {
   }
 }
 
-updateAdmin();
+updateJohn();

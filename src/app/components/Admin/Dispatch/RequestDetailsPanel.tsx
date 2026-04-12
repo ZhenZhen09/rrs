@@ -199,39 +199,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
-          {!readOnly && isPending ? (
-            <>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={handleReturnForRevision}
-                disabled={isSubmitting}
-                className="hidden sm:flex h-10 md:h-12 px-4 md:px-6 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-2"
-              >
-                <RotateCcw size={14} />
-                Return
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => onDecline(adminNote)}
-                disabled={isSubmitting}
-                className="hidden sm:flex h-10 md:h-12 px-4 md:px-6 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest text-rose-500 hover:bg-rose-50 transition-all"
-              >
-                Decline
-              </Button>
-              <Button 
-                size="sm"
-                disabled={!selectedRiderId || isSubmitting}
-                onClick={() => onApprove(selectedRiderId, adminNote)}
-                className="h-10 md:h-12 px-4 md:px-8 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] md:text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center gap-2"
-              >
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 md:h-4 md:w-4 animate-spin" /> : <Check className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={3} />}
-                <span className="hidden xs:inline">Approve & Assign</span>
-                <span className="inline xs:hidden">Assign</span>
-              </Button>
-            </>
-          ) : isApproved && !isTerminal ? (
+          {isApproved && !isTerminal ? (
             <div className="flex items-center gap-3 bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100 animate-in fade-in duration-500">
               <Check className="h-4 w-4 text-emerald-600" />
               <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Confirmed</span>
@@ -241,7 +209,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
       </div>
 
       {/* Scrollable Content (flex-1 overflow-auto min-h-0) */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-1 overflow-auto min-h-0 pb-32">
         <div className="p-4 md:p-8 space-y-6 md:space-y-8">
           {/* Map Section */}
           <div className="h-[250px] md:h-[350px] w-full shrink-0">
@@ -559,6 +527,34 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <AlertDialog open={confirmModal.open} onOpenChange={(open) => !open && setConfirmModal({ open: false, status: null })}>
+        <AlertDialogContent className="rounded-[1.5rem] border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-[900] text-slate-900">
+              Confirm Status Update
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 font-bold">
+              Are you sure you want to manually mark this delivery as <span className={cn("uppercase", confirmModal.status === 'completed' ? "text-emerald-600" : "text-rose-600")}>{confirmModal.status}</span>? This action will notify the requester and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4 gap-3">
+            <AlertDialogCancel className="rounded-xl font-black text-[10px] uppercase tracking-widest border-slate-100 h-12">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => confirmModal.status && handleStatusChange(confirmModal.status)}
+              className={cn(
+                "rounded-xl font-black text-[10px] uppercase tracking-widest h-12 text-white border-none shadow-lg transition-all active:scale-95",
+                confirmModal.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200" : "bg-rose-500 hover:bg-rose-600 shadow-rose-200"
+              )}
+            >
+              {updatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Update"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

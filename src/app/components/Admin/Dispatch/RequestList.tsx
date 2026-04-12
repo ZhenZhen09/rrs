@@ -49,13 +49,13 @@ export const RequestList: React.FC<RequestListProps> = ({
             onClick={() => onFilterChange('active')}
             className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-md shadow-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Active ({requests.filter(r => r.status === 'approved' && r.delivery_status !== 'completed' && r.delivery_status !== 'failed').length})
+            Active ({requests.filter(r => r.status === 'approved' && !['completed', 'failed', 'disapproved'].includes(r.delivery_status || '')).length})
           </button>
           <button 
             onClick={() => onFilterChange('completed')}
             className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-md shadow-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Done ({requests.filter(r => r.delivery_status === 'completed' || r.delivery_status === 'failed' || r.status === 'disapproved').length})
+            Done ({requests.filter(r => ['completed', 'failed', 'disapproved'].includes(r.delivery_status || '') || r.status === 'disapproved').length})
           </button>
         </div>
 

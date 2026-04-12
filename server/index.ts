@@ -107,6 +107,46 @@ class RequestWatchdog {
     const STAGNANT_THRESHOLD = 10 * 60 * 1000;  // 10 minutes
 
     try {
+      // --- GRACE PERIOD CLEANUP (FIX: STUCK QUEUEING REQUESTS) ---
+      // Transition requests from 'submitted_waiting' to 'pending' if they are older than 60 seconds
+      const [stuckRequests] = await pool.execute(
+        `SELECT request_id, requester_id, requester_name, requester_department 
+         FROM delivery_requests 
+         WHERE status = 'submitted_waiting' 
+         AND created_at <= (NOW() - INTERVAL 60 SECOND)`
+      );
+      
+      const stRequests = stuckRequests as any[];
+      if (stRequests.length > 0) {
+        console.log(`🧹 Watchdog: Transitioning ${stRequests.length} stuck requests to pending`);
+        
+        for (const req of stRequests) {
+          await pool.execute(
+            "UPDATE delivery_requests SET status = 'pending' WHERE request_id = ?",
+            [req.request_id]
+          );
+
+          // Notify admins
+          const [admins] = await pool.query('SELECT id FROM users WHERE role = ?', ['admin']) as any[];
+          const notifMessage = `New request from ${req.requester_name} (${req.requester_department})`;
+          
+          for (const admin of admins) {
+            const notifId = `notif_${Date.now()}_wd_${Math.random().toString(36).substring(2, 7)}`;
+            await pool.query(
+              'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+              [notifId, admin.id, notifMessage, 'request_submitted', req.request_id]
+            );
+            this.io.to(admin.id).emit('notification-added', { 
+              id: notifId, message: notifMessage, type: 'request_submitted', request_id: req.request_id 
+            });
+          }
+          
+          // Emit update to everyone
+          this.io.emit('request-updated', { request_id: req.request_id, status: 'pending' });
+        }
+      }
+
+      // --- EXISTING MBE ENGINE ---
       // Get all active (approved but not terminal) requests
       const [rows] = await pool.execute(
         `SELECT request_id, assigned_rider_id, delivery_status, current_lat, current_lng 

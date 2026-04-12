@@ -1,0 +1,72 @@
+# Professional Test Report: Personnel Requests & Admin Approval Workflow
+
+Project: Rider Scheduling System
+Tester: Senior Software Tester
+Date: April 12, 2026
+Testing Type: Alpha/Beta Integration Testing
+
+---
+
+## 1. Executive Summary
+The end-to-end workflow for personnel requests, admin approval, revision handling, and final completion was tested. While the core functionality is present and data integrity is maintained in the backend, several significant UI/UX bugs were identified that hinder the efficiency of the dispatch console and admin operations.
+
+## 2. Test Scenario Results
+
+Step 1: Personnel (John Smith) creates 5 delivery requests.
+Result: PASS
+Notes: Successfully created Jane Doe 1 through 5.
+
+Step 2: Admin approves 4 requests (Jane Doe 1-4).
+Result: PASS
+Notes: Assigned to rider successfully.
+
+Step 3: Admin marks 4 requests as "Completed".
+Result: PASS
+Notes: Status updated correctly in DB.
+
+Step 4: Admin returns 1 request (Jane Doe 5) for revision.
+Result: PARTIAL
+Notes: UI Batch Action bar failed to appear; simulated via DB update.
+
+Step 5: Personnel (John Smith) revises request #5.
+Result: PASS
+Notes: Instructions updated and resubmitted successfully.
+
+Step 6: Admin approves and completes revised request #5.
+Result: PASS
+Notes: Final cycle completed.
+
+---
+
+## 3. Bug Report
+
+### BUG-001: Unreliable Multi-Select / Batch Action Bar
+- Severity: High
+- Description: The selection strip on the left side of RequestCard in the Dispatch Console does not consistently trigger the selection state. Clicking the area frequently fails to register, preventing the "Batch Action Bar" (which contains the Revision and Approve buttons) from appearing.
+- Impact: Admins cannot easily return requests for revision or perform bulk actions without multiple retries or workarounds.
+
+### BUG-002: Admin Status Controls Missing in Calendar View
+- Severity: Medium
+- Description: When an Admin opens a request's details via the Calendar View, the "Admin Status Controls" (Revision, Disapprove, Complete, etc.) are absent from the modal.
+- Impact: Admins are forced to switch back to the Dispatch Console to manage request states, breaking the workflow continuity.
+
+### BUG-003: UI Stalling on "Updating system..."
+- Severity: Medium
+- Description: After confirming a status update (e.g., marking as Completed), the UI occasionally remains in a "disabled" state with a spinner saying "Updating system..." indefinitely. 
+- Workaround: A manual page refresh resolves the state and shows the updated data.
+- Impact: Confuses users and requires unnecessary page reloads.
+
+### BUG-004: Dialog Header Interception (Click Collision)
+- Severity: Low
+- Description: In the "Request Details" dialog, the sticky header element (bg-white/80 backdrop-blur-md) intercepts pointer events intended for the dialog's close button.
+- Impact: Users may find it difficult to close dialogs via the "X" button, requiring the Escape key as a workaround.
+
+---
+
+## 4. Recommendations
+1. Selection Logic: Refactor the selection strip in RequestCard.tsx to use a more robust Checkbox component or a larger hit area that doesn't rely on precise pixel clicks.
+2. Context Sharing: Ensure the RequestDetailsPanel receives the same administrative permissions/props regardless of whether it is rendered in the Dispatch Console or a Dialog modal.
+3. Optimistic Updates: Review the updatingStatus state logic in DataContext.tsx to ensure it properly clears even if a background process or socket event lags.
+
+---
+**End of Report**

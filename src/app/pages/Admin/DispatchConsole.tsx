@@ -104,7 +104,7 @@ export function DispatchConsole() {
     if (!requests) return [];
     
     let filtered = requests.filter(r => {
-      if (filterTab === "pending") return r.status === "pending" || r.status === "submitted_waiting";
+      if (filterTab === "pending") return r.status === "pending";
       if (filterTab === "active") return r.status === "approved" && !["completed", "failed", "disapproved"].includes(r.delivery_status || "");
       if (filterTab === "completed") return ["completed", "failed", "disapproved"].includes(r.delivery_status || "") || r.status === "disapproved";
       return true;
@@ -136,7 +136,7 @@ export function DispatchConsole() {
   const stats = useMemo(() => {
     if (!requests) return { pending: 0, active: 0, done: 0 };
     return {
-      pending: requests.filter(r => r.status === "pending" || r.status === "submitted_waiting").length,
+      pending: requests.filter(r => r.status === "pending").length,
       active: requests.filter(r => r.status === "approved" && !["completed", "failed", "disapproved"].includes(r.delivery_status || "")).length,
       done: requests.filter(r => ["completed", "failed", "disapproved"].includes(r.delivery_status || "") || r.status === "disapproved").length
     };
@@ -238,37 +238,37 @@ export function DispatchConsole() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center bg-slate-100/50 p-1 rounded-2xl border border-slate-100/50">
-            <button 
-              onClick={() => { setFilterTab("pending"); setSelectedRequestId(null); }}
-              className={cn(
-                "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                filterTab === "pending" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              Pending ({stats.pending})
-            </button>
-            <button 
-              onClick={() => { setFilterTab("active"); setSelectedRequestId(null); }}
-              className={cn(
-                "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                filterTab === "active" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              Active ({stats.active})
-            </button>
-            <button 
-              onClick={() => { setFilterTab("completed"); setSelectedRequestId(null); }}
-              className={cn(
-                "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                filterTab === "completed" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              Done ({stats.done})
-            </button>
-          </div>
-
-          <div className="h-8 w-[1px] bg-slate-200 mx-2" />
+          {false && (
+            <div className="flex items-center bg-slate-100/50 p-1 rounded-2xl border border-slate-100/50">
+              <button
+                onClick={() => { setFilterTab("pending"); setSelectedRequestId(null); }}
+                className={cn(
+                  "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  filterTab === "pending" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Pending ({stats.pending})
+              </button>
+              <button
+                onClick={() => { setFilterTab("active"); setSelectedRequestId(null); }}
+                className={cn(
+                  "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  filterTab === "active" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Active ({stats.active})
+              </button>
+              <button
+                onClick={() => { setFilterTab("completed"); setSelectedRequestId(null); }}
+                className={cn(
+                  "px-5 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  filterTab === "completed" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Done ({stats.done})
+              </button>
+            </div>
+          )}
 
           <Button 
             variant="ghost" 
@@ -293,7 +293,7 @@ export function DispatchConsole() {
           <ResizablePanel defaultSize={30} minSize={25} maxSize={40}>
             <div className="h-full flex flex-col bg-white">
               {/* Batch Actions Bar */}
-              {selectedRequestIds.length > 0 && (
+              {selectedRequestIds.length > 0 && filterTab === "pending" && (
                 <div className="shrink-0 p-4 bg-slate-900 border-b border-slate-800 animate-in slide-in-from-top-4 duration-300">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -517,82 +517,82 @@ export function DispatchConsole() {
       </Dialog>
 
       {/* GLOBAL FLOATING DRIVER LOCATOR BUTTON (MATCHING CONCEPT) */}
-      <div className="fixed bottom-8 right-8 z-[1000] flex items-center gap-4">
-        {/* Tooltip Speech Bubble */}
-        <div className="bg-white px-5 py-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-50 animate-in fade-in slide-in-from-right-4 duration-500">
-          <p className="text-[11px] font-[900] text-slate-800 uppercase tracking-widest whitespace-nowrap">Track Driver Location</p>
-          {/* Bubble Tail */}
-          <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-white border-r border-t border-slate-50 rotate-45" />
-        </div>
+      {false && (
+        <div className="fixed bottom-8 right-8 z-[1000] flex items-center gap-4">
+          <div className="bg-white px-5 py-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-50 animate-in fade-in slide-in-from-right-4 duration-500">
+            <p className="text-[11px] font-[900] text-slate-800 uppercase tracking-widest whitespace-nowrap">Track Driver Location</p>
+            <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-white border-r border-t border-slate-50 rotate-45" />
+          </div>
 
-        <div className="relative group">
-          <style dangerouslySetInnerHTML={{ __html: `
-            @keyframes sonar-ping {
-              0% { transform: scale(1); opacity: 0.6; }
-              100% { transform: scale(2.2); opacity: 0; }
-            }
-            .sonar-ripple::before {
-              content: "";
-              position: absolute;
-              inset: 0;
-              background: linear-gradient(to bottom right, #ec4899, #9333ea);
-              border-radius: 9999px;
-              animation: sonar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-              z-index: -1;
-            }
-          `}} />
-          
-          <Button
-            onClick={() => {
-              // Priority 1: Job-based tracking
-              const jobTracking = requests.find(r => 
-                r.delivery_status === 'in_progress' && 
-                r.current_lat !== null
-              );
-              
-              if (jobTracking) {
-                setTrackingRequest(jobTracking);
-                setIsTrackingModalOpen(true);
-                toast.success(`Tracking Rider: ${jobTracking.assigned_rider_name}`);
-                return;
+          <div className="relative group">
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes sonar-ping {
+                0% { transform: scale(1); opacity: 0.6; }
+                100% { transform: scale(2.2); opacity: 0; }
               }
-
-              // Priority 2: Global/Idle tracking
-              const onlineRiderIds = Object.keys(riderLocations);
-              if (onlineRiderIds.length > 0) {
-                const firstRiderId = onlineRiderIds[0];
-                const loc = riderLocations[firstRiderId];
+              .sonar-ripple::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(to bottom right, #ec4899, #9333ea);
+                border-radius: 9999px;
+                animation: sonar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+                z-index: -1;
+              }
+            `}} />
+            
+            <Button
+              onClick={() => {
+                // Priority 1: Job-based tracking
+                const jobTracking = requests.find(r => 
+                  r.delivery_status === 'in_progress' && 
+                  r.current_lat !== null
+                );
                 
-                // Find any job assigned to this rider to provide context to the map
-                const assignedJob = requests.find(r => r.assigned_rider_id === firstRiderId && r.status === 'approved');
-                
-                if (assignedJob) {
-                  setTrackingRequest(assignedJob);
-                } else {
-                  // Fallback: Create a dummy request object just for the map view
-                  setTrackingRequest({
-                    request_id: 'IDLE',
-                    assigned_rider_name: loc.name,
-                    assigned_rider_id: firstRiderId,
-                    current_lat: loc.lat,
-                    current_lng: loc.lng,
-                    pickup_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
-                    dropoff_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
-                    delivery_status: 'online' as any
-                  } as any);
+                if (jobTracking) {
+                  setTrackingRequest(jobTracking);
+                  setIsTrackingModalOpen(true);
+                  toast.success(`Tracking Rider: ${jobTracking.assigned_rider_name}`);
+                  return;
                 }
-                setIsTrackingModalOpen(true);
-                return;
-              }
 
-              toast.info("No active GPS signals detected from riders.");
-            }}
-            className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-[0_10px_40px_rgba(236,72,153,0.4)] border-none p-0 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 sonar-ripple group-hover:shadow-[0_15px_50px_rgba(236,72,153,0.6)]"
-          >
-            <MapPin size={32} className="drop-shadow-md text-white" strokeWidth={2.5} fill="white" />
-          </Button>
+                // Priority 2: Global/Idle tracking
+                const onlineRiderIds = Object.keys(riderLocations);
+                if (onlineRiderIds.length > 0) {
+                  const firstRiderId = onlineRiderIds[0];
+                  const loc = riderLocations[firstRiderId];
+                  
+                  // Find any job assigned to this rider to provide context to the map
+                  const assignedJob = requests.find(r => r.assigned_rider_id === firstRiderId && r.status === 'approved');
+                  
+                  if (assignedJob) {
+                    setTrackingRequest(assignedJob);
+                  } else {
+                    // Fallback: Create a dummy request object just for the map view
+                    setTrackingRequest({
+                      request_id: 'IDLE',
+                      assigned_rider_name: loc.name,
+                      assigned_rider_id: firstRiderId,
+                      current_lat: loc.lat,
+                      current_lng: loc.lng,
+                      pickup_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
+                      dropoff_location: { lat: loc.lat, lng: loc.lng, address: 'Current Location' },
+                      delivery_status: 'online' as any
+                    } as any);
+                  }
+                  setIsTrackingModalOpen(true);
+                  return;
+                }
+
+                toast.info("No active GPS signals detected from riders.");
+              }}
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-[0_10px_40px_rgba(236,72,153,0.4)] border-none p-0 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 sonar-ripple group-hover:shadow-[0_15px_50px_rgba(236,72,153,0.6)]"
+            >
+              <MapPin size={32} className="drop-shadow-md text-white" strokeWidth={2.5} fill="white" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* GLOBAL LIVE TRACKING MODAL */}
       <Dialog open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen}>
