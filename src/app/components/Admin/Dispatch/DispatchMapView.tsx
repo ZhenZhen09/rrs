@@ -147,25 +147,6 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         <RecenterMap origin={origin} destination={destination} current={current} />
       </MapContainer>
 
-      {/* Floating Driver Locator Button - Dashboard Version */}
-      {current && (
-        <div className="absolute bottom-4 right-4 z-[1000]">
-          <div className="group/fab relative">
-            <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest rounded-md opacity-0 group-hover/fab:opacity-100 transition-all pointer-events-none whitespace-nowrap shadow-lg">
-              Locate Rider
-            </div>
-            <Button
-              onClick={() => {
-                mapRef.current?.flyTo([current.lat, current.lng], 16, { duration: 1.2 });
-              }}
-              className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg transition-all hover:scale-110 active:scale-90 ripple-mini fab-glow-mini flex items-center justify-center border-none p-0 overflow-visible"
-            >
-              <Bike size={18} md:size={20} strokeWidth={2.5} className="drop-shadow-md" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Map Overlays */}
       <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
         <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg border border-slate-100 flex items-center gap-3">

@@ -45,10 +45,12 @@ import { MapPin } from "lucide-react";
 export function DispatchConsole() {
   const { 
     requests, 
+    riderLocations,
     approveRequest, 
-    disapproveRequest, 
-    returnForRevision, 
-    refreshData 
+    disapproveRequest,
+    returnForRevision,
+    cancelRequest, 
+    refreshData
   } = useGlobalData();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -696,31 +698,36 @@ export function DispatchConsole() {
           
           <Button
             onClick={() => {
-              // Priority 1: In Progress Jobs
-              const activeTracking = requests.find(r => 
+              // Priority 1: Job-based tracking
+              const jobTracking = requests.find(r => 
                 r.delivery_status === 'in_progress' && 
-                r.current_lat !== null && 
-                r.current_lng !== null
+                r.current_lat !== null
               );
               
-              if (activeTracking) {
+              if (jobTracking) {
                 setFilterTab('active');
-                setSelectedRequestId(activeTracking.request_id);
-                toast.success(`Tracking Rider: ${activeTracking.assigned_rider_name}`);
+                setSelectedRequestId(jobTracking.request_id);
+                toast.success(`Tracking Rider: ${jobTracking.assigned_rider_name}`);
                 return;
               }
 
-              // Priority 2: Any Job with active coordinates (even if not 'in_progress' yet)
-              const anyJobWithCoords = requests.find(r => 
-                r.current_lat !== null && 
-                r.current_lng !== null &&
-                (r.delivery_status === 'assigned' || r.delivery_status === 'picked_up')
-              );
-
-              if (anyJobWithCoords) {
-                setFilterTab('active');
-                setSelectedRequestId(anyJobWithCoords.request_id);
-                toast.success(`Locating Rider for Job #${anyJobWithCoords.request_id.slice(-6).toUpperCase()}`);
+              // Priority 2: Global/Idle tracking
+              const onlineRiderIds = Object.keys(riderLocations);
+              if (onlineRiderIds.length > 0) {
+                const firstRiderId = onlineRiderIds[0];
+                const loc = riderLocations[firstRiderId];
+                
+                // See if this rider has any assigned job we can select
+                const assignedJob = requests.find(r => r.assigned_rider_id === firstRiderId && r.status === 'approved');
+                
+                if (assignedJob) {
+                  setFilterTab('active');
+                  setSelectedRequestId(assignedJob.request_id);
+                  toast.success(`Locating ${loc.name} (Assigned to #${assignedJob.request_id.slice(-6).toUpperCase()})`);
+                } else {
+                  toast.success(`${loc.name} is online but has no active job. Showing current position.`);
+                  // If no job, we might need a global map view, but for now we've located them.
+                }
                 return;
               }
 
@@ -728,7 +735,7 @@ export function DispatchConsole() {
             }}
             className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-[0_10px_40px_rgba(236,72,153,0.4)] border-none p-0 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 sonar-ripple group-hover:shadow-[0_15px_50px_rgba(236,72,153,0.6)]"
           >
-            <MapPin size={28} className="drop-shadow-md text-white" strokeWidth={2.5} fill="white" />
+            <MapPin size={32} className="drop-shadow-md text-white" strokeWidth={2.5} fill="white" />
           </Button>
         </div>
       </div>

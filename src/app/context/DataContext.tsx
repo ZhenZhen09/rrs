@@ -7,6 +7,7 @@ interface DataContextType {
   requests: DeliveryRequest[];
   notifications: Notification[];
   riderPresence: Record<string, 'online' | 'offline'>;
+  riderLocations: Record<string, { lat: number, lng: number, name: string, lastUpdate: Date }>;
   submitRequest: (request: Omit<DeliveryRequest, 'request_id' | 'requester_id' | 'created_at' | 'status'>) => Promise<void>;
   resubmitRequest: (requestId: string, request: Omit<DeliveryRequest, 'request_id' | 'requester_id' | 'created_at' | 'status'>) => Promise<void>;
   approveRequest: (requestId: string, riderId: string, adminRemark?: string) => Promise<void>;
@@ -29,6 +30,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [riderPresence, setRiderPresence] = useState<Record<string, 'online' | 'offline'>>({});
+  const [riderLocations, setRiderLocations] = useState<Record<string, { lat: number, lng: number, name: string, lastUpdate: Date }>>({});
   const socketRef = React.useRef<Socket | null>(null);
   const pendingOptimisticIds = React.useRef<Set<string>>(new Set());
 
@@ -189,18 +191,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setRiderPresence(prev => ({ ...prev, [data.riderId]: data.status }));
     });
 
-    socket.on('rider-location-updated', (data: { requestId: string, lat: number, lng: number }) => {
-      if (pendingOptimisticIds.current.has(data.requestId)) return;
-      setRequests(prev => (prev || []).map(req => 
-        req.request_id === data.requestId 
-          ? { 
-              ...req, 
-              current_lat: data.lat, 
-              current_lng: data.lng,
-              current_location: { lat: data.lat, lng: data.lng } 
-            }
-          : req
-      ));
+    socket.on('rider-location-updated', (data: { requestId: string, lat: number, lng: number, riderId: string, riderName: string }) => {
+      // 1. Update Global Rider Map (Rider-centric)
+      if (data.riderId) {
+        setRiderLocations(prev => ({
+          ...prev,
+          [data.riderId]: { 
+            lat: data.lat, 
+            lng: data.lng, 
+            name: data.riderName || 'Rider',
+            lastUpdate: new Date()
+          }
+        }));
+      }
+
+      // 2. Update Requests List (Job-centric)
+      if (data.requestId && data.requestId !== 'idle') {
+        if (pendingOptimisticIds.current.has(data.requestId)) return;
+        setRequests(prev => (prev || []).map(req => 
+          req.request_id === data.requestId 
+            ? { 
+                ...req, 
+                current_lat: data.lat, 
+                current_lng: data.lng,
+                current_location: { lat: data.lat, lng: data.lng } 
+              }
+            : req
+        ));
+      }
     });
 
     socket.on('delivery-status-updated', () => {
@@ -531,6 +549,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         requests,
         notifications,
         riderPresence,
+        riderLocations,
         submitRequest,
         resubmitRequest,
         approveRequest,

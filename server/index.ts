@@ -261,23 +261,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('update-location', async (data) => {
-    const { requestId, lat, lng, riderId } = data;
-    if (!requestId || lat === undefined || lat === null || lng === undefined || lng === null || !riderId) return;
+    const { requestId, lat, lng, riderId, riderName } = data;
+    if (lat === undefined || lat === null || lng === undefined || lng === null || !riderId) return;
 
-    try {
-      // 1. SECURITY & INTEGRITY CHECK: Only track if the request is still active
-      const [statusRows] = await pool.execute(
-        'SELECT delivery_status FROM delivery_requests WHERE request_id = ?',
-        [requestId]
-      );
-      const requestStatus = (statusRows as any[])[0]?.delivery_status;
+    // 1. BROADCAST GLOBALLY: Allow UI to see where riders are even if idle
+    io.emit('rider-location-updated', { 
+      ...data, 
+      requestId: requestId || 'idle',
+      riderName: riderName || 'Rider'
+    });
 
-      if (['completed', 'failed', 'cancelled', 'disapproved'].includes(requestStatus)) {
-        return;
-      }
+    // 2. JOB-SPECIFIC LOGIC (Only run if we have a real request ID)
+    if (requestId && requestId !== 'idle') {
+      try {
+        const [statusRows] = await pool.execute(
+          'SELECT delivery_status FROM delivery_requests WHERE request_id = ?',
+          [requestId]
+        );
+        const requestStatus = (statusRows as any[])[0]?.delivery_status;
 
-      // 2. Broadcast movement to Admin Dashboard
-      io.emit('rider-location-updated', data);
+        if (['completed', 'failed', 'cancelled', 'disapproved'].includes(requestStatus)) {
+          return;
+        }
 
       // 3. Heartbeat Tracking & Exception Clearing
       const existingState = requestPingState.get(requestId);

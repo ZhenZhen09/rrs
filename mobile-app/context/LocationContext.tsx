@@ -123,17 +123,20 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       await requestPermissions();
     }
 
-    // If already tracking this request, don't restart
+    // --- SENIOR LOGIC: TRACKING STATE GUARD ---
+    // 1. If already tracking a real job, don't downgrade to 'idle'
+    if (isTracking && activeRequestId.current !== 'idle' && requestId === 'idle') return;
+    
+    // 2. If already tracking this specific request, skip
     if (isTracking && activeRequestId.current === requestId) return;
 
     activeRequestId.current = requestId;
+    const isIdle = requestId === 'idle';
 
     // --- IMMEDIATE LOCATION PING ---
-    // Fetch current location once to send it immediately instead of waiting for distanceInterval
     try {
       const initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (socketRef.current && user) {
-        console.log('🛰️ Sending initial tracking ping:', initialLocation.coords.latitude, initialLocation.coords.longitude);
         socketRef.current.emit('update-location', {
           riderId: user.id,
           riderName: user.name,
@@ -143,20 +146,25 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (err) {
-      console.warn('Failed to get initial location ping:', err);
+      console.warn('Initial ping failed:', err);
     }
 
-    // Foreground tracking (higher frequency for active UI)
+    // Clean up existing watcher if any
+    if (foregroundSubscription.current) {
+      foregroundSubscription.current.remove();
+    }
+
+    // Foreground tracking
     try {
       foregroundSubscription.current = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 10, // Increased sensitivity for production
-          timeInterval: 10000,  // Every 10 seconds
+          // High accuracy for jobs, Balanced for idle to save battery
+          accuracy: isIdle ? Location.Accuracy.Balanced : Location.Accuracy.High,
+          distanceInterval: isIdle ? 50 : 10, 
+          timeInterval: isIdle ? 30000 : 10000,
         },
         (location) => {
           const { latitude, longitude } = location.coords;
-          console.log('📍 Foreground location update:', latitude, longitude);
           if (socketRef.current && user && activeRequestId.current) {
             socketRef.current.emit('update-location', {
               riderId: user.id,
@@ -168,9 +176,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           }
         }
       );
-      console.log('✅ Foreground tracking started');
     } catch (err) {
-      console.error('❌ Failed to start foreground tracking:', err);
+      console.error('Foreground tracking error:', err);
     }
 
     // Background tracking - Wrapped in try/catch to prevent total failure if background perm denied
@@ -215,22 +222,32 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     setIsTracking(false);
   };
 
-  // Auto-resume tracking if a job is in_progress (e.g. after app restart)
-  // We use a more careful check to avoid restarting tracking for completed jobs
+  // Auto-resume tracking if a job is in_progress OR if rider is online (idle tracking)
   useEffect(() => {
-    if (!user?.id || isTracking) return;
+    if (!user?.id) return;
 
-    const timer = setTimeout(() => {
-      // Check if there are any active jobs today that are in_progress
+    const timer = setTimeout(async () => {
+      // Priority 1: Check for active in_progress job
       const tasks = queryClient.getQueryData<Job[]>(['tasks', user.id]);
-      if (tasks) {
-        const activeJob = tasks.find(t => t.delivery_status === 'in_progress');
-        if (activeJob && !isTracking) {
-          console.log('🔄 Auto-resuming tracking for job:', activeJob.request_id);
+      const activeJob = tasks?.find(t => t.delivery_status === 'in_progress');
+      
+      if (activeJob) {
+        if (!isTracking || activeRequestId.current === 'idle') {
+          console.log('🔄 Starting high-priority job tracking:', activeJob.request_id);
           startTracking(activeJob.request_id);
         }
+      } 
+      // Priority 2: If online but no job, start idle tracking
+      else {
+        // We need a way to know if they are 'online'. 
+        // For now, let's assume if they are logged in and no job, we can start idle tracking
+        // if they haven't explicitly stopped it.
+        if (!isTracking) {
+          console.log('📡 Starting low-priority idle tracking');
+          startTracking('idle');
+        }
       }
-    }, 1000); // 1s delay to let status updates settle
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [user?.id, queryClient, isTracking]);
