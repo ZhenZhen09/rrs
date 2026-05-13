@@ -47,14 +47,19 @@ router.get('/riders', authorize(['admin', 'personnel']), async (req: AuthRequest
 // Get LIVE riders (for Map)
 router.get('/riders/live', authorize(['admin', 'personnel']), async (req: AuthRequest, res: Response) => {
   try {
-    // Fetch all riders and their latest info, prioritizing users table for live coords
+    // Fetch all riders and their latest info, ensuring unique riders via GROUP BY
+    // to prevent duplicate key warnings in the frontend when a rider has multiple active tasks.
     const [rows]: any = await pool.query(`
       SELECT u.id, u.name, u.email, u.status as user_status, u.current_lat, u.current_lng,
-             dr.request_id, dr.delivery_status, dr.pickup_address, dr.time_window
+             MAX(dr.request_id) as request_id, 
+             MAX(dr.delivery_status) as delivery_status, 
+             MAX(dr.pickup_address) as pickup_address, 
+             MAX(dr.time_window) as time_window
       FROM users u
       LEFT JOIN delivery_requests dr ON u.id = dr.assigned_rider_id 
         AND dr.delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')
       WHERE u.role = 'rider'
+      GROUP BY u.id
     `);
 
     const riders = rows.map((r: any) => ({
