@@ -209,6 +209,18 @@ app.use('/api/requests', authenticate, requestRoutes);
 app.use('/api/notifications', authenticate, notificationRoutes);
 app.use('/api/analytics', authenticate, analyticsRoutes);
 
+const clientDistPath = path.resolve(__dirname, '..', '..', 'dist');
+const clientIndexPath = path.join(clientDistPath, 'index.html');
+
+if (fs.existsSync(clientIndexPath)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^(?!\/api(?:\/|$)|\/socket\.io(?:\/|$)).*/, (req, res) => {
+    res.sendFile(clientIndexPath);
+  });
+} else {
+  console.warn(`Frontend build not found at ${clientDistPath}; serving API only.`);
+}
+
 const watchdog = new RequestWatchdog(io);
 watchdog.start();
 
