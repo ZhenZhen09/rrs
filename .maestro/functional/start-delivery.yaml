@@ -1,0 +1,16 @@
+appId: host.exp.exponent
+---
+- assertVisible: "Today's Tasks"
+- tapOn:
+    id: "today_task_card_0"
+- extendedWaitUntil:
+    visible: "TRANSACTION ID"
+    timeout: 15000
+- tapOn:
+    id: "job_start_delivery_button"
+- extendedWaitUntil:
+    visible:
+      id: "job_complete_button"
+    timeout: 15000
+- assertVisible:
+    id: "job_failed_button"

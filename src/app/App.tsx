@@ -1,6 +1,7 @@
 import { RouterProvider } from 'react-router';
 import { AuthProvider } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
+import { RealTimeProvider } from './context/RealTimeContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from './components/ui/sonner';
 import { router } from './routes';
@@ -9,10 +10,12 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <DataProvider>
-          <RouterProvider router={router} />
-          <Toaster />
-        </DataProvider>
+        <RealTimeProvider>
+          <DataProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </DataProvider>
+        </RealTimeProvider>
       </AuthProvider>
     </ThemeProvider>
   );

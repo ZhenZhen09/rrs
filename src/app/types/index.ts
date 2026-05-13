@@ -42,7 +42,7 @@ export type RequestType =
   | 'On-site Assistance'
   | 'Passbook / Statement Update'
   | 'Permit Processing'
-  | 'Petty Cash Liquidation'
+  | 'Credit Collection'
   | 'Pickup'
   | 'Purchasing / Errand'
   | 'Recruitment Logistics'
@@ -66,7 +66,7 @@ export const REQUEST_CATEGORIES = {
     'Cash Collection',
     'Check Deposit / Encashment',
     'Check Retrieval',
-    'Petty Cash Liquidation',
+    'Credit Collection',
     'Passbook / Statement Update',
     'Tax & Treasury',
   ],
@@ -127,7 +127,7 @@ export const CATEGORY_CONFIG: Record<RequestType, CategoryStyle> = {
   'On-site Assistance': { icon: 'HelpingHand', color: 'text-purple-600', bgColor: 'bg-purple-50', borderColor: 'border-purple-100' },
   'Passbook / Statement Update': { icon: 'BookOpen', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
   'Permit Processing': { icon: 'ClipboardCheck', color: 'text-indigo-600', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-100' },
-  'Petty Cash Liquidation': { icon: 'Receipt', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
+  'Credit Collection': { icon: 'Receipt', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
   'Pickup': { icon: 'Package', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-100' },
   'Purchasing / Errand': { icon: 'ShoppingCart', color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100' },
   'Recruitment Logistics': { icon: 'UserPlus', color: 'text-purple-600', bgColor: 'bg-purple-50', borderColor: 'border-purple-100' },

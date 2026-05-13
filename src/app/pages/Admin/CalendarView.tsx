@@ -37,6 +37,7 @@ import {
   BadgeAlert
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -70,6 +71,7 @@ interface CalendarFilters {
 type ViewMode = 'month' | 'week';
 
 export function CalendarView() {
+  const { logout } = useAuth();
   const { requests, approveRequest, disapproveRequest, returnForRevision, refreshData } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,10 +79,11 @@ export function CalendarView() {
   const [riders, setRiders] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [selectedDayTasks, setSelectedDayTasks] = useState<{ date: Date, tasks: any[] } | null>(null);
   
   // Buffering filters (Applied only on "Apply Filters" click)
   const [activeFilters, setActiveFilters] = useState<CalendarFilters>({
-    status: ['pending', 'approved', 'assigned', 'in_transit', 'completed', 'returned_for_revision', 'submitted_waiting'],
+    status: ['pending', 'approved', 'assigned', 'in_progress', 'completed', 'failed', 'returned_for_revision', 'submitted_waiting', 'cancelled', 'disapproved'],
     rider: 'all',
     department: 'all',
     urgency: ['Low', 'Medium', 'High', 'Urgent'],
@@ -114,11 +117,12 @@ export function CalendarView() {
     }
     setIsSubmitting(true);
     try {
-      await disapproveRequest(selectedTask.request_id, remark);
-      toast.success("Request declined.");
+      // Map to cancelRequest for consistency with Dispatch Console
+      await cancelRequest(selectedTask.request_id, remark);
+      toast.success("Request cancelled.");
       setSelectedTask(null);
     } catch (err) {
-      toast.error("Failed to decline request.");
+      toast.error("Failed to cancel request.");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,7 +132,11 @@ export function CalendarView() {
   useEffect(() => {
     const fetchRiders = async () => {
       try {
-        const res = await fetch('/api/users');
+        const res = await fetch('/api/users', { credentials: 'include' });
+        if (res.status === 401) {
+          logout();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           const allUsers = Array.isArray(data) ? data : (data.data || []);
@@ -139,7 +147,7 @@ export function CalendarView() {
       }
     };
     fetchRiders();
-  }, []);
+  }, [logout]);
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
@@ -171,12 +179,13 @@ export function CalendarView() {
 
       // 2. Search Query (ID or Name)
       const matchesSearch = 
-        req.request_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        req.requester_name.toLowerCase().includes(searchQuery.toLowerCase());
+        (req.request_id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (req.requester_name || "").toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
       // 3. Status Filter
-      if (!activeFilters.status.includes(req.delivery_status || req.status)) return false;
+      const reqStatus = req.delivery_status || req.status;
+      if (!activeFilters.status.includes(reqStatus)) return false;
 
       // 4. Rider Filter
       if (activeFilters.rider !== 'all' && req.assigned_rider_id !== activeFilters.rider) return false;
@@ -222,7 +231,7 @@ export function CalendarView() {
 
   const resetFilters = () => {
     const defaults: CalendarFilters = {
-      status: ['pending', 'approved', 'assigned', 'in_transit', 'completed', 'returned_for_revision'],
+      status: ['pending', 'approved', 'assigned', 'in_progress', 'completed', 'failed', 'returned_for_revision'],
       rider: 'all',
       department: 'all',
       urgency: ['Low', 'Medium', 'High', 'Urgent'],
@@ -234,95 +243,81 @@ export function CalendarView() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Top Header Section */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+      <div className="bg-white border-b border-slate-100 px-6 py-2 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-2xl text-primary">
-            <CalendarIcon size={24} />
+          <div className="p-1.5 bg-primary/5 rounded-lg text-primary">
+            <CalendarIcon size={18} strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Calendar View</h1>
-            <div className="flex items-center gap-4 mt-2">
+            <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none">Calendar View</h1>
+            <div className="flex items-center gap-4 mt-1">
                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Approved</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Active</span>
                </div>
                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">In Transit</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]"></div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">In Progress</span>
                </div>
                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pending</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]"></div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Pending</span>
                </div>
                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Urgent</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]"></div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Failed</span>
                </div>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <div className="relative w-full md:w-56">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
             <Input 
-              placeholder="Search request ID / rider..." 
+              placeholder="Search..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-11 rounded-xl border-slate-200 bg-slate-50/50 focus-visible:ring-primary focus-visible:border-primary"
+              className="pl-8 h-7 rounded-lg border-slate-200 bg-slate-50/50 focus-visible:ring-primary/20 focus-visible:border-primary font-bold text-[10px]"
             />
           </div>
           <Button 
             variant="outline" 
             size="icon" 
             onClick={refreshData}
-            className="h-11 w-11 rounded-xl border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+            className="h-7 w-7 rounded-lg border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
           >
-            <RefreshCw className="h-4 w-4 text-slate-600" />
+            <RefreshCw className="h-3.5 w-3.5 text-slate-600" />
           </Button>
-          <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-xl border border-slate-200/50 ml-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">Active</span>
-            <div className="w-8 h-4 bg-emerald-500 rounded-full relative">
-              <div className="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"></div>
-            </div>
-          </div>
         </div>
       </div>
 
       <div className="flex-1 flex min-h-0">
         {/* Main Calendar Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
+        <div className="flex-1 flex flex-col min-w-0 bg-white">
           
           {/* Calendar Controls */}
-          <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+          <div className="px-6 py-2 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 bg-slate-50/30 border-b border-slate-100/50">
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="h-10 px-4 rounded-xl border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
-                <Filter className="w-4 h-4 mr-2" /> Filter
+              <Button variant="outline" className="h-7 px-3 rounded-lg border-slate-200 font-black text-[8px] uppercase tracking-widest text-slate-600 hover:bg-white transition-all">
+                <Filter className="w-3 h-3 mr-1" /> Filter
               </Button>
-              <div className="flex bg-slate-100/50 p-1 rounded-xl border border-slate-200/50">
+              <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-200/50">
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={goToToday} 
-                  className={cn("h-8 rounded-lg px-4 text-xs font-bold transition-all", isSameDay(currentDate, new Date()) ? "text-slate-900 bg-white shadow-sm" : "text-slate-600 hover:bg-white hover:shadow-sm")}
+                  className={cn("h-6 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all", isSameDay(currentDate, new Date()) ? "text-slate-900 bg-white shadow-sm" : "text-slate-500 hover:text-slate-900")}
                 >
                   Today
                 </Button>
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={() => setViewMode('week')}
-                  className={cn("h-8 rounded-lg px-4 text-xs font-bold transition-all", viewMode === 'week' ? "text-slate-900 bg-white shadow-sm" : "text-slate-600 hover:bg-white hover:shadow-sm")}
-                >
-                  Week
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
                   onClick={() => setViewMode('month')}
-                  className={cn("h-8 rounded-lg px-4 text-xs font-bold transition-all", viewMode === 'month' ? "text-slate-900 bg-white shadow-sm" : "text-slate-600 hover:bg-white hover:shadow-sm")}
+                  className={cn("h-6 rounded-md px-3 text-[8px] font-black uppercase tracking-widest transition-all", viewMode === 'month' ? "text-slate-900 bg-white shadow-sm" : "text-slate-500 hover:text-slate-900")}
                 >
                   Month
                 </Button>
@@ -330,39 +325,42 @@ export function CalendarView() {
             </div>
 
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-black text-slate-900 min-w-[140px] text-center tracking-tight">
-                {format(currentDate, viewMode === 'month' ? 'MMMM yyyy' : "'Week of' MMM d, yyyy")}
-              </h2>
               <div className="flex gap-1">
-                <Button variant="outline" size="icon" onClick={prevMonth} className="h-10 w-10 rounded-xl border-slate-200 hover:bg-slate-50 transition-all active:scale-95">
-                  <ChevronLeft className="h-5 w-5 text-slate-600" />
+                <Button variant="outline" size="icon" onClick={prevMonth} className="h-7 w-7 rounded-lg border-slate-200 hover:bg-white hover:shadow-sm transition-all active:scale-95">
+                  <ChevronLeft className="h-4 w-4 text-slate-600" />
                 </Button>
-                <Button variant="outline" size="icon" onClick={nextMonth} className="h-10 w-10 rounded-xl border-slate-200 hover:bg-slate-50 transition-all active:scale-95">
-                  <ChevronRight className="h-5 w-5 text-slate-600" />
+                <Button variant="outline" size="icon" onClick={nextMonth} className="h-7 w-7 rounded-lg border-slate-200 hover:bg-white hover:shadow-sm transition-all active:scale-95">
+                  <ChevronRight className="h-4 w-4 text-slate-600" />
                 </Button>
               </div>
+              <h2 className="text-sm font-black text-slate-900 min-w-[120px] text-center tracking-tight">
+                {format(currentDate, 'MMMM yyyy')}
+              </h2>
             </div>
 
-            <div className="flex items-center gap-3">
-               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">My Requests Only</span>
-               <div className="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer" onClick={() => setMyRequestsOnly(!myRequestsOnly)}>
-                  <div className={cn("absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300", myRequestsOnly ? "right-0.5" : "left-0.5")}></div>
+            <div className="flex items-center gap-2 bg-white px-2.5 h-7 rounded-lg border border-slate-100 shadow-sm">
+               <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">My Requests</span>
+               <div 
+                 className={cn("w-7 h-3.5 rounded-full relative cursor-pointer transition-colors duration-300", myRequestsOnly ? "bg-emerald-500" : "bg-slate-200")} 
+                 onClick={() => setMyRequestsOnly(!myRequestsOnly)}
+               >
+                  <div className={cn("absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full shadow-sm transition-all duration-300", myRequestsOnly ? "right-0.5" : "left-0.5")}></div>
                </div>
             </div>
           </div>
 
           {/* Days of Week Header */}
-          <div className="grid grid-cols-7 border-b border-slate-100 shrink-0">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="py-3 text-center border-r border-slate-50 last:border-r-0">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{day}</span>
+          <div className="grid grid-cols-7 border-b border-slate-100 shrink-0 bg-white">
+            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
+              <div key={day} className="py-2 text-center border-r border-slate-50 last:border-r-0">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">{day}</span>
               </div>
             ))}
           </div>
 
           {/* Calendar Grid */}
           <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
-            <div className={cn("grid grid-cols-7", viewMode === 'month' ? "min-h-full" : "h-auto")}>
+            <div className="grid grid-cols-7 min-h-full">
               {calendarDays.map((day, idx) => {
                 const dayKey = format(day, 'yyyy-MM-dd');
                 const dayRequests = requestsByDay[dayKey] || [];
@@ -373,24 +371,42 @@ export function CalendarView() {
                   <div 
                     key={day.toString()} 
                     className={cn(
-                      "min-h-[140px] border-r border-b border-slate-100 p-2 transition-colors flex flex-col",
-                      !isCurrentMonth && viewMode === 'month' && "bg-slate-50/40 opacity-40",
-                      isToday && "bg-blue-50/30"
+                      "min-h-[140px] border-r border-b border-slate-100 p-2.5 transition-colors flex flex-col",
+                      !isCurrentMonth && "bg-slate-50/20 opacity-40 grayscale-[0.5]",
+                      isToday && "bg-emerald-50/5"
                     )}
                   >
-                    <div className="flex justify-between items-center mb-2 px-1">
+                    <div className="flex justify-between items-start mb-2">
                       <span className={cn(
-                        "text-xs font-bold leading-none w-6 h-6 flex items-center justify-center rounded-lg transition-all",
-                        isToday ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-slate-400"
+                        "text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-md transition-all",
+                        isToday ? "bg-emerald-500 text-white shadow-sm" : "text-slate-400"
                       )}>
                         {format(day, 'd')}
                       </span>
+                      {dayRequests.length > 0 && (
+                        <button 
+                          onClick={() => setSelectedDayTasks({ date: day, tasks: dayRequests })}
+                          className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-tighter hover:text-primary hover:underline transition-colors"
+                        >
+                          {dayRequests.length} {dayRequests.length === 1 ? 'event' : 'events'}
+                        </button>
+                      )}
                     </div>
 
-                    <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[120px] scrollbar-hide">
-                      {dayRequests.map(req => (
-                        <CalendarTaskCard key={req.request_id} request={req} onClick={() => setSelectedTask(req)} />
+                    <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[100px] scrollbar-hide">
+                      {dayRequests.slice(0, 4).map(req => (
+                        <CalendarTaskRow key={req.request_id} request={req} onClick={() => setSelectedTask(req)} />
                       ))}
+                      {dayRequests.length > 4 && (
+                        <div className="pl-1.5 py-0.5">
+                          <button 
+                            onClick={() => setSelectedDayTasks({ date: day, tasks: dayRequests })}
+                            className="text-[8px] font-black text-primary uppercase tracking-widest cursor-pointer hover:underline"
+                          >
+                            + {dayRequests.length - 4} more
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -400,109 +416,71 @@ export function CalendarView() {
         </div>
 
         {/* Right Sidebar Filters */}
-        <aside className="w-[320px] bg-white border-l border-slate-100 flex flex-col shrink-0 overflow-hidden shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
-          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-            <h3 className="text-lg font-black text-slate-900 tracking-tight">Filters</h3>
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="text-[10px] font-black uppercase text-primary hover:bg-primary/5 rounded-lg h-8">Reset</Button>
+        <aside className="w-[220px] bg-white border-l border-slate-100 flex flex-col shrink-0 overflow-hidden shadow-[-5px_0_20px_rgba(0,0,0,0.01)]">
+          <div className="p-3 border-b border-slate-50 flex items-center justify-between">
+            <h3 className="text-xs font-black text-slate-900 tracking-tight">Filters</h3>
+            <button onClick={resetFilters} className="text-[7px] font-black uppercase text-primary hover:bg-primary/5 rounded-md h-5 px-2">Clear</button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
             {/* Status Filter */}
-            <div className="space-y-4">
-               <div className="flex items-center justify-between">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</h4>
-                 <ChevronLeft className="w-3 h-3 text-slate-300 -rotate-90" />
-               </div>
-               <div className="space-y-2.5">
+            <div className="space-y-2">
+               <h4 className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status</h4>
+               <div className="space-y-1">
                   <FilterCheckbox label="Pending" checked={localFilters.status.includes('pending')} onChange={() => toggleStatus('pending')} />
                   <FilterCheckbox label="Approved" checked={localFilters.status.includes('approved')} onChange={() => toggleStatus('approved')} />
                   <FilterCheckbox label="Assigned" checked={localFilters.status.includes('assigned')} onChange={() => toggleStatus('assigned')} />
-                  <FilterCheckbox label="In Transit" checked={localFilters.status.includes('in_transit')} onChange={() => toggleStatus('in_transit')} />
+                  <FilterCheckbox label="In Progress" checked={localFilters.status.includes('in_progress')} onChange={() => toggleStatus('in_progress')} />
                   <FilterCheckbox label="Revision" checked={localFilters.status.includes('returned_for_revision')} onChange={() => toggleStatus('returned_for_revision')} />
                   <FilterCheckbox label="Completed" checked={localFilters.status.includes('completed')} onChange={() => toggleStatus('completed')} />
+                  <FilterCheckbox label="Failed" checked={localFilters.status.includes('failed')} onChange={() => toggleStatus('failed')} />
                </div>
             </div>
 
             {/* Rider Filter */}
-            <div className="space-y-4">
-               <div className="flex items-center justify-between">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rider</h4>
-                 <ChevronLeft className="w-3 h-3 text-slate-300 -rotate-90" />
-               </div>
+            <div className="space-y-2">
+               <h4 className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rider</h4>
                <Select value={localFilters.rider} onValueChange={(val) => setLocalFilters(prev => ({ ...prev, rider: val }))}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 w-full font-bold text-slate-700 bg-slate-50/50">
-                    <SelectValue placeholder="Select Rider" />
+                  <SelectTrigger className="h-7 rounded-md border-slate-200 w-full font-bold text-slate-700 bg-slate-50/50 hover:bg-white transition-all shadow-none border-none px-2">
+                    <SelectValue placeholder="Select" className="text-[9px]" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="all">All Riders</SelectItem>
+                  <SelectContent className="rounded-md border-slate-100 shadow-xl p-1">
+                    <SelectItem value="all" className="rounded-sm py-1 font-bold text-[9px]">All Riders</SelectItem>
                     {riders.map(rider => (
-                      <SelectItem key={rider.id} value={rider.id}>{rider.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-               </Select>
-            </div>
-
-            {/* Department Filter */}
-            <div className="space-y-4">
-               <div className="flex items-center justify-between">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Department</h4>
-                 <ChevronLeft className="w-3 h-3 text-slate-300 -rotate-90" />
-               </div>
-               <Select value={localFilters.department} onValueChange={(val) => setLocalFilters(prev => ({ ...prev, department: val }))}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 w-full font-bold text-slate-700 bg-slate-50/50">
-                    <SelectValue placeholder="Select Department" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {DEPARTMENTS.map(dept => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      <SelectItem key={rider.id} value={rider.id} className="rounded-sm py-1 font-bold text-[9px]">{rider.name}</SelectItem>
                     ))}
                   </SelectContent>
                </Select>
             </div>
 
             {/* Urgency Level Filter */}
-            <div className="space-y-4">
-               <div className="flex items-center justify-between">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Urgency Level</h4>
-                 <ChevronLeft className="w-3 h-3 text-slate-300 -rotate-90" />
-               </div>
-               <div className="grid grid-cols-2 gap-3">
-                  <FilterCheckbox label="Low" checked={localFilters.urgency.includes('Low')} onChange={() => toggleUrgency('Low')} />
-                  <FilterCheckbox label="Medium" checked={localFilters.urgency.includes('Medium')} onChange={() => toggleUrgency('Medium')} />
-                  <FilterCheckbox label="High" checked={localFilters.urgency.includes('High')} onChange={() => toggleUrgency('High')} />
-                  <FilterCheckbox label="Urgent" checked={localFilters.urgency.includes('Urgent')} colorClass="text-rose-600" onChange={() => toggleUrgency('Urgent')} />
-               </div>
-            </div>
-
-            {/* Date Range Filter */}
-            <div className="space-y-4">
-               <div className="flex items-center justify-between">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date Range</h4>
-                 <ChevronLeft className="w-3 h-3 text-slate-300 -rotate-90" />
-               </div>
-               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
-                  <CalendarIcon className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs font-bold text-slate-600">
-                    {format(calendarDays[0], 'MMM d, yyyy')} — {format(calendarDays[calendarDays.length - 1], 'MMM d, yyyy')}
-                  </span>
+            <div className="space-y-2">
+               <h4 className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Urgency</h4>
+               <div className="flex gap-1 flex-wrap">
+                  {['Low', 'Medium', 'High', 'Urgent'].map(level => (
+                    <button
+                      key={level}
+                      onClick={() => toggleUrgency(level)}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest transition-all border",
+                        localFilters.urgency.includes(level) 
+                          ? "bg-slate-900 border-slate-900 text-white" 
+                          : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                      )}
+                    >
+                      {level}
+                    </button>
+                  ))}
                </div>
             </div>
           </div>
 
-          <div className="p-6 border-t border-slate-50 bg-slate-50/30 grid grid-cols-2 gap-3">
+          <div className="p-3 border-t border-slate-50 bg-slate-50/30">
             <Button 
               onClick={applyFilters}
-              className="h-12 bg-primary hover:bg-primary/90 text-white rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-primary/20 transition-all active:scale-95"
+              className="w-full h-8 bg-primary hover:bg-primary/90 text-white rounded-md font-black text-[9px] uppercase tracking-widest shadow-sm"
             >
-              Apply Filters
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={resetFilters} 
-              className="h-12 rounded-xl border-slate-200 font-black text-[11px] uppercase tracking-widest bg-white hover:bg-slate-50 transition-all active:scale-95"
-            >
-              Reset All
+              Update View
             </Button>
           </div>
         </aside>
@@ -510,10 +488,10 @@ export function CalendarView() {
 
       {/* Task Details Modal */}
       <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
-        <DialogContent className="max-w-[95vw] lg:max-w-6xl h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden">
+        <DialogContent className="max-w-[95vw] lg:max-w-6xl h-[90vh] rounded-[2rem] p-0 border-none shadow-2xl overflow-hidden">
           <DialogHeader className="sr-only">
             <DialogTitle>Request Details</DialogTitle>
-            <DialogDescription>View and manage the details of the selected delivery request.</DialogDescription>
+            <DialogDescription>View and manage request details.</DialogDescription>
           </DialogHeader>
           {selectedTask && (
             <RequestDetailsPanel 
@@ -529,87 +507,94 @@ export function CalendarView() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Day Schedule Modal */}
+      <Dialog open={!!selectedDayTasks} onOpenChange={(open) => !open && setSelectedDayTasks(null)}>
+        <DialogContent className="max-w-xs rounded-xl p-0 border-none shadow-2xl overflow-hidden bg-white">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900 leading-none">Day Schedule</h3>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                  {selectedDayTasks && format(selectedDayTasks.date, 'MMM d')}
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center text-primary">
+                <CalendarIcon size={16} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
+              {selectedDayTasks?.tasks.map(req => (
+                <div key={req.request_id} className="p-0.5 hover:bg-slate-50 rounded-md transition-all">
+                  <CalendarTaskRow 
+                    request={req} 
+                    onClick={() => {
+                      setSelectedDayTasks(null);
+                      setTimeout(() => setSelectedTask(req), 100);
+                    }} 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="p-3 bg-slate-50 border-t border-slate-100">
+            <Button 
+              onClick={() => setSelectedDayTasks(null)} 
+              variant="outline" 
+              className="w-full h-8 rounded-md font-black text-[9px] uppercase tracking-widest border-slate-200"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// Small Component for individual calendar cards
-function CalendarTaskCard({ request, onClick }: { request: any, onClick: () => void }) {
+// kondensed row for individual events
+function CalendarTaskRow({ request, onClick }: { request: any, onClick: () => void }) {
   const isRevision = request.status === 'returned_for_revision';
 
-  const getStatusColor = (status: string, urgency: string) => {
-    if (urgency === 'Urgent') return 'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100 shadow-sm';
-    switch (status) {
-      case 'completed': return 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100';
-      case 'assigned':
-      case 'in_transit': return 'bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100 shadow-sm';
-      case 'approved': return 'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100 shadow-sm';
-      default: return 'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100 shadow-sm';
-    }
-  };
-
-  const getStatusIndicator = (status: string, urgency: string) => {
+  const getStatusDotColor = (status: string, urgency: string) => {
     if (urgency === 'Urgent') return 'bg-rose-500';
     switch (status) {
       case 'completed': return 'bg-slate-400';
-      case 'assigned':
-      case 'in_transit': return 'bg-blue-500';
+      case 'failed': return 'bg-rose-500';
+      case 'in_progress': return 'bg-blue-500';
+      case 'assigned': return 'bg-emerald-500';
       case 'approved': return 'bg-emerald-500';
       default: return 'bg-amber-500';
     }
   };
-  
+
   return (
-    <div 
+    <button 
       onClick={onClick}
       className={cn(
-        "p-2.5 rounded-xl border transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98] shadow-sm",
-        getStatusColor(request.delivery_status || request.status, request.urgency_level),
-        isRevision && "opacity-50 grayscale-[0.8] pointer-events-none"
+        "w-full flex items-center gap-2 px-2 py-1 rounded-md transition-all text-left group hover:bg-slate-50 active:scale-[0.98]",
+        isRevision && "opacity-40 grayscale pointer-events-none"
       )}
     >
-      <div className="flex items-center justify-between gap-1 mb-1.5">
-        <span className="text-[10px] font-black tracking-tight opacity-70">#{request.request_id.slice(-8)}</span>
-        <div className={cn("w-2 h-2 rounded-full shrink-0", getStatusIndicator(request.delivery_status || request.status, request.urgency_level))}></div>
-      </div>
-      
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-black leading-tight truncate flex-1">{request.requester_name}</p>
-        <p className="text-[9px] font-bold opacity-70 whitespace-nowrap">{request.time_window?.split('-')[0].trim()}</p>
-      </div>
-      
-      <p className="text-[9px] font-bold mt-1 opacity-60 truncate">
-        {request.pickup_location.address.split(',')[0]} → {request.dropoff_location.address.split(',')[0]}
-      </p>
-
-      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-current/10">
-        <div className="flex items-center gap-1">
-          <User className="w-2.5 h-2.5 opacity-60" />
-          <span className="text-[8px] font-black uppercase tracking-tight truncate max-w-[60px]">
-            {request.assigned_rider_name || 'Unassigned'}
-          </span>
-        </div>
-        {request.urgency_level === 'Urgent' && (
-          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-rose-500 text-white rounded-md">
-             <AlertCircle className="w-2 h-2" />
-             <span className="text-[7px] font-black uppercase">Urgent</span>
-          </div>
-        )}
-      </div>
-    </div>
+      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", getStatusDotColor(request.delivery_status || request.status, request.urgency_level))}></div>
+      <span className="text-[8px] font-bold text-slate-900 truncate">
+        {request.on_behalf_of || request.requester_name}
+      </span>
+    </button>
   );
 }
 
 // Simple Checkbox wrapper for filters
-function FilterCheckbox({ label, checked, onChange, colorClass = "text-slate-700" }: { label: string, checked: boolean, onChange: () => void, colorClass?: string }) {
+function FilterCheckbox({ label, checked, onChange }: { label: string, checked: boolean, onChange: () => void }) {
   return (
-    <div className="flex items-center space-x-3 group cursor-pointer" onClick={onChange}>
+    <div className="flex items-center space-x-2 group cursor-pointer" onClick={onChange}>
       <Checkbox 
         checked={checked} 
         onCheckedChange={onChange}
-        className="rounded-md border-slate-200 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all group-hover:border-primary/50"
+        className="h-3.5 w-3.5 rounded border-slate-200 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all"
       />
-      <label className={cn("text-xs font-bold leading-none select-none cursor-pointer transition-colors group-hover:text-slate-900", checked ? colorClass : "text-slate-500")}>
+      <label className={cn("text-[9px] font-black uppercase tracking-widest select-none cursor-pointer transition-colors group-hover:text-slate-900", checked ? "text-slate-900" : "text-slate-400")}>
         {label}
       </label>
     </div>

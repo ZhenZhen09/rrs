@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 const locationSchema = z.object({
-  lat: z.number(),
-  lng: z.number(),
+  lat: z.coerce.number(),
+  lng: z.coerce.number(),
   address: z.string().min(1, 'Address is required'),
   businessName: z.string().optional().nullable(),
   landmarks: z.string().optional().nullable()
@@ -19,12 +19,12 @@ export const createRequestSchema = z.object({
   pickup_contact_name: z.string().optional().nullable(),
   pickup_contact_mobile: z.string().optional().nullable(),
   recipient_name: z.string().min(1, 'Recipient name is required'),
-  recipient_contact: z.string().optional(),
+  recipient_contact: z.string().optional().nullable(),
   request_type: z.string().min(1, 'Request type is required'),
   urgency_level: z.string().min(1, 'Urgency level is required'),
-  on_behalf_of: z.string().optional(),
-  personnel_instructions: z.string().optional(),
-  admin_remark: z.string().optional()
+  on_behalf_of: z.string().optional().nullable(),
+  personnel_instructions: z.string().optional().nullable(),
+  admin_remark: z.string().optional().nullable()
 });
 
 export const approveRequestSchema = z.object({
@@ -32,12 +32,20 @@ export const approveRequestSchema = z.object({
   admin_remark: z.string().optional()
 });
 
+export const disapproveRequestSchema = z.object({
+  admin_remark: z.string().optional()
+});
+
+export const returnRequestSchema = z.object({
+  admin_remark: z.string().min(1, 'Admin remark is required for revision')
+});
+
 export const updateStatusSchema = z.object({
   status: z.enum(['assigned', 'in_progress', 'arrived', 'completed', 'failed'], {
     message: "Invalid delivery status"
   }),
   remark: z.string().optional(),
-  current_lat: z.number().optional(),
-  current_lng: z.number().optional(),
+  current_lat: z.coerce.number().optional(),
+  current_lng: z.coerce.number().optional(),
   timestamp: z.string().optional()
 });

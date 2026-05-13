@@ -33,3 +33,12 @@ export const markNotificationAsRead = async (notificationId: string) => {
 export const markAllNotificationsAsRead = async (userId: string) => {
   return api.put(`/api/notifications/read-all/${userId}`);
 };
+
+export const updateLocationBackground = async (data: {
+  riderId: string;
+  lat: number;
+  lng: number;
+  requestId: string;
+}) => {
+  return api.post('/api/users/location', data);
+};

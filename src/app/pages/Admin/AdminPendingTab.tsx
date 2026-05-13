@@ -128,11 +128,18 @@ export function AdminPendingTab({
                     Requester Name
                   </p>
                   <h4 className="font-[900] text-slate-900 text-lg leading-none tracking-tight">
-                    {req.requester_name}
+                    {req.on_behalf_of || req.requester_name}
                   </h4>
-                  <div className="text-[10px] text-primary font-black mt-2 uppercase tracking-widest flex items-center gap-1.5">
-                    <div className="w-1 h-1 rounded-full bg-primary" />
-                    {req.requester_department}
+                  <div className="flex flex-col gap-1 mt-2">
+                    {req.on_behalf_of && req.on_behalf_of !== req.requester_name && (
+                      <div className="text-[8px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                        <User size={8} /> Account: {req.requester_name}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-primary font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <div className="w-1 h-1 rounded-full bg-primary" />
+                      {req.requester_department}
+                    </div>
                   </div>
                 </div>
               </div>

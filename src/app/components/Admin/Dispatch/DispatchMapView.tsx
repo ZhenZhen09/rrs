@@ -1,27 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Location } from '../../../types';
-import { Bike } from 'lucide-react';
-import { renderToString } from 'react-dom/server';
 import { Button } from '../../ui/button';
-
-// Fix for default Leaflet icons in React
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-
-const DefaultIcon = L.icon({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  tooltipAnchor: [16, -28],
-  shadowSize: [41, 41]
-});
+import carTopViewIconUrl from '../../../assets/car-top-view-marker.svg';
 
 // Custom Icons for Origin and Destination
 const originIcon = L.divIcon({
@@ -38,19 +21,21 @@ const destinationIcon = L.divIcon({
   iconAnchor: [7, 7]
 });
 
-// Rider Icon using Lucide Bike
+// Rider Icon using car top-view asset
 const riderIcon = L.divIcon({
   className: 'custom-div-icon',
-  html: renderToString(
-    <div className="relative flex flex-col items-center">
-      <div className="bg-blue-500 p-1.5 rounded-full border-2 border-white shadow-lg animate-bounce-short">
-        <Bike size={18} color="white" strokeWidth={3} />
-      </div>
-      <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-30 -z-10"></div>
+  html: `
+    <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; animation: car-road-glide-mini 1.4s ease-in-out infinite;">
+      <img
+        src="${carTopViewIconUrl}"
+        alt=""
+        style="width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(15,23,42,0.28));"
+      />
+      <div style="position: absolute; inset: 0; background: #60a5fa; border-radius: 9999px; opacity: 0.22; z-index: -1; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
     </div>
-  ),
-  iconSize: [32, 32],
-  iconAnchor: [16, 32]
+  `,
+  iconSize: [46, 46],
+  iconAnchor: [23, 23]
 });
 
 interface DispatchMapViewProps {
@@ -59,30 +44,76 @@ interface DispatchMapViewProps {
   current?: { lat: number, lng: number } | null;
 }
 
-function RecenterMap({ origin, destination, current }: DispatchMapViewProps) {
-  const map = useMap();
-  
+function MapCameraController({
+  origin,
+  destination,
+  current,
+  followMode,
+  onUserInteraction,
+}: DispatchMapViewProps & {
+  followMode: boolean;
+  onUserInteraction: () => void;
+}) {
+  const hasInitialFitRef = useRef(false);
+  const isProgrammaticMove = useRef(false);
+  const map = useMapEvents({
+    dragstart: () => {
+      if (!isProgrammaticMove.current) onUserInteraction();
+    },
+    zoomstart: () => {
+      if (!isProgrammaticMove.current) onUserInteraction();
+    },
+  });
+
   useEffect(() => {
-    if (origin && destination) {
-      const points: [number, number][] = [
-        [origin.lat, origin.lng],
-        [destination.lat, destination.lng]
-      ];
-      
-      if (current) {
-        points.push([current.lat, current.lng]);
-      }
-      
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [50, 50], animate: true });
+    if (!origin || !destination || hasInitialFitRef.current) {
+      return;
     }
+
+    isProgrammaticMove.current = true;
+    const points: [number, number][] = [
+      [origin.lat, origin.lng],
+      [destination.lat, destination.lng],
+    ];
+
+    if (current) {
+      points.push([current.lat, current.lng]);
+    }
+
+    const bounds = L.latLngBounds(points);
+    map.fitBounds(bounds, { padding: [50, 50], animate: false });
+    hasInitialFitRef.current = true;
+    window.setTimeout(() => {
+      isProgrammaticMove.current = false;
+    }, 100);
   }, [origin, destination, current, map]);
+
+  useEffect(() => {
+    if (!current || !followMode) {
+      return;
+    }
+
+    isProgrammaticMove.current = true;
+    map.panTo([current.lat, current.lng], {
+      animate: true,
+      duration: 0.7,
+      easeLinearity: 0.35,
+      noMoveStart: true,
+    });
+
+    const timeout = window.setTimeout(() => {
+      isProgrammaticMove.current = false;
+    }, 800);
+
+    return () => window.clearTimeout(timeout);
+  }, [current, followMode, map]);
 
   return null;
 }
 
 export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destination, current }) => {
   const mapRef = useRef<L.Map | null>(null);
+  const [followMode, setFollowMode] = React.useState(true);
   const polylinePositions: [number, number][] = [
     [origin.lat, origin.lng],
     [destination.lat, destination.lng]
@@ -109,6 +140,10 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         }
         .fab-glow-mini {
           box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+        }
+        @keyframes car-road-glide-mini {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-1px) scale(1.025); }
         }
       `}} />
 
@@ -144,7 +179,13 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
           opacity={0.6}
         />
         
-        <RecenterMap origin={origin} destination={destination} current={current} />
+        <MapCameraController
+          origin={origin}
+          destination={destination}
+          current={current}
+          followMode={followMode}
+          onUserInteraction={() => setFollowMode(false)}
+        />
       </MapContainer>
 
       {/* Map Overlays */}
@@ -173,6 +214,32 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
           </div>
         )}
       </div>
+
+      {current && (
+        <div className="absolute bottom-4 right-4 z-[400] flex flex-col items-end gap-2">
+          <div className="rounded-full bg-white/95 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100">
+            Follow {followMode ? 'On' : 'Off'}
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setFollowMode(true);
+              mapRef.current?.panTo([current.lat, current.lng], {
+                animate: true,
+                duration: 0.8,
+              });
+            }}
+            className={`h-10 w-10 rounded-full border-none p-0 shadow-xl ${
+              followMode
+                ? 'bg-gradient-to-br from-emerald-500 to-blue-600'
+                : 'bg-gradient-to-br from-slate-700 to-slate-950'
+            }`}
+            aria-label={followMode ? 'Following rider location' : 'Recenter rider location'}
+          >
+            <img src={carTopViewIconUrl} alt="" className="h-7 w-7 object-contain drop-shadow-md" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

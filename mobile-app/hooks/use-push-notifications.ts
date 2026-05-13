@@ -37,9 +37,15 @@ export function usePushNotifications(userId?: string) {
     registerForPushNotificationsAsync().then(token => {
       if (token) {
         setExpoPushToken(token);
-        // Updated to use the correct endpoint we just created
-        api.post('/api/notifications/register-token', { userId, token })
-          .catch(err => console.error('Failed to register push token:', err));
+        // Server now extracts user ID from the JWT token for security
+        api.post('/api/notifications/register-token', { token })
+          .catch(err => {
+            if (err.response?.status === 401) {
+              console.warn('📱 Push registration: Waiting for fresh login session...');
+            } else {
+              console.error('Failed to register push token:', err);
+            }
+          });
       }
     });
 

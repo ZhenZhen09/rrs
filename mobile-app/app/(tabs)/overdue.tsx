@@ -1,80 +1,52 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/Colors';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { api } from '@/utils/api';
-import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'expo-router';
 import { getLocalDateStr, formatDisplayDate } from '@/utils/dateUtils';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
-
-interface DeliveryRequest {
-  request_id: string;
-  requester_name: string;
-  delivery_date: string;
-  time_window: string;
-  pickup_location: { address: string };
-  dropoff_location: { address: string };
-  recipient_name: string;
-  delivery_status: string;
-  assigned_rider_id: string;
-}
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { useDashboard } from '@/hooks/data/useDashboard';
+import { NotificationModal } from '@/components/NotificationModal';
 
 export default function OverdueScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [tasks, setTasks] = useState<DeliveryRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
+  const { 
+    tasks: allTasks,
+    loading,
+    refreshing,
+    onRefresh,
+    notifications,
+    unreadCount, 
+    isNotifOpen, 
+    setIsNotifOpen, 
+    handleLogout, 
+    handleNotificationClick, 
+    handleMarkAllRead,
+    router
+  } = useDashboard();
 
-  const fetchTasks = useCallback(async () => {
-    try {
-      const response = await api.get('/api/requests');
-      const allRequests: DeliveryRequest[] = Array.isArray(response.data) ? response.data : response.data.data;
-      
-      const todayStr = getLocalDateStr(new Date());
-
-      const riderTasks = allRequests.filter(req => {
-        // Handle dates accurately by comparing YYYY-MM-DD strings
-        const dbDateStr = getLocalDateStr(req.delivery_date);
-
-        return (
-          req.assigned_rider_id === user?.id && 
-          dbDateStr < todayStr &&
-          req.delivery_status !== 'completed' &&
-          req.delivery_status !== 'cancelled' &&
-          req.delivery_status !== 'failed'
-        );
-      });
-      
-      setTasks(riderTasks);
-    } catch (err) {
-      console.error('Fetch overdue tasks error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchTasks();
-  };
+  const todayStr = getLocalDateStr(new Date());
+  const tasks = allTasks.filter(req => {
+    const isPast = getLocalDateStr(req.delivery_date) < todayStr;
+    const isApproved = req.status === 'approved';
+    const isNotTerminal = !['completed', 'delivered', 'failed', 'cancelled'].includes(req.delivery_status);
+    return isPast && isApproved && isNotTerminal;
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Overdue Tasks</Text>
-        <Text style={styles.subtitle}>Items from previous days</Text>
-      </View>
+      <ScreenHeader 
+        title="Overdue Tasks"
+        subtitle="Items from previous days"
+        badgeLabel="OVERDUE"
+        badgeStatus="danger"
+        onNotifPress={() => setIsNotifOpen(true)}
+        onLogoutPress={handleLogout}
+        unreadCount={unreadCount}
+      />
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -84,24 +56,27 @@ export default function OverdueScreen() {
           <>
             <SkeletonCard />
             <SkeletonCard />
-            <SkeletonCard />
           </>
         ) : tasks.length === 0 ? (
           <View style={styles.empty}>
             <MaterialIcons name="check-circle" size={64} color="#E2E8F0" />
             <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptyText}>You have no overdue tasks at this moment.</Text>
+            <Text style={styles.emptyText}>You have no overdue tasks.</Text>
           </View>
         ) : (
-          tasks.map(task => (
+          tasks.map((task, index) => (
             <Card key={task.request_id} style={styles.card}>
-              <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/job/${task.request_id}`)}>
+              <TouchableOpacity
+                testID={`overdue_task_card_${index}`}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/job/${task.request_id}`)}
+              >
                 <View style={styles.cardHeader}>
                   <View>
                     <Text style={styles.dateLabel}>SCHEDULED FOR</Text>
                     <Text style={styles.dateText}>{task?.delivery_date ? formatDisplayDate(task.delivery_date) : 'N/A'}</Text>
                   </View>
-                  <Badge label="OVERDUE" status="danger" />
+                  <Badge label="LATE" status="danger" />
                 </View>
 
                 <View style={styles.divider} />
@@ -120,7 +95,7 @@ export default function OverdueScreen() {
                 <View style={styles.footer}>
                   <Text style={styles.timeWindow}>{task?.time_window || 'No time set'}</Text>
                   <View style={styles.action}>
-                    <Text style={styles.actionText}>View Details</Text>
+                    <Text style={styles.actionText}>View</Text>
                     <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
                   </View>
                 </View>
@@ -129,6 +104,14 @@ export default function OverdueScreen() {
           ))
         )}
       </ScrollView>
+
+      <NotificationModal 
+        visible={isNotifOpen}
+        onClose={() => setIsNotifOpen(false)}
+        notifications={notifications}
+        onNotificationClick={handleNotificationClick}
+        onMarkAllRead={handleMarkAllRead}
+      />
     </SafeAreaView>
   );
 }
@@ -137,28 +120,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    padding: scale(20),
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  title: {
-    fontSize: normalizeFontSize(24),
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  subtitle: {
-    fontSize: normalizeFontSize(14),
-    color: '#EF4444',
-    fontWeight: '600',
-    marginTop: verticalScale(2),
   },
   scrollContent: {
     padding: scale(20),

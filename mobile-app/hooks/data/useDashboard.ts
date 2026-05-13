@@ -1,14 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { Alert } from 'react-native';
-import { io, Socket } from 'socket.io-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTasks, getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
 import { Job } from '@/types';
 import { getLocalDateStr } from '@/utils/dateUtils';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
-import { Config } from '@/constants/Config';
 
 export const useDashboard = () => {
   const { user, logout } = useAuth();
@@ -28,17 +26,6 @@ export const useDashboard = () => {
     queryKey: ['tasks', user?.id],
     queryFn: getTasks,
     enabled: !!user?.id,
-    select: (allRequests) => {
-      const todayStr = getLocalDateStr(new Date());
-      return allRequests.filter((req: Job) => {
-        if (req?.assigned_rider_id !== user?.id) return false;
-        if (['completed', 'failed', 'cancelled'].includes(req.delivery_status)) return false;
-        const dbDateOnly = typeof req.delivery_date === 'string' 
-          ? req.delivery_date.substring(0, 10) 
-          : getLocalDateStr(req.delivery_date);
-        return dbDateOnly === todayStr;
-      });
-    },
   });
 
   // Use TanStack Query for Notifications
@@ -53,7 +40,6 @@ export const useDashboard = () => {
   });
 
   const loading = tasksLoading || notifsLoading;
-  const socketRef = useRef<Socket | null>(null);
 
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
@@ -101,46 +87,8 @@ export const useDashboard = () => {
     }
   }, [currentPushNotification, refetchTasks, refetchNotifs]);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    
-    socketRef.current = io(Config.API_URL, {
-      transports: ['websocket', 'polling'], // Allow polling fallback for Expo Go
-      reconnectionAttempts: 10,
-      timeout: 10000,
-    });
-
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      console.log('Socket connected - Dashboard');
-      if (user?.id) {
-        socket.emit('join', user.id);
-      }
-    });
-
-    socket.on('new_assignment', (data) => {
-      console.log('Socket Update: New task detected');
-      // Invalidating the query triggers a background refetch
-      queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
-    });
-
-    socket.on('notification-added', (data) => {
-      console.log('Socket Update: New notification received');
-      refetchNotifs();
-      refetchTasks(); // Refetch tasks too as status might have changed
-    });
-
-    return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.off('new_assignment');
-        socket.off('notification-added');
-        socket.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, [user?.id, queryClient]);
+  // --- SENIOR NOTE: Socket logic has been moved to LocationContext (Global Scope) ---
+  // This hook now relies on global query invalidation for reactivity.
 
   const onRefresh = useCallback(() => {
     refetchTasks();
@@ -151,7 +99,7 @@ export const useDashboard = () => {
     user,
     loading,
     tasks,
-    error: null, // TanStack Query handles error states via isError/error, but we keep null for compatibility
+    error: null,
     isMenuOpen,
     setIsMenuOpen,
     isNotifOpen,

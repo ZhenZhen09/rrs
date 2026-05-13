@@ -5,7 +5,7 @@ import {
   useMapEvents,
   useMap,
   ZoomControl,
-  Marker
+  Marker,
 } from "react-leaflet";
 import L from "leaflet";
 import { type Location } from "../types";
@@ -13,14 +13,34 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { MapPin, Loader2, Target, X, Navigation, History, Star, ArrowRight, Search, Map as MapIcon, ChevronRight, Check, MapPinned, Info, Building2, InfoIcon } from "lucide-react";
+import {
+  MapPin,
+  Loader2,
+  Target,
+  X,
+  Navigation,
+  History,
+  Star,
+  ArrowRight,
+  Search,
+  Map as MapIcon,
+  ChevronRight,
+  Check,
+  MapPinned,
+  Info,
+  Building2,
+  InfoIcon,
+} from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { toast } from "sonner";
 
 // Fix default marker icon issue
-const iconRetinaUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png";
-const iconUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png";
-const shadowUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png";
+const iconRetinaUrl =
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png";
+const iconUrl =
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png";
+const shadowUrl =
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png";
 
 const DefaultIcon = L.icon({
   iconRetinaUrl,
@@ -47,14 +67,14 @@ interface SearchResult {
   lon: number;
   display_name: string;
   name?: string;
-  type?: 'address' | 'business';
+  type?: "address" | "business";
   category?: string;
 }
 
-function MapInteractions({ 
-  onCenterChanged, 
-  onMapClick 
-}: { 
+function MapInteractions({
+  onCenterChanged,
+  onMapClick,
+}: {
   onCenterChanged: (lat: number, lng: number) => void;
   onMapClick: (lat: number, lng: number) => void;
 }) {
@@ -83,7 +103,9 @@ function FixMapSize({ watch }: { watch?: any }) {
   const map = useMap();
   useEffect(() => {
     const intervals = [10, 50, 150, 300, 500, 1000];
-    const timers = intervals.map((ms) => setTimeout(() => map.invalidateSize(), ms));
+    const timers = intervals.map((ms) =>
+      setTimeout(() => map.invalidateSize(), ms),
+    );
     const handleResize = () => map.invalidateSize();
     window.addEventListener("resize", handleResize);
     const container = map.getContainer();
@@ -101,37 +123,46 @@ function FixMapSize({ watch }: { watch?: any }) {
   return null;
 }
 
-export function MapPickerContent({ 
-  onLocationSelect, 
-  initialLocation, 
-  title, 
+export function MapPickerContent({
+  onLocationSelect,
+  initialLocation,
+  title,
   onClose,
-  isStandalone = false 
-}: { 
-  onLocationSelect: (location: Location) => void; 
-  initialLocation?: Location; 
+  isStandalone = false,
+}: {
+  onLocationSelect: (location: Location) => void;
+  initialLocation?: Location;
   title: string;
   onClose?: () => void;
   isStandalone?: boolean;
 }) {
   // DEFAULT LOCATION: Toyota Pasong Tamo @ Chino Roces Ave
   const defaultCenter: [number, number] = [14.544837, 121.018449];
-  const defaultAddress = { 
-    main: "Toyota Pasong Tamo", 
-    sub: "2292 Chino Roces Ave, Makati, 1231 Metro Manila" 
+  const defaultAddress = {
+    main: "Toyota Pasong Tamo",
+    sub: "2292 Chino Roces Ave, Makati, 1231 Metro Manila",
   };
   const defaultBusinessName = "Toyota Pasong Tamo";
 
-  const [mapCenter, setMapCenter] = useState<[number, number]>(initialLocation ? [initialLocation.lat, initialLocation.lng] : defaultCenter);
+  const [mapCenter, setMapCenter] = useState<[number, number]>(
+    initialLocation
+      ? [initialLocation.lat, initialLocation.lng]
+      : defaultCenter,
+  );
   const [currentPos, setCurrentPos] = useState<[number, number]>(mapCenter);
-  
-  const [addressDetails, setAddressDetails] = useState<{ main: string; sub: string; }>(
-    initialLocation ? { main: "Loading...", sub: "Please wait" } : defaultAddress
+
+  const [addressDetails, setAddressDetails] = useState<{
+    main: string;
+    sub: string;
+  }>(
+    initialLocation
+      ? { main: "Loading...", sub: "Please wait" }
+      : defaultAddress,
   );
   const [customAddressName, setCustomAddressName] = useState(
-    initialLocation ? "" : defaultBusinessName
+    initialLocation ? "" : defaultBusinessName,
   );
-  
+
   const [landmarks, setLandmarks] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -139,21 +170,21 @@ export function MapPickerContent({
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
-  
+
   // Geoapify Specific States
   const [discoveryResults, setDiscoveryResults] = useState<any[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
-  
+
   const hasEditedRef = useRef(!initialLocation); // Set to true if using default so it doesn't get overwritten immediately
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const geocodeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialMount = useRef(true);
 
-  const GEOAPIFY_KEY = 'e981beca841349698124675a91674f3a'; // Updated Geoapify Key
+  const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a"; // Updated Geoapify Key
 
   const formatAddress = (fullAddress: string) => {
-    const cleanAddress = fullAddress.replace(/ \(Landmarks:.*?\)/, '');
+    const cleanAddress = fullAddress.replace(/ \(Landmarks:.*?\)/, "");
     const parts = cleanAddress.split(",");
     if (parts.length > 1) {
       return { main: parts[0].trim(), sub: parts.slice(1).join(",").trim() };
@@ -165,7 +196,7 @@ export function MapPickerContent({
   const fetchNearbyPlaces = async (lat: number, lon: number) => {
     // Cancel previous discovery request
     if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -175,20 +206,23 @@ export function MapPickerContent({
       // Nearby search for businesses, cafes, offices, etc.
       const response = await fetch(
         `https://api.geoapify.com/v2/places?categories=commercial,catering,education,healthcare,office,entertainment,tourism&filter=circle:${lon},${lat},1000&bias=proximity:${lon},${lat}&limit=10&apiKey=${GEOAPIFY_KEY}`,
-        { signal }
+        { signal },
       );
       const data = await response.json();
       if (data.features) {
-        setDiscoveryResults(data.features.map((f: any) => ({
-          name: f.properties.name || f.properties.street || "Business/Building",
-          address: f.properties.formatted,
-          lat: f.properties.lat,
-          lon: f.properties.lon,
-          category: f.properties.categories[0]?.replace(/_/g, ' ') || 'Place'
-        })));
+        setDiscoveryResults(
+          data.features.map((f: any) => ({
+            name:
+              f.properties.name || f.properties.street || "Business/Building",
+            address: f.properties.formatted,
+            lat: f.properties.lat,
+            lon: f.properties.lon,
+            category: f.properties.categories[0]?.replace(/_/g, " ") || "Place",
+          })),
+        );
       }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === "AbortError") return;
       console.error("Discovery failed", error);
     } finally {
       if (!signal.aborted) {
@@ -206,7 +240,7 @@ export function MapPickerContent({
 
     // Cancel previous search request
     if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -216,30 +250,34 @@ export function MapPickerContent({
       // Use only Autocomplete API for the dropdown - it's much faster and includes POIs
       const response = await fetch(
         `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&filter=countrycode:ph&limit=10&apiKey=${GEOAPIFY_KEY}`,
-        { signal }
+        { signal },
       );
 
       if (!response.ok) {
         throw new Error(`Autocomplete API error: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      const addrSuggestions = data.features ? data.features.map((f: any) => ({
-        place_id: f.properties.place_id,
-        lat: f.properties.lat,
-        lon: f.properties.lon,
-        display_name: f.properties.formatted,
-        name: f.properties.name || f.properties.street || formatAddress(f.properties.formatted).main,
-        type: 'address' as const
-      })) : [];
+      const addrSuggestions = data.features
+        ? data.features.map((f: any) => ({
+            place_id: f.properties.place_id,
+            lat: f.properties.lat,
+            lon: f.properties.lon,
+            display_name: f.properties.formatted,
+            name:
+              f.properties.name ||
+              f.properties.street ||
+              formatAddress(f.properties.formatted).main,
+            type: "address" as const,
+          }))
+        : [];
 
       if (!signal.aborted) {
         setSuggestions(addrSuggestions);
         if (addrSuggestions.length > 0) setShowSuggestions(true);
       }
-
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === "AbortError") return;
       console.error("Search failed:", error);
     } finally {
       if (!signal.aborted) {
@@ -254,7 +292,8 @@ export function MapPickerContent({
         const formatted = formatAddress(initialLocation.address);
         setAddressDetails(formatted);
         setCustomAddressName(formatted.main);
-        const landmarkMatch = initialLocation.address.match(/\(Landmarks: (.*?)\)/);
+        const landmarkMatch =
+          initialLocation.address.match(/\(Landmarks: (.*?)\)/);
         if (landmarkMatch && landmarkMatch[1]) setLandmarks(landmarkMatch[1]);
         hasEditedRef.current = true;
         fetchNearbyPlaces(initialLocation.lat, initialLocation.lng);
@@ -273,9 +312,11 @@ export function MapPickerContent({
     geocodeTimeoutRef.current = setTimeout(async () => {
       try {
         // Use Geoapify for Reverse Geocoding
-        const response = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${currentPos[0]}&lon=${currentPos[1]}&apiKey=${GEOAPIFY_KEY}`);
+        const response = await fetch(
+          `https://api.geoapify.com/v1/geocode/reverse?lat=${currentPos[0]}&lon=${currentPos[1]}&apiKey=${GEOAPIFY_KEY}`,
+        );
         const data = await response.json();
-        
+
         if (data.features && data.features.length > 0) {
           const prop = data.features[0].properties;
           const foundAddress = prop.formatted || "Unknown Location";
@@ -285,14 +326,19 @@ export function MapPickerContent({
             setCustomAddressName(prop.name || prop.street || formatted.main);
           }
         } else {
-          setAddressDetails({ main: "Unknown Location", sub: `Coordinates: ${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` });
+          setAddressDetails({
+            main: "Unknown Location",
+            sub: `Coordinates: ${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}`,
+          });
         }
-        
+
         // Also fetch nearby businesses whenever point changes
         fetchNearbyPlaces(currentPos[0], currentPos[1]);
-        
       } catch (error) {
-        setAddressDetails({ main: "Unknown Location", sub: `Coordinates: ${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}` });
+        setAddressDetails({
+          main: "Unknown Location",
+          sub: `Coordinates: ${currentPos[0].toFixed(5)}, ${currentPos[1].toFixed(5)}`,
+        });
       } finally {
         setIsGeocoding(false);
       }
@@ -314,7 +360,7 @@ export function MapPickerContent({
     const value = e.target.value;
     setSearchQuery(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    
+
     if (value.trim().length >= 2) {
       setShowSuggestions(true);
       searchTimeoutRef.current = setTimeout(() => fetchSuggestions(value), 200);
@@ -347,12 +393,12 @@ export function MapPickerContent({
   };
 
   const handleConfirm = () => {
-    onLocationSelect({ 
-      lat: currentPos[0], 
-      lng: currentPos[1], 
+    onLocationSelect({
+      lat: currentPos[0],
+      lng: currentPos[1],
       address: addressDetails.sub || "Selected Location",
       businessName: customAddressName,
-      landmarks: landmarks
+      landmarks: landmarks,
     });
   };
 
@@ -370,18 +416,20 @@ export function MapPickerContent({
           toast.error("Could not get your location. Please check permissions.");
           setIsGeocoding(false);
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true },
       );
     }
   };
 
-  const containerClasses = isStandalone 
-    ? "w-full h-full relative overflow-hidden bg-white flex flex-col md:flex-row" 
+  const containerClasses = isStandalone
+    ? "w-full h-full relative overflow-hidden bg-white flex flex-col md:flex-row"
     : "max-w-6xl w-[95vw] h-[90dvh] md:h-[min(900px,85vh)] p-0 overflow-hidden bg-white border-none rounded-[2rem] shadow-2xl [&>button:last-child]:hidden sm:rounded-[2rem] relative";
 
   return (
     <div className={containerClasses}>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .custom-sidebar-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
@@ -400,44 +448,55 @@ export function MapPickerContent({
           scrollbar-width: thin;
           scrollbar-color: #e2e8f0 transparent;
         }
-      `}} />
-      
+      `,
+        }}
+      />
+
       {/* FULLSCREEN MAP FOUNDATION */}
-      <div className={`absolute inset-0 z-0 bg-[#e5e3df] transition-all duration-500 ease-in-out ${isExpanded ? 'md:pl-[424px]' : 'md:pl-0'}`}>
-        <MapContainer 
-          center={mapCenter} 
-          zoom={16} 
-          style={{ height: "100%", width: "100%" }} 
-          zoomControl={false} 
+      <div
+        className={`absolute inset-0 z-0 bg-[#e5e3df] transition-all duration-500 ease-in-out ${isExpanded ? "md:pl-[424px]" : "md:pl-0"}`}
+      >
+        <MapContainer
+          center={mapCenter}
+          zoom={16}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
           <FixMapSize watch={isExpanded} />
           <ChangeView center={mapCenter} />
-          <MapInteractions onCenterChanged={handleCenterChanged} onMapClick={handleMapClick} />
+          <MapInteractions
+            onCenterChanged={handleCenterChanged}
+            onMapClick={handleMapClick}
+          />
           <ZoomControl position="bottomright" />
-          
+
           {/* Real Map Marker instead of CSS Overlay */}
           <Marker position={currentPos} icon={DefaultIcon}>
-             {/* Optional: Add a simple popup or tooltip if needed */}
+            {/* Optional: Add a simple popup or tooltip if needed */}
           </Marker>
         </MapContainer>
       </div>
 
       {/* FLOATING SIDEBAR */}
-      <div className={`
+      <div
+        className={`
         absolute z-50 transition-all duration-500 ease-in-out
         md:top-6 md:left-6 md:bottom-6 md:w-[400px]
         top-0 left-0 w-full h-full md:h-auto
-        ${isExpanded ? 'translate-x-0' : 'md:-translate-x-[calc(100%-20px)] -translate-y-[calc(100%-80px)] md:translate-y-0'}
-      `}>
+        ${isExpanded ? "translate-x-0" : "md:-translate-x-[calc(100%-20px)] -translate-y-[calc(100%-80px)] md:translate-y-0"}
+      `}
+      >
         <div className="w-full h-full bg-white md:rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100/50 flex flex-col overflow-hidden relative">
-          
           {/* Header (Search) */}
           <div className="p-6 pb-4 border-b border-slate-50 relative">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
                   <div className="p-2 bg-[#00B14F] rounded-xl shadow-lg shadow-[#00B14F]/20">
                     <MapIcon className="h-4 w-4 text-white" />
                   </div>
@@ -445,7 +504,12 @@ export function MapPickerContent({
                 </h2>
               </div>
               {onClose && (
-                <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 text-slate-400 hover:bg-slate-50" onClick={onClose}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-10 w-10 text-slate-400 hover:bg-slate-50"
+                  onClick={onClose}
+                >
                   <X className="h-5 w-5" />
                 </Button>
               )}
@@ -469,13 +533,21 @@ export function MapPickerContent({
                   <div className="max-h-[320px] overflow-y-auto custom-sidebar-scrollbar">
                     <div className="py-2">
                       {suggestions.map((s, i) => (
-                        <button key={i} className="w-full text-left px-5 py-4 hover:bg-slate-50 transition-colors flex items-start gap-4 border-b border-slate-50 last:border-0" onClick={() => handleSelectSuggestion(s)}>
+                        <button
+                          key={i}
+                          className="w-full text-left px-5 py-4 hover:bg-slate-50 transition-colors flex items-start gap-4 border-b border-slate-50 last:border-0"
+                          onClick={() => handleSelectSuggestion(s)}
+                        >
                           <div className="p-2 bg-slate-100 rounded-full mt-0.5 shrink-0">
-                             <MapPin className="h-4 w-4 text-slate-500" />
+                            <MapPin className="h-4 w-4 text-slate-500" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[14px] font-bold text-slate-900 truncate">{s.name}</p>
-                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{s.display_name}</p>
+                            <p className="text-[14px] font-bold text-slate-900 truncate">
+                              {s.name}
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                              {s.display_name}
+                            </p>
                           </div>
                         </button>
                       ))}
@@ -489,85 +561,106 @@ export function MapPickerContent({
           {/* Scrollable Discovery Panel - Changed from ScrollArea to div for better scrollbar control */}
           <div className="flex-1 bg-white overflow-y-auto custom-sidebar-scrollbar">
             <div className="p-6 space-y-8">
-              
               {/* Selected Location Information */}
               <div className="space-y-6">
                 <div className="flex flex-col gap-1">
-                   <div className="flex items-center gap-2 mb-1">
-                      <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                        Selected Point
-                      </div>
-                   </div>
-                   <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">
-                     {customAddressName || "Select a location"}
-                   </h3>
-                   <div className="flex items-start gap-2 mt-2">
-                      <MapPinned className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                      <p className="text-sm font-bold text-slate-500 leading-relaxed italic">
-                        {isGeocoding ? "Identifying location..." : addressDetails.sub || "Click on the map or search to pick a location"}
-                      </p>
-                   </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                      Selected Point
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
+                    {customAddressName || "Select a location"}
+                  </h3>
+                  <div className="flex items-start gap-2 mt-2">
+                    <MapPinned className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                    <p className="text-sm font-bold text-slate-500 leading-relaxed italic">
+                      {isGeocoding
+                        ? "Identifying location..."
+                        : addressDetails.sub ||
+                          "Click on the map or search to pick a location"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {/* Geoapify Discovery & Nearby Section */}
               <div className="space-y-4 pt-6 border-t border-slate-100">
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-blue-50 rounded-lg">
-                        <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                      </div>
-                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Discovery & Businesses</Label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-50 rounded-lg">
+                      <Building2 className="h-3.5 w-3.5 text-blue-600" />
                     </div>
-                    {isDiscovering && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
-                 </div>
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Discovery & Businesses
+                    </Label>
+                  </div>
+                  {isDiscovering && (
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                  )}
+                </div>
 
-                 {discoveryResults.length > 0 ? (
-                   <div className="space-y-3">
-                      {discoveryResults.slice(0, 5).map((place, idx) => (
-                        <button 
-                          key={idx} 
-                          onClick={() => handleSelectDiscovery(place)}
-                          className="w-full group text-left p-3 rounded-2xl border border-slate-50 bg-slate-50/30 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all duration-300"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-xl shadow-sm group-hover:bg-blue-50 transition-colors">
-                              <Star className="h-3.5 w-3.5 text-amber-500" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-black text-slate-900 truncate">{place.name}</p>
-                                <span className="text-[8px] font-black text-blue-500 uppercase bg-blue-50 px-1.5 py-0.5 rounded-md">{place.category}</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">{place.address}</p>
-                            </div>
+                {discoveryResults.length > 0 ? (
+                  <div className="space-y-3">
+                    {discoveryResults.slice(0, 5).map((place, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectDiscovery(place)}
+                        className="w-full group text-left p-3 rounded-2xl border border-slate-50 bg-slate-50/30 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-white rounded-xl shadow-sm group-hover:bg-blue-50 transition-colors">
+                            <Star className="h-3.5 w-3.5 text-amber-500" />
                           </div>
-                        </button>
-                      ))}
-                   </div>
-                 ) : (
-                   <div className="py-8 text-center bg-slate-50/50 rounded-[1.5rem] border border-dashed border-slate-200">
-                      <p className="text-[11px] font-bold text-slate-400">Search for businesses or explore nearby</p>
-                   </div>
-                 )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-black text-slate-900 truncate">
+                                {place.name}
+                              </p>
+                              <span className="text-[8px] font-black text-blue-500 uppercase bg-blue-50 px-1.5 py-0.5 rounded-md">
+                                {place.category}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                              {place.address}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center bg-slate-50/50 rounded-[1.5rem] border border-dashed border-slate-200">
+                    <p className="text-[11px] font-bold text-slate-400">
+                      Search for businesses or explore nearby
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Discovery Details Form */}
               <div className="space-y-6 pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-2 px-1">
                   <InfoIcon className="h-3.5 w-3.5 text-[#00B14F]" />
-                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personalize Location</Label>
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Personalize Location
+                  </Label>
                 </div>
-                
+
                 <div className="space-y-5">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 ml-1">
-                       <Building2 className="h-3 w-3 text-slate-400" />
-                       <Label className="text-[11px] font-bold text-slate-500">Business / Building Name</Label>
+                      <Building2 className="h-3 w-3 text-slate-400" />
+                      <Label className="text-[11px] font-bold text-slate-500">
+                        Business / Building Name
+                      </Label>
                     </div>
-                    <Input 
-                      value={customAddressName} 
-                      onChange={e => {setCustomAddressName(e.target.value); hasEditedRef.current = true;}}
+                    <Input
+                      value={customAddressName}
+                      onChange={(e) => {
+                        setCustomAddressName(e.target.value);
+                        hasEditedRef.current = true;
+                      }}
                       placeholder="e.g. Starbucks, 5th Ave Entrance"
                       className="h-12 bg-slate-50 border-transparent font-black text-slate-900 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
                     />
@@ -575,12 +668,14 @@ export function MapPickerContent({
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 ml-1">
-                       <Info className="h-3 w-3 text-slate-400" />
-                       <Label className="text-[11px] font-bold text-slate-500">Nearby Landmarks / Instructions</Label>
+                      <Info className="h-3 w-3 text-slate-400" />
+                      <Label className="text-[11px] font-bold text-slate-500">
+                        Nearby Landmarks / Instructions
+                      </Label>
                     </div>
-                    <Input 
-                      value={landmarks} 
-                      onChange={e => setLandmarks(e.target.value)}
+                    <Input
+                      value={landmarks}
+                      onChange={(e) => setLandmarks(e.target.value)}
                       placeholder="e.g. Beside the main lobby elevators"
                       className="h-12 bg-slate-50 border-transparent text-sm font-bold text-slate-700 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
                     />
@@ -595,18 +690,20 @@ export function MapPickerContent({
             <Button
               onClick={handleConfirm}
               disabled={isGeocoding || !customAddressName}
-              className="w-full h-16 rounded-[1.4rem] bg-slate-900 hover:bg-slate-800 text-white font-black text-sm uppercase tracking-widest shadow-2xl shadow-slate-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+              className="w-full h-11 rounded-[1.4rem] bg-slate-900 hover:bg-slate-800 text-white font-black text-sm uppercase tracking-widest shadow-2xl shadow-slate-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
             >
               Confirm Selection
               <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
 
-          <button 
+          <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="hidden md:flex absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-20 bg-white border border-slate-100 rounded-full items-center justify-center shadow-lg hover:bg-slate-50 transition-all z-[60]"
           >
-            <div className={`w-1 h-8 rounded-full bg-slate-200 transition-all ${isExpanded ? 'bg-slate-300' : 'bg-slate-900'}`} />
+            <div
+              className={`w-1 h-8 rounded-full bg-slate-200 transition-all ${isExpanded ? "bg-slate-300" : "bg-slate-900"}`}
+            />
           </button>
         </div>
       </div>
@@ -614,28 +711,33 @@ export function MapPickerContent({
       {/* FLOATING ACTION BUTTONS */}
       <div className="absolute top-6 right-6 z-40 flex flex-col gap-3">
         {isStandalone && (
-           <Button 
-             onClick={handleConfirm}
-             disabled={isGeocoding || !customAddressName}
-             className="rounded-2xl h-14 px-6 bg-[#00B14F] text-white shadow-2xl hover:bg-[#009e46] border-none font-black text-xs uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2"
-           >
-             <Check className="h-5 w-5" />
-             Confirm
-           </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={isGeocoding || !customAddressName}
+            className="rounded-2xl h-14 px-6 bg-[#00B14F] text-white shadow-2xl hover:bg-[#009e46] border-none font-black text-xs uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2"
+          >
+            <Check className="h-5 w-5" />
+            Confirm
+          </Button>
         )}
-        <Button 
-          onClick={locateMe} 
-          variant="outline" 
-          size="icon" 
+        <Button
+          onClick={locateMe}
+          variant="outline"
+          size="icon"
           className="rounded-2xl h-14 w-14 bg-white shadow-2xl hover:bg-slate-50 border-none text-slate-900 transition-transform active:scale-90"
         >
           <Target className="h-6 w-6" />
         </Button>
         {!isStandalone && onClose && (
           <div className="hidden md:flex flex-col gap-2 p-2 bg-white rounded-2xl shadow-2xl">
-             <Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl h-10 w-10 hover:bg-rose-50 hover:text-rose-500">
-               <X className="h-5 w-5" />
-             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="rounded-xl h-10 w-10 hover:bg-rose-50 hover:text-rose-500"
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
         )}
       </div>
@@ -643,12 +745,18 @@ export function MapPickerContent({
   );
 }
 
-export function MapPicker({ open, onOpenChange, onLocationSelect, initialLocation, title }: MapPickerProps) {
+export function MapPicker({
+  open,
+  onOpenChange,
+  onLocationSelect,
+  initialLocation,
+  title,
+}: MapPickerProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90dvh] md:h-[min(900px,85vh)] p-0 overflow-hidden bg-white border-none rounded-[2rem] shadow-2xl [&>button:last-child]:hidden sm:rounded-[2rem]">
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        <MapPickerContent 
+        <MapPickerContent
           title={title}
           initialLocation={initialLocation}
           onLocationSelect={onLocationSelect}

@@ -28,7 +28,7 @@ export const useJobDetails = () => {
   
   // Use TanStack Query for Job Details
   const {
-    data: job,
+    data: jobData,
     isLoading: loading,
     refetch: fetchJobDetails,
   } = useQuery({
@@ -37,6 +37,21 @@ export const useJobDetails = () => {
     enabled: !!id,
     staleTime: 30000, // 30 seconds
   });
+
+  /**
+   * --- SENIOR STATUS ALIGNMENT LOGIC ---
+   * If the job is assigned to a rider and approved, but the delivery 
+   * hasn't started yet (status is NULL or 'pending'), we force it 
+   * to 'assigned' so the UI is clear.
+   */
+  const job = jobData ? {
+    ...jobData,
+    delivery_status: (
+      (jobData.delivery_status && jobData.delivery_status !== 'pending') 
+        ? jobData.delivery_status 
+        : (jobData.assigned_rider_id ? 'assigned' : 'pending')
+    )
+  } : null;
 
   // Use TanStack Mutation for Status Updates (Optimistic UI)
   const updateMutation = useMutation({
@@ -101,6 +116,7 @@ export const useJobDetails = () => {
   });
 
   const updating = updateMutation.isPending || syncStatus === 'pending' || syncStatus === 'verifying';
+  const isStartingDelivery = updateMutation.isPending && updateMutation.variables?.status === 'in_progress';
   const socketRef = useRef<Socket | null>(null);
 
   const COMPLETED_REASONS = [
@@ -154,46 +170,23 @@ export const useJobDetails = () => {
   };
 
   useEffect(() => {
-    socketRef.current = io(Config.API_URL, { 
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      timeout: 10000,
-    });
-
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      console.log('Socket connected - Job Details');
-      if (user?.id) {
-        socket.emit('join', user.id);
-      }
-    });
-
-    return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.disconnect();
-        socketRef.current = null;
-      }
-    };
+    // SENIOR FIX: Stop creating a local socket here. 
+    // The LocationContext already handles the connection.
+    // We just need to join the job-specific room.
+    
+    // For now, I will remove this block entirely as the 
+    // global socket in LocationContext will handle the 'join'.
+    // Room joining will be moved to a more stable place or handled via the global ref.
   }, [id, user?.id]);
 
   useEffect(() => {
-    if (socketRef.current && id) {
-      socketRef.current.emit('join-job-room', id);
-      socketRef.current.on('job-status-changed', (data: any) => {
-        if (data.requestId === id) {
-          queryClient.invalidateQueries({ queryKey: ['job', id] });
-          if (['completed', 'failed', 'cancelled'].includes(data.status)) {
-            stopTracking();
-          }
-        }
-      });
-    }
+    // Instead of local socket, we rely on the global sync
+    // triggered by queryClient invalidation from the server.
   }, [id, queryClient]);
 
   useEffect(() => {
-    if (job?.delivery_status === 'in_progress' && !isTracking) {
+    const currentStatus = job?.delivery_status?.toLowerCase();
+    if (currentStatus === 'in_progress' && !isTracking) {
       startTracking(id as string);
     }
   }, [job?.delivery_status, isTracking, id]);
@@ -244,5 +237,7 @@ export const useJobDetails = () => {
     router,
     syncStatus,
     isTracking,
+    isStartingDelivery,
+    fetchJobDetails,
   };
 };

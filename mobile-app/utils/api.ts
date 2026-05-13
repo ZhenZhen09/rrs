@@ -1,82 +1,99 @@
 import axios from 'axios';
 import { Config } from '@/constants/Config';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { AuthManager } from '@/utils/AuthManager';
+
+let isRefreshing = false;
+let failedQueue: any[] = [];
+let hasHandledAuthFailure = false;
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+let onAuthFailure: (() => void) | null = null;
+
+const handleAuthFailure = async () => {
+  if (hasHandledAuthFailure) return;
+
+  hasHandledAuthFailure = true;
+  await AuthManager.clearSession();
+  onAuthFailure?.();
+};
 
 export const api = axios.create({
   baseURL: Config.API_URL,
-  timeout: 15000, // Reduced from 60s to 15s to fail-fast and trigger retries on 4G
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json', 'x-client-type': 'mobile' },
 });
 
-/**
- * Wake up the Render server in the background.
- */
-export const wakeUpServer = async () => {
-  try {
-    console.log('[WakeUp] Pinging server to trigger spin-up...');
-    // Use /api/ping which is a real route on the server
-    await api.get('/api/ping', { timeout: 45000 }); 
-    console.log('[WakeUp] Server responded! Ready for action.');
-  } catch (error) {
-    console.log('[WakeUp] Ping sent, server warming up in background...');
-  }
+export const setAuthFailureListener = (callback: () => void) => { onAuthFailure = callback; };
+export const resetAuthStatus = () => {
+  isRefreshing = false;
+  failedQueue = [];
+  hasHandledAuthFailure = false;
 };
+export const wakeUpServer = async () => { try { await api.get('/api/ping', { timeout: 45000 }); } catch (error) {} };
 
-// Request Interceptor: Add Auth Token and Cache Buster
-api.interceptors.request.use(
-  async (config) => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Cache buster for GET requests
-    if (config.method === 'get') {
-      config.params = { ...config.params, _t: Date.now() };
-    }
-    
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+api.interceptors.request.use(async (config) => {
+  const token = await AuthManager.getAccessToken();
+  if (token && token.includes('.') && !token.startsWith('rider_')) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
 
-// Response Interceptor: EXPONENTIAL BACKOFF & NETWORK RECOVERY
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const { config, response, code } = error;
-    
-    if (!config) return Promise.reject(error);
+api.interceptors.response.use((response) => response, async (error) => {
+  const originalRequest = error.config;
 
-    // Maximum retry attempts
-    const MAX_RETRIES = 3;
-    config._retryCount = config._retryCount || 0;
-
-    // Determine if we should retry (Network errors, Timeouts, or 503/504)
-    const isNetworkError = !response || code === 'ECONNABORTED' || code === 'ERR_NETWORK';
-    const isServerWarmingUp = response && [502, 503, 504].includes(response.status);
-
-    if ((isNetworkError || isServerWarmingUp) && config._retryCount < MAX_RETRIES) {
-      config._retryCount++;
-      
-      // --- EXPONENTIAL BACKOFF ---
-      // 1st retry: 2s, 2nd: 4s, 3rd: 8s
-      const delay = Math.pow(2, config._retryCount) * 1000;
-      
-      console.warn(`[API RETRY] ${config.url} (Attempt ${config._retryCount}/${MAX_RETRIES}). Retrying in ${delay}ms...`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return api(config);
-    }
-
-    // If all retries fail, show a helpful alert (only for non-background tasks)
-    if (config._retryCount >= MAX_RETRIES) {
-       console.error(`[API FATAL] ${config.url} failed after ${MAX_RETRIES} retries.`);
-    }
-
+  if (!originalRequest || error.response?.status !== 401) {
     return Promise.reject(error);
   }
-);
+
+  if (originalRequest.url?.includes('/api/auth/refresh')) {
+    await handleAuthFailure();
+    return Promise.reject(error);
+  }
+
+  if (!originalRequest._retry) {
+    if (isRefreshing) {
+      return new Promise(function(resolve, reject) {
+        failedQueue.push({ resolve, reject });
+      }).then(token => {
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers['Authorization'] = 'Bearer ' + token;
+        return api(originalRequest);
+      }).catch(err => {
+        return Promise.reject(err);
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      const newAT = await AuthManager.refreshAccessToken();
+      if (!newAT) throw new Error('Refresh failed');
+
+      processQueue(null, newAT);
+      originalRequest.headers = originalRequest.headers ?? {};
+      originalRequest.headers['Authorization'] = 'Bearer ' + newAT;
+      return api(originalRequest);
+    } catch (refreshError) {
+      processQueue(refreshError, null);
+      await handleAuthFailure();
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+
+  return Promise.reject(error);
+});

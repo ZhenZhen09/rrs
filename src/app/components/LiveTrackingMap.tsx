@@ -6,51 +6,160 @@ import {
   Polyline,
   Circle,
   useMap,
+  useMapEvents,
   ZoomControl,
   Tooltip,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useState, useRef } from "react";
-import { Bike, MapPin, MapPinned, Clock, ShieldCheck, Activity, Search, X, Loader2 } from "lucide-react";
-import { renderToString } from "react-dom/server";
+import {
+  MapPin,
+  MapPinned,
+  Clock,
+  Activity,
+  Search,
+  X,
+  Loader2,
+} from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
+import carTopViewIconUrl from "../assets/car-top-view-marker.svg";
+
+const calculateBearing = (
+  from: [number, number],
+  to: [number, number],
+) => {
+  const [fromLat, fromLng] = from;
+  const [toLat, toLng] = to;
+
+  const startLat = (fromLat * Math.PI) / 180;
+  const startLng = (fromLng * Math.PI) / 180;
+  const endLat = (toLat * Math.PI) / 180;
+  const endLng = (toLng * Math.PI) / 180;
+
+  const y = Math.sin(endLng - startLng) * Math.cos(endLat);
+  const x =
+    Math.cos(startLat) * Math.sin(endLat) -
+    Math.sin(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
+
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+};
+
+const toMeters = (latDiff: number, lngDiff: number, atLat: number) => {
+  const metersPerLat = 111320;
+  const metersPerLng = 111320 * Math.cos((atLat * Math.PI) / 180);
+  return {
+    x: lngDiff * metersPerLng,
+    y: latDiff * metersPerLat,
+  };
+};
+
+const nearestPointOnSegment = (
+  point: [number, number],
+  start: [number, number],
+  end: [number, number],
+) => {
+  const atLat = point[0];
+  const startOffset = toMeters(start[0] - point[0], start[1] - point[1], atLat);
+  const endOffset = toMeters(end[0] - point[0], end[1] - point[1], atLat);
+  const vx = endOffset.x - startOffset.x;
+  const vy = endOffset.y - startOffset.y;
+  const lengthSquared = vx * vx + vy * vy;
+  const t = lengthSquared === 0
+    ? 0
+    : Math.max(0, Math.min(1, (-(startOffset.x * vx + startOffset.y * vy)) / lengthSquared));
+
+  return {
+    point: [
+      start[0] + (end[0] - start[0]) * t,
+      start[1] + (end[1] - start[1]) * t,
+    ] as [number, number],
+    distance: Math.sqrt(
+      Math.pow(startOffset.x + vx * t, 2) +
+      Math.pow(startOffset.y + vy * t, 2),
+    ),
+  };
+};
+
+const snapToRoute = (
+  point: [number, number] | null,
+  route: [number, number][],
+  maxDistanceMeters = 80,
+) => {
+  if (!point || route.length < 2) return point;
+
+  let nearest = point;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < route.length - 1; i += 1) {
+    const candidate = nearestPointOnSegment(point, route[i], route[i + 1]);
+    if (candidate.distance < nearestDistance) {
+      nearest = candidate.point;
+      nearestDistance = candidate.distance;
+    }
+  }
+
+  return nearestDistance <= maxDistanceMeters ? nearest : point;
+};
+
+const routeBearingAtPoint = (
+  point: [number, number] | null,
+  route: [number, number][],
+  maxDistanceMeters = 80,
+) => {
+  if (!point || route.length < 2) return null;
+
+  let nearestBearing: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < route.length - 1; i += 1) {
+    const segmentStart = route[i];
+    const segmentEnd = route[i + 1];
+    const candidate = nearestPointOnSegment(point, segmentStart, segmentEnd);
+
+    if (candidate.distance < nearestDistance) {
+      nearestDistance = candidate.distance;
+      nearestBearing = calculateBearing(segmentStart, segmentEnd);
+    }
+  }
+
+  return nearestDistance <= maxDistanceMeters ? nearestBearing : null;
+};
 
 // Custom icons using Leaflet's divIcon with raw HTML strings for reliability
-const createRiderIcon = (label?: string) => {
+const createRiderIcon = (rotation = 0) => {
   return L.divIcon({
     html: `
-      <div class="relative flex flex-col items-center">
-        ${label ? `
-          <div class="bg-white px-1.5 py-0.5 rounded shadow-md border border-slate-200 mb-1">
-            <p class="text-[8px] font-black text-slate-700 leading-none uppercase tracking-tighter">${label}</p>
-          </div>
-        ` : ''}
-        <div class="relative animate-bounce-short" style="color: #3b82f6;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>
-          </svg>
-          <div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-30 -z-10"></div>
+      <div class="relative car-marker-shell" style="width: 64px; height: 64px;">
+        <div class="car-marker-body" style="transform: rotate(${rotation}deg);">
+          <img
+            src="${carTopViewIconUrl}"
+            alt=""
+            style="width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 10px 12px rgba(15,23,42,0.32));"
+          />
         </div>
+        <div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-20 -z-10"></div>
       </div>
     `,
     className: "custom-map-icon smooth-marker-move",
-    iconSize: [60, 60],
-    iconAnchor: [30, 60],
+    iconSize: [64, 64],
+    iconAnchor: [32, 32],
   });
 };
 
-const createStaticIcon = (type: 'pickup' | 'dropoff' | 'search') => {
-  const color = type === 'pickup' ? '#10b981' : type === 'dropoff' ? '#ef4444' : '#6366f1';
-  const iconPath = type === 'pickup' 
-    ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'
-    : type === 'dropoff'
-    ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><path d="M12 13V7l-2 2"/>'
-    : '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>';
+const createStaticIcon = (type: "pickup" | "dropoff" | "search") => {
+  const color =
+    type === "pickup" ? "#10b981" : type === "dropoff" ? "#ef4444" : "#6366f1";
+  const iconPath =
+    type === "pickup"
+      ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'
+      : type === "dropoff"
+        ? '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><path d="M12 13V7l-2 2"/>'
+        : '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>';
 
   return L.divIcon({
     html: `
@@ -66,15 +175,16 @@ const createStaticIcon = (type: 'pickup' | 'dropoff' | 'search') => {
   });
 };
 
-const pickupIcon = createStaticIcon('pickup');
-const dropoffIcon = createStaticIcon('dropoff');
-const searchIcon = createStaticIcon('search');
+const pickupIcon = createStaticIcon("pickup");
+const dropoffIcon = createStaticIcon("dropoff");
+const searchIcon = createStaticIcon("search");
 
 interface LiveTrackingMapProps {
   requestId?: string;
   pickup: { lat: number; lng: number; address: string };
   dropoff: { lat: number; lng: number; address: string };
   current: { lat: number; lng: number } | null;
+  history?: { lat: number; lng: number; timestamp?: string }[];
   riderName?: string;
   status?: string;
   timeWindow?: string;
@@ -90,11 +200,60 @@ interface SearchResult {
   display_name: string;
 }
 
-function ChangeView({ center, zoom }: { center: [number, number], zoom?: number }) {
+function ChangeView({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom?: number;
+}) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, zoom || map.getZoom(), { animate: true, duration: 1.5 });
+    map.setView(center, zoom || map.getZoom(), {
+      animate: true,
+      duration: 1.5,
+    });
   }, [center, map, zoom]);
+  return null;
+}
+
+function FollowModeController({
+  center,
+  followMode,
+  onUserInteraction,
+}: {
+  center: [number, number] | null;
+  followMode: boolean;
+  onUserInteraction: () => void;
+}) {
+  const isProgrammaticMove = useRef(false);
+  const map = useMapEvents({
+    dragstart: () => {
+      if (!isProgrammaticMove.current) onUserInteraction();
+    },
+    zoomstart: () => {
+      if (!isProgrammaticMove.current) onUserInteraction();
+    },
+  });
+
+  useEffect(() => {
+    if (!center || !followMode) return;
+
+    isProgrammaticMove.current = true;
+    map.panTo(center, {
+      animate: true,
+      duration: 0.7,
+      easeLinearity: 0.35,
+      noMoveStart: true,
+    });
+
+    const timeout = window.setTimeout(() => {
+      isProgrammaticMove.current = false;
+    }, 800);
+
+    return () => window.clearTimeout(timeout);
+  }, [center, followMode, map]);
+
   return null;
 }
 
@@ -103,6 +262,7 @@ export function LiveTrackingMap({
   pickup,
   dropoff,
   current,
+  history,
   riderName,
   status,
   timeWindow,
@@ -113,10 +273,12 @@ export function LiveTrackingMap({
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [historyCoords, setHistoryCoords] = useState<[number, number][]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  
+  const [followMode, setFollowMode] = useState(true);
+
   // Smooth position state to prevent jumping
   const [smoothPos, setSmoothPos] = useState<[number, number] | null>(null);
-  
+  const [headingAngle, setHeadingAngle] = useState(0);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -124,51 +286,113 @@ export function LiveTrackingMap({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchPos, setSearchPos] = useState<[number, number] | null>(null);
   const [searchLabel, setSearchLabel] = useState("");
-  
+
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousPositionRef = useRef<[number, number] | null>(null);
+  const latestHistoryPoint =
+    historyCoords.length > 0 ? historyCoords[historyCoords.length - 1] : null;
+  const effectiveCurrent = current
+    ? ([Number(current.lat), Number(current.lng)] as [number, number])
+    : latestHistoryPoint;
+  const activeRouteCoords = routeCoords.length > 0 ? routeCoords : [];
+  const snappedCurrent = snapToRoute(effectiveCurrent, activeRouteCoords);
+  const fallbackRouteCoords: [number, number][] = effectiveCurrent
+    ? (status === "assigned"
+        ? [
+            effectiveCurrent,
+            [Number(pickup.lat), Number(pickup.lng)],
+            [Number(dropoff.lat), Number(dropoff.lng)],
+          ]
+        : [
+            effectiveCurrent,
+            [Number(dropoff.lat), Number(dropoff.lng)],
+          ])
+    : [
+        [Number(pickup.lat), Number(pickup.lng)],
+        [Number(dropoff.lat), Number(dropoff.lng)],
+      ];
 
   // Effect to smooth out incoming GPS data
   useEffect(() => {
     if (current) {
       const newLat = Number(current.lat);
       const newLng = Number(current.lng);
-      
-      console.log('🛰️ Map received current location:', { newLat, newLng });
+
+      console.log("🛰️ Map received current location:", { newLat, newLng });
 
       if (isNaN(newLat) || isNaN(newLng)) {
-        console.error('❌ Invalid coordinates received:', current);
+        console.error("❌ Invalid coordinates received:", current);
         return;
       }
-      
+
       if (!smoothPos) {
-        console.log('✅ Initializing smoothPos to:', [newLat, newLng]);
+        console.log("✅ Initializing smoothPos to:", [newLat, newLng]);
         setSmoothPos([newLat, newLng]);
+        setLastUpdate(new Date());
       } else {
         const latDiff = Math.abs(smoothPos[0] - newLat);
         const lngDiff = Math.abs(smoothPos[1] - newLng);
-        
+
         if (latDiff > 0.00001 || lngDiff > 0.00001) {
-           console.log('📍 Updating smoothPos (movement detected)');
-           setSmoothPos([newLat, newLng]);
-           setLastUpdate(new Date());
+          console.log("📍 Updating smoothPos (movement detected)");
+          setSmoothPos([newLat, newLng]);
+          setLastUpdate(new Date());
         }
       }
     } else {
-      console.log('❓ Map received null/undefined current location');
+      console.log("❓ Map received null/undefined current location");
     }
   }, [current]);
 
-  const center: [number, number] = smoothPos 
-    ? smoothPos 
-    : [Number(pickup.lat), Number(pickup.lng)];
+  useEffect(() => {
+    if (!current) {
+      return;
+    }
+
+    const newLat = Number(current.lat);
+    const newLng = Number(current.lng);
+
+    if (isNaN(newLat) || isNaN(newLng)) {
+      return;
+    }
+
+    const nextPosition: [number, number] = [newLat, newLng];
+
+    if (previousPositionRef.current) {
+      const previousPosition = previousPositionRef.current;
+      const latDiff = Math.abs(previousPosition[0] - nextPosition[0]);
+      const lngDiff = Math.abs(previousPosition[1] - nextPosition[1]);
+
+      if (latDiff > 0.00001 || lngDiff > 0.00001) {
+        setHeadingAngle(calculateBearing(previousPosition, nextPosition));
+      }
+    }
+
+    previousPositionRef.current = nextPosition;
+  }, [current]);
+
+  const displayCurrent = smoothPos
+    ? snapToRoute(smoothPos, activeRouteCoords)
+    : snappedCurrent;
+  const displayHeading =
+    routeBearingAtPoint(displayCurrent, activeRouteCoords) ?? headingAngle;
+
+  const center: [number, number] = displayCurrent || [Number(pickup.lat), Number(pickup.lng)];
 
   // Fetch actual road route from OSRM
   useEffect(() => {
-    const fetchRoute = async () => {
+    if (routeFetchTimeoutRef.current) {
+      clearTimeout(routeFetchTimeoutRef.current);
+    }
+
+    routeFetchTimeoutRef.current = setTimeout(async () => {
       try {
-        const points = current
-          ? `${pickup.lng},${pickup.lat};${current.lng},${current.lat};${dropoff.lng},${dropoff.lat}`
+        const points = effectiveCurrent
+          ? (status === "assigned"
+              ? `${effectiveCurrent[1]},${effectiveCurrent[0]};${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`
+              : `${effectiveCurrent[1]},${effectiveCurrent[0]};${dropoff.lng},${dropoff.lat}`)
           : `${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`;
 
         const res = await fetch(
@@ -186,20 +410,34 @@ export function LiveTrackingMap({
       } catch (err) {
         console.error("Routing error:", err);
       }
-    };
+    }, 750);
 
-    fetchRoute();
-  }, [pickup, current, dropoff]);
+    return () => {
+      if (routeFetchTimeoutRef.current) {
+        clearTimeout(routeFetchTimeoutRef.current);
+      }
+    };
+  }, [pickup, effectiveCurrent, dropoff, status]);
 
   // Fetch Location History (Breadcrumbs)
   useEffect(() => {
+    if (history) {
+      setHistoryCoords(
+        history.map((log) => [Number(log.lat), Number(log.lng)] as [number, number]),
+      );
+      return;
+    }
+
     if (requestId) {
       const fetchHistory = async () => {
         try {
           const res = await fetch(`/api/requests/${requestId}/history`);
           if (res.ok) {
             const data = await res.json();
-            const coords = data.map((log: any) => [Number(log.lat), Number(log.lng)] as [number, number]);
+            const coords = data.map(
+              (log: any) =>
+                [Number(log.lat), Number(log.lng)] as [number, number],
+            );
             setHistoryCoords(coords);
           }
         } catch (err) {
@@ -207,10 +445,10 @@ export function LiveTrackingMap({
         }
       };
       fetchHistory();
-      const interval = setInterval(fetchHistory, 15000);
+      const interval = setInterval(fetchHistory, 5000);
       return () => clearInterval(interval);
     }
-  }, [requestId, current]);
+  }, [requestId, history]);
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -219,18 +457,18 @@ export function LiveTrackingMap({
     }
     setIsSearching(true);
     try {
-      const GEOAPIFY_KEY = 'e981beca841349698124675a91674f3a';
+      const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a";
       const res = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&filter=countrycode:ph&limit=5&apiKey=${GEOAPIFY_KEY}`
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&filter=countrycode:ph&limit=5&apiKey=${GEOAPIFY_KEY}`,
       );
       const data = await res.json();
-      
+
       if (data.features) {
         const results = data.features.map((f: any) => ({
           place_id: f.properties.place_id,
           lat: f.properties.lat,
           lon: f.properties.lon,
-          display_name: f.properties.formatted
+          display_name: f.properties.formatted,
         }));
         setSuggestions(results);
       } else {
@@ -254,7 +492,7 @@ export function LiveTrackingMap({
   const selectSuggestion = (s: SearchResult) => {
     const pos: [number, number] = [Number(s.lat), Number(s.lon)];
     setSearchPos(pos);
-    setSearchLabel(s.display_name.split(',')[0]);
+    setSearchLabel(s.display_name.split(",")[0]);
     setSearchQuery("");
     setShowSuggestions(false);
   };
@@ -270,9 +508,13 @@ export function LiveTrackingMap({
   const dropoffDetails = formatAddress(dropoff.address);
 
   return (
-    <div className={`w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-slate-100 relative group ${containerClassName}`}>
+    <div
+      className={`w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-slate-100 relative group ${containerClassName}`}
+    >
       {/* GLOBAL CSS FOR SMOOTH MARKERS AND ANIMATIONS */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .smooth-marker-move {
           transition: transform 2s linear !important;
         }
@@ -285,18 +527,20 @@ export function LiveTrackingMap({
         .animate-ping-custom {
           animation: ping-custom 1s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
-        @keyframes bounce-short {
+        .car-marker-shell {
+          animation: car-road-glide 1.4s ease-in-out infinite;
+        }
+        .car-marker-body {
+          transition: transform 0.45s ease;
+          transform-origin: 50% 50%;
+        }
+        @keyframes car-road-glide {
           0%, 100% {
-            transform: translateY(-5%);
-            animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+            transform: translateY(0) scale(1);
           }
           50% {
-            transform: translateY(0);
-            animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+            transform: translateY(-1px) scale(1.025);
           }
-        }
-        .animate-bounce-short {
-          animation: bounce-short 1s infinite;
         }
         @keyframes sonar-ripple {
           0% { transform: scale(1); opacity: 0.8; }
@@ -320,29 +564,44 @@ export function LiveTrackingMap({
         .fab-glow:hover {
           box-shadow: 0 0 30px rgba(236, 72, 153, 0.5);
         }
-        `}} />
+        `,
+        }}
+      />
 
-        {/* Floating Driver Locator Button */}
-        <div className="absolute bottom-8 right-8 z-[1000] flex flex-col items-end gap-3">
+      {/* Floating Driver Locator Button */}
+      <div className="absolute bottom-8 right-8 z-[1000] flex flex-col items-end gap-3">
         <div className="group relative">
           <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap shadow-xl">
-            Locate Driver
+            {followMode ? "Following Driver" : "Recenter Driver"}
+          </div>
+          <div className="mb-2 rounded-full bg-white/95 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100">
+            Follow {followMode ? "On" : "Off"}
           </div>
           <Button
             onClick={() => {
-              if (smoothPos) {
-                mapRef.current?.flyTo(smoothPos as [number, number], 16, { duration: 1.5 });
-              } else if (current) {
-                mapRef.current?.flyTo([Number(current.lat), Number(current.lng)], 16, { duration: 1.5 });
+              if (displayCurrent) {
+                setFollowMode(true);
+                mapRef.current?.panTo(displayCurrent as [number, number], {
+                  animate: true,
+                  duration: 0.8,
+                });
               }
             }}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-90 ripple-effect fab-glow flex items-center justify-center border-none p-0 overflow-visible"
+            className={`w-14 h-14 rounded-full text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-90 ripple-effect fab-glow flex items-center justify-center border-none p-0 overflow-visible ${
+              followMode
+                ? "bg-gradient-to-br from-emerald-500 to-blue-600"
+                : "bg-gradient-to-br from-slate-700 to-slate-950"
+            }`}
+            aria-label={followMode ? "Following driver location" : "Recenter driver location"}
           >
-            <Bike size={24} strokeWidth={2.5} className="drop-shadow-md" />
+            <img
+              src={carTopViewIconUrl}
+              alt=""
+              className="h-9 w-9 object-contain drop-shadow-md"
+            />
           </Button>
         </div>
-        </div>
-
+      </div>
 
       <MapContainer
         center={center}
@@ -352,41 +611,80 @@ export function LiveTrackingMap({
         zoomControl={false}
         attributionControl={false}
       >
-        <TileLayer 
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        
+
         <div className="absolute top-1/2 -translate-y-1/2 right-4 z-[9999] flex flex-col gap-2">
           <ZoomControl position="topright" />
         </div>
 
-        {routeCoords.length > 0 && (
-          <Polyline positions={routeCoords} color="#10b981" weight={8} opacity={0.6} />
+        <FollowModeController
+          center={displayCurrent}
+          followMode={followMode}
+          onUserInteraction={() => setFollowMode(false)}
+        />
+
+        {routeCoords.length > 0 ? (
+          <Polyline
+            positions={routeCoords}
+            color="#3b82f6"
+            weight={8}
+            opacity={0.65}
+          />
+        ) : (
+          <Polyline
+            positions={fallbackRouteCoords}
+            color="#3b82f6"
+            weight={6}
+            opacity={0.95}
+          />
         )}
 
         {historyCoords.length > 1 && (
-          <Polyline positions={historyCoords} color="#3b82f6" weight={4} opacity={0.9} dashArray="1, 8" lineJoin="round" />
+          <Polyline
+            positions={historyCoords}
+            color="#3b82f6"
+            weight={4}
+            opacity={0.9}
+            dashArray="1, 8"
+            lineJoin="round"
+          />
         )}
 
-        <Marker position={[Number(pickup.lat), Number(pickup.lng)]} icon={pickupIcon}>
+        <Marker
+          position={[Number(pickup.lat), Number(pickup.lng)]}
+          icon={pickupIcon}
+        >
           <Popup>Pickup: {pickup.address}</Popup>
         </Marker>
 
-        <Circle center={[Number(dropoff.lat), Number(dropoff.lng)]} pathOptions={{ color: '#ef4444', fillOpacity: 0.05 }} radius={200} />
-        <Marker position={[Number(dropoff.lat), Number(dropoff.lng)]} icon={dropoffIcon}>
+        <Circle
+          center={[Number(dropoff.lat), Number(dropoff.lng)]}
+          pathOptions={{ color: "#ef4444", fillOpacity: 0.05 }}
+          radius={200}
+        />
+        <Marker
+          position={[Number(dropoff.lat), Number(dropoff.lng)]}
+          icon={dropoffIcon}
+        >
           <Popup>Destination: {dropoff.address}</Popup>
         </Marker>
 
-        {(smoothPos || current) && (
+        {displayCurrent && (
           <>
-            <ChangeView center={smoothPos || [Number(current!.lat), Number(current!.lng)]} />
-            <Marker 
-              position={smoothPos || [Number(current!.lat), Number(current!.lng)]} 
-              icon={createRiderIcon(riderName)}
+            <Marker
+              position={displayCurrent}
+              icon={createRiderIcon(displayHeading)}
             >
-              <Tooltip permanent direction="top" offset={[0, -40]} className="bg-white border-none shadow-none text-[10px] font-bold">
-                {riderName || 'Rider'}
+              <Tooltip
+                permanent
+                direction="top"
+                offset={[0, -40]}
+                className="bg-white border-none shadow-none text-[10px] font-bold"
+              >
+                {riderName || "Rider"}
               </Tooltip>
             </Marker>
           </>
@@ -397,7 +695,12 @@ export function LiveTrackingMap({
             <ChangeView center={searchPos} zoom={17} />
             <Marker position={searchPos} icon={searchIcon}>
               <Popup>{searchLabel}</Popup>
-              <Tooltip permanent direction="top" offset={[0, -40]} className="bg-white border-none shadow-none text-[10px] font-bold text-indigo-600">
+              <Tooltip
+                permanent
+                direction="top"
+                offset={[0, -40]}
+                className="bg-white border-none shadow-none text-[10px] font-bold text-indigo-600"
+              >
                 Found Place
               </Tooltip>
             </Marker>
@@ -411,7 +714,7 @@ export function LiveTrackingMap({
           <div className="relative group/search">
             <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-200 rounded-2xl flex items-center px-4 h-12 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20">
               <Search size={18} className="text-slate-400" />
-              <Input 
+              <Input
                 value={searchQuery}
                 onChange={onSearchChange}
                 onFocus={() => setShowSuggestions(true)}
@@ -420,10 +723,18 @@ export function LiveTrackingMap({
               />
               {isSearching ? (
                 <Loader2 size={16} className="animate-spin text-indigo-500" />
-              ) : searchQuery && (
-                <button onClick={() => { setSearchQuery(""); setSuggestions([]); }} className="p-1 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={16} className="text-slate-400" />
-                </button>
+              ) : (
+                searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSuggestions([]);
+                    }}
+                    className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+                  >
+                    <X size={16} className="text-slate-400" />
+                  </button>
+                )
               )}
             </div>
 
@@ -437,10 +748,21 @@ export function LiveTrackingMap({
                         onClick={() => selectSuggestion(s)}
                         className="w-full text-left p-3 hover:bg-indigo-50/50 rounded-xl transition-colors flex items-start gap-3"
                       >
-                        <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                        <MapPin
+                          size={16}
+                          className="text-slate-400 mt-0.5 shrink-0"
+                        />
                         <div className="truncate">
-                          <p className="text-sm font-bold text-slate-800 truncate">{s.display_name.split(',')[0]}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{s.display_name.split(',').slice(1).join(',').trim()}</p>
+                          <p className="text-sm font-bold text-slate-800 truncate">
+                            {s.display_name.split(",")[0]}
+                          </p>
+                          <p className="text-[10px] text-slate-500 truncate">
+                            {s.display_name
+                              .split(",")
+                              .slice(1)
+                              .join(",")
+                              .trim()}
+                          </p>
                         </div>
                       </button>
                     ))}
@@ -454,10 +776,16 @@ export function LiveTrackingMap({
 
       <div className="absolute top-20 left-4 z-[9999] max-w-[280px]">
         <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-100 p-3 rounded-2xl flex items-start gap-3">
-          <div className="p-2 bg-red-50 text-red-500 rounded-lg shrink-0"><MapPinned size={20} /></div>
+          <div className="p-2 bg-red-50 text-red-500 rounded-lg shrink-0">
+            <MapPinned size={20} />
+          </div>
           <div className="truncate">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">Destination</p>
-            <h4 className="text-sm font-bold text-slate-800 truncate leading-tight">{dropoffDetails.main}</h4>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">
+              Destination
+            </p>
+            <h4 className="text-sm font-bold text-slate-800 truncate leading-tight">
+              {dropoffDetails.main}
+            </h4>
           </div>
         </div>
       </div>
@@ -469,30 +797,45 @@ export function LiveTrackingMap({
               {riderName?.substring(0, 1)}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-900 leading-none truncate mb-1">{riderName || "Rider"}</h3>
+              <h3 className="font-bold text-slate-900 leading-none truncate mb-1">
+                {riderName || "Rider"}
+              </h3>
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                <p className="text-[10px] font-medium text-slate-500 truncate">Live Tracking Active</p>
+                <p className="text-[10px] font-medium text-slate-500 truncate">
+                  Live Tracking Active
+                </p>
               </div>
             </div>
-            <Badge variant="outline" className="bg-blue-50/50 text-blue-600 border-blue-100 text-[10px] py-0 px-2 h-5 shrink-0">
+            <Badge
+              variant="outline"
+              className="bg-blue-50/50 text-blue-600 border-blue-100 text-[10px] py-0 px-2 h-5 shrink-0"
+            >
               History Enabled
             </Badge>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
             <div className="flex items-center gap-2">
               <Clock className="text-slate-400" size={12} />
               <div className="truncate">
-                <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">Last Update</p>
-                <p className="text-[10px] font-bold text-slate-700">{format(lastUpdate, 'HH:mm:ss')}</p>
+                <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">
+                  Last Update
+                </p>
+                <p className="text-[10px] font-bold text-slate-700">
+                  {format(lastUpdate, "HH:mm:ss")}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Activity className="text-slate-400" size={12} />
               <div className="truncate">
-                <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">Status</p>
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">{status || 'In Progress'}</p>
+                <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">
+                  Status
+                </p>
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">
+                  {status || "In Progress"}
+                </p>
               </div>
             </div>
           </div>

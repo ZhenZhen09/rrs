@@ -46,7 +46,8 @@ export function Login() {
           const updateResponse = await fetch('/api/auth/update-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: result.userId, newPassword })
+            body: JSON.stringify({ userId: result.userId, newPassword }),
+            credentials: 'include'
           });
           
           if (updateResponse.ok) {
@@ -64,7 +65,8 @@ export function Login() {
         const setupRes = await fetch('/api/auth/mfa/setup-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: result.userId })
+          body: JSON.stringify({ userId: result.userId }),
+          credentials: 'include'
         });
         if (setupRes.ok) {
           const setupData = await setupRes.json();
@@ -97,13 +99,15 @@ export function Login() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        credentials: 'include'
       });
 
       if (response.ok) {
         const data = await response.json();
         // Log user in
         const userToSet = mfaStep === 'setup' ? data.user : data;
+        
         localStorage.setItem('currentUser', JSON.stringify(userToSet));
         window.location.reload(); // Simple way to trigger AuthContext update
       } else {

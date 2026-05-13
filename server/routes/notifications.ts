@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { pool } from '../db';
 import { Expo } from 'expo-server-sdk';
+import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const expo = new Expo();
@@ -39,28 +40,26 @@ async function sendPushNotification(userId: string, title: string, body: string,
 // Register Push Token
 router.post('/register-token', async (req, res) => {
   try {
-    const { userId, token } = req.body;
-    if (!userId || !token) return res.status(400).json({ error: 'Missing userId or token' });
+    const { token } = req.body;
+    const user = (req as AuthRequest).user!;
+    
+    if (!token) return res.status(400).json({ error: 'Missing token' });
 
-    await pool.query('UPDATE users SET expo_push_token = ? WHERE id = ?', [token, userId]);
+    await pool.query('UPDATE users SET expo_push_token = ? WHERE id = ?', [token, user.id]);
+    console.log(`📲 Registered push token for user: ${user.id}`);
     res.json({ success: true });
   } catch (error) {
-    console.error(error);
+    console.error('Push registration error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-// Get all notifications (with optional userId filter and limit)
-router.get('/', async (req, res) => {
+// Get all notifications (Filtered by authenticated user)
+router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.query.userId;
-    let query = 'SELECT * FROM notifications';
-    const params: any[] = [];
-
-    if (userId) {
-      query += ' WHERE user_id = ?';
-      params.push(userId);
-    }
+    const user = req.user!;
+    let query = 'SELECT * FROM notifications WHERE user_id = ?';
+    const params: any[] = [user.id];
 
     // Limit to 50 to prevent UI flooding and DB strain
     query += ' ORDER BY created_at DESC LIMIT 50';
@@ -102,11 +101,14 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Mark a single notification as read
+// Mark a single notification as read with BOLA protection
 router.put('/:id/read', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('UPDATE notifications SET is_read = TRUE WHERE id = ?', [id]);
+    const user = (req as AuthRequest).user!;
+    
+    // Ensure the notification belongs to the user
+    await pool.query('UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?', [id, user.id]);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -114,10 +116,17 @@ router.put('/:id/read', async (req, res) => {
   }
 });
 
-// Mark all notifications as read for a specific user
+// Mark all notifications as read (Securely uses token user ID)
 router.put('/read-all/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const user = (req as AuthRequest).user!;
+
+    // SECURITY: Prevent a user from marking another user's notifications as read
+    if (userId !== user.id && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to modify these notifications' });
+    }
+
     await pool.query('UPDATE notifications SET is_read = TRUE WHERE user_id = ?', [userId]);
     res.json({ success: true });
   } catch (error) {

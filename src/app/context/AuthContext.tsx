@@ -21,27 +21,29 @@ const API_URL = '/api';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const storedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
-    if (storedUser) {
-      // Migrate to localStorage for cross-tab support if it was in sessionStorage
-      localStorage.setItem('currentUser', storedUser);
-      return JSON.parse(storedUser);
-    }
-    return null;
+    const storedUser = localStorage.getItem('currentUser');
+    return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; requirePasswordReset?: boolean; userId?: string; error?: string }> => {
+  const login = async (email: string, password: string): Promise<{ 
+    success: boolean; 
+    requirePasswordReset?: boolean; 
+    userId?: string; 
+    error?: string;
+    mfa_required?: boolean;
+    mfa_setup_required?: boolean;
+  }> => {
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
       });
       
       if (response.status === 428) {
         // Handle cPanel Technical Domain interception
         alert("Security checkpoint required. The page will now reload so you can accept the warning.");
-        // Unregister service workers so the reload actually hits the network
         if ('serviceWorker' in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
           for (let registration of registrations) {
@@ -64,9 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.mfa_setup_required) {
           return { success: false, mfa_setup_required: true, userId: data.userId };
         }
+        
         setUser(data);
         localStorage.setItem('currentUser', JSON.stringify(data));
-        sessionStorage.setItem('currentUser', JSON.stringify(data));
         return { success: true };
       }
       return { success: false, error: data.error || 'Login failed' };
@@ -76,10 +78,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch(`${API_URL}/auth/logout`, { 
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     setUser(null);
     localStorage.removeItem('currentUser');
-    sessionStorage.removeItem('currentUser');
   };
 
   const createAccount = async (email: string, password: string, role: 'personnel' | 'rider'): Promise<boolean> => {
@@ -87,13 +96,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch(`${API_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role })
+        body: JSON.stringify({ email, password, role }),
+        credentials: 'include'
       });
       if (response.ok) {
         const newUser = await response.json();
         setUser(newUser);
         localStorage.setItem('currentUser', JSON.stringify(newUser));
-        sessionStorage.setItem('currentUser', JSON.stringify(newUser));
         return true;
       }
       return false;

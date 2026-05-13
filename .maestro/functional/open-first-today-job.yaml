@@ -1,0 +1,9 @@
+appId: host.exp.exponent
+---
+- assertVisible: "Today's Tasks"
+- tapOn:
+    id: "today_task_card_0"
+- extendedWaitUntil:
+    visible: "TRANSACTION ID"
+    timeout: 15000
+- assertVisible: "DROP-OFF DESTINATION"

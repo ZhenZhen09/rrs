@@ -1,0 +1,19 @@
+appId: host.exp.exponent
+---
+- assertVisible: "Today's Tasks"
+- tapOn: "Overdue"
+- extendedWaitUntil:
+    visible: "Overdue Tasks"
+    timeout: 10000
+- tapOn: "Tomorrow"
+- extendedWaitUntil:
+    visible: "Tomorrow's Jobs"
+    timeout: 10000
+- tapOn: "History"
+- extendedWaitUntil:
+    visible: "Delivery History"
+    timeout: 10000
+- tapOn: "Today"
+- extendedWaitUntil:
+    visible: "Today's Tasks"
+    timeout: 10000

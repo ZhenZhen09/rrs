@@ -37,38 +37,38 @@ export const RequestList: React.FC<RequestListProps> = ({
   return (
     <div className="flex flex-col h-full bg-white border-r border-slate-100 shadow-sm overflow-hidden">
       {/* List Header / Filters */}
-      <div className="p-6 pb-2 shrink-0">
-        <div className="flex items-center gap-2 mb-6 bg-slate-100/50 p-1.5 rounded-2xl">
+      <div className="p-4 pb-1 shrink-0">
+        <div className="flex items-center gap-1.5 mb-4 bg-slate-100/50 p-1 rounded-xl">
           <button 
             onClick={() => onFilterChange('pending')}
-            className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${filter === 'pending' ? 'bg-white text-slate-900 shadow-md shadow-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Pending ({requests.filter(r => r.status === 'pending').length})
           </button>
           <button 
             onClick={() => onFilterChange('active')}
-            className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-md shadow-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Active ({requests.filter(r => r.status === 'approved' && !['completed', 'failed', 'disapproved'].includes(r.delivery_status || '')).length})
           </button>
           <button 
             onClick={() => onFilterChange('completed')}
-            className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-md shadow-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Done ({requests.filter(r => ['completed', 'failed', 'disapproved'].includes(r.delivery_status || '') || r.status === 'disapproved').length})
           </button>
         </div>
 
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort by:</span>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sort by:</span>
           <Select value={sortBy} onValueChange={onSortChange}>
-            <SelectTrigger className="h-8 border-none shadow-none text-xs font-bold text-slate-700 bg-transparent hover:bg-slate-50 rounded-lg focus:ring-0">
+            <SelectTrigger className="h-7 border-none shadow-none text-[11px] font-bold text-slate-700 bg-transparent hover:bg-slate-50 rounded-lg focus:ring-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-              <SelectItem value="newest" className="font-bold">Time: Newest</SelectItem>
-              <SelectItem value="oldest" className="font-bold">Time: Oldest</SelectItem>
-              <SelectItem value="urgency" className="font-bold">Urgency</SelectItem>
+              <SelectItem value="newest" className="text-xs font-bold">Time: Newest</SelectItem>
+              <SelectItem value="oldest" className="text-xs font-bold">Time: Oldest</SelectItem>
+              <SelectItem value="urgency" className="text-xs font-bold">Urgency</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -76,7 +76,7 @@ export const RequestList: React.FC<RequestListProps> = ({
 
       {/* Scrollable List with Horizontal Support */}
       <ScrollArea className="flex-1 overflow-x-auto">
-        <div className="px-6 pb-6 mt-4 min-w-[320px]">
+        <div className="px-4 pb-4 mt-2 min-w-[320px]">
           {displayRequests.length === 0 ? (
             <div className="py-20 text-center">
               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -93,6 +93,7 @@ export const RequestList: React.FC<RequestListProps> = ({
                 onClick={() => onSelect(req.request_id)}
                 isMultiSelected={selectedIds.includes(req.request_id)}
                 onToggleSelection={onToggleSelect}
+                isActiveTab={filter === 'active'}
               />
             ))
           )}

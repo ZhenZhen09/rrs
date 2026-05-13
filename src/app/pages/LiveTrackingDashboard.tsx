@@ -7,24 +7,97 @@ import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Clock, User as UserIcon, Bike, ChevronLeft, MapPin, XCircle, CheckCircle2 } from "lucide-react";
 import { formatLocalDate } from "../utils/dateUtils";
+import { DeliveryRequest } from "../types";
+import { useRealTime } from "../context/RealTimeContext";
+
+interface TrackingLocation {
+  lat: number;
+  lng: number;
+  source?: "request" | "rider";
+  updated_at?: string;
+}
+
+interface TrackingPayload {
+  request: DeliveryRequest;
+  current_location: TrackingLocation | null;
+  request_current_location: TrackingLocation | null;
+  rider_current_location: TrackingLocation | null;
+  history: { lat: number; lng: number; timestamp?: string }[];
+  tracking_state: {
+    has_request_location: boolean;
+    has_rider_location: boolean;
+    is_request_specific: boolean;
+    is_fallback: boolean;
+    rider_status: string | null;
+  };
+}
 
 export function LiveTrackingDashboard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { requests, fetchRequestById, refreshData } = useData();
+  const { riderLocations, socket } = useRealTime();
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [trackingPayload, setTrackingPayload] = useState<TrackingPayload | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
 
-  const trackingRequest = requests.find((r) => r.request_id === id);
+  const trackingRequest = trackingPayload?.request || requests.find((r) => r.request_id === id);
+  const liveRiderLocation = trackingRequest?.assigned_rider_id
+    ? riderLocations[trackingRequest.assigned_rider_id]
+    : null;
+
+  const fetchTrackingPayload = async () => {
+    if (!id) return;
+    try {
+      const response = await fetch(`/api/requests/${id}/tracking`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        setTrackingPayload(null);
+        setTrackingError(response.status === 403 ? "You are not allowed to view this tracking session." : "Tracking details are unavailable.");
+        return;
+      }
+
+      const data = await response.json();
+      setTrackingPayload(data);
+      setTrackingError(null);
+    } catch (error) {
+      console.error("Tracking payload fetch failed:", error);
+      setTrackingError("Tracking details are unavailable.");
+    } finally {
+      setIsInitialLoading(false);
+    }
+  };
 
   // Effect to fetch the specific request if not found in the global list
   useEffect(() => {
+    fetchTrackingPayload();
+
     if (id && !trackingRequest) {
       console.log('🔍 Request not in local state, fetching specifically:', id);
-      fetchRequestById(id).finally(() => setIsInitialLoading(false));
+      fetchRequestById(id);
     } else if (trackingRequest) {
       setIsInitialLoading(false);
     }
-  }, [id, trackingRequest, fetchRequestById]);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const interval = setInterval(() => {
+      fetchTrackingPayload();
+      fetchRequestById(id);
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [id, fetchRequestById]);
+
+  useEffect(() => {
+    if (!id || !socket) return;
+
+    socket.emit("join-room", `job_${id}`);
+  }, [id, socket]);
 
   if (isInitialLoading) {
     return (
@@ -35,14 +108,14 @@ export function LiveTrackingDashboard() {
     );
   }
 
-  if (!trackingRequest) {
+  if (!trackingRequest || trackingError) {
     return (
       <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
         <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 text-slate-200">
           <Bike size={40} />
         </div>
         <h2 className="text-2xl font-black text-slate-900 mb-2">Tracking not found</h2>
-        <p className="text-slate-500 mb-8 max-w-xs">This request might be completed or the link has expired.</p>
+        <p className="text-slate-500 mb-8 max-w-xs">{trackingError || "This request might be completed or the link has expired."}</p>
         <Button onClick={() => navigate(-1)} variant="outline" className="rounded-xl">
           Go Back
         </Button>
@@ -53,14 +126,31 @@ export function LiveTrackingDashboard() {
   console.log('📍 Tracking Request Info:', {
     id: trackingRequest.request_id,
     status: trackingRequest.delivery_status,
-    lat: trackingRequest.current_lat,
-    lng: trackingRequest.current_lng,
-    hasCurrent: !!(trackingRequest.current_lat && trackingRequest.current_lng)
+    lat: trackingPayload?.current_location?.lat ?? trackingRequest.current_lat,
+    lng: trackingPayload?.current_location?.lng ?? trackingRequest.current_lng,
+    source: trackingPayload?.current_location?.source,
+    hasCurrent: Boolean(trackingPayload?.current_location) ||
+      trackingRequest.current_lat !== null &&
+      trackingRequest.current_lat !== undefined &&
+      trackingRequest.current_lng !== null &&
+      trackingRequest.current_lng !== undefined
   });
 
   const isCompleted = trackingRequest.delivery_status === 'completed';
   const isFailed = trackingRequest.delivery_status === 'failed';
   const isFinished = isCompleted || isFailed;
+  const currentLocation = liveRiderLocation
+    ? { lat: Number(liveRiderLocation.lat), lng: Number(liveRiderLocation.lng) }
+    : trackingPayload?.current_location
+    ? { lat: Number(trackingPayload.current_location.lat), lng: Number(trackingPayload.current_location.lng) }
+    : ((trackingRequest.current_lat !== null && trackingRequest.current_lat !== undefined && trackingRequest.current_lng !== null && trackingRequest.current_lng !== undefined)
+      ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) }
+      : null);
+  const trackingLabel = trackingPayload?.tracking_state?.is_request_specific
+    ? "Live delivery tracking"
+    : trackingPayload?.tracking_state?.is_fallback
+      ? "Assigned rider location"
+      : "Waiting for rider location";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -80,7 +170,7 @@ export function LiveTrackingDashboard() {
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black text-slate-900 tracking-tight">Track Delivery</h1>
                 <Badge variant="outline" className={`${isFinished ? 'bg-slate-100 text-slate-500' : 'bg-[#00B14F]/10 text-[#009e46]'} border-none font-bold text-[10px] uppercase px-2 py-0`}>
-                  {isFinished ? 'Offline' : 'Live'}
+                  {isFinished ? 'Offline' : currentLocation ? 'Live' : 'Waiting'}
                 </Badge>
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
@@ -115,7 +205,8 @@ export function LiveTrackingDashboard() {
              requestId={trackingRequest.request_id}
              pickup={trackingRequest.pickup_location}
              dropoff={trackingRequest.dropoff_location}
-             current={(trackingRequest.current_lat !== null && trackingRequest.current_lat !== undefined && trackingRequest.current_lng !== null && trackingRequest.current_lng !== undefined) ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) } : undefined}
+             current={currentLocation}
+             history={trackingPayload?.history || []}
              riderName={trackingRequest.assigned_rider_name}
              status={trackingRequest.delivery_status}
              timeWindow={trackingRequest.time_window}
@@ -162,7 +253,7 @@ export function LiveTrackingDashboard() {
                   <div className="text-left">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Rider's Update</p>
                     <p className="text-sm font-bold text-slate-700 leading-relaxed italic">
-                      "{trackingRequest.rider_remark || 'Preparing for your delivery...'}"
+                      "{trackingRequest.rider_remark || trackingLabel}"
                     </p>
                   </div>
                 </div>

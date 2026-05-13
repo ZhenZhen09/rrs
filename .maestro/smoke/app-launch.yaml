@@ -1,0 +1,8 @@
+appId: host.exp.exponent
+---
+- assertVisible: "Rider Scheduling"
+- assertVisible: "Identification required"
+- assertVisible:
+    id: "login_email_input"
+- assertVisible:
+    id: "login_continue_button"

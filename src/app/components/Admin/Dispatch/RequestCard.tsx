@@ -1,14 +1,17 @@
-import React from 'react';
-import { Badge } from '../../ui/badge';
-import { Card } from '../../ui/card';
-import { Button } from '../../ui/button';
-import { Checkbox } from '../../ui/checkbox';
-import { Clock, MapPin, Package, Truck, Bike, Loader2, AlertTriangle, WifiOff, User, CheckCheck, Signal, SignalHigh } from 'lucide-react';
-import { cn } from '../../ui/utils';
-import { DeliveryRequest } from '../../../types';
-import { formatLocalDate } from '../../../utils/dateUtils';
-import { getTypeIcon, getTypeColor } from '../../../utils/categoryUtils';
-import { useData } from '../../../context/DataContext';
+import React from "react";
+import { Badge } from "../../ui/badge";
+import { Card } from "../../ui/card";
+import {
+  Clock,
+  Truck,
+  User,
+  CheckCheck,
+  Building2,
+  Calendar,
+} from "lucide-react";
+import { cn } from "../../ui/utils";
+import { DeliveryRequest } from "../../../types";
+import { formatDateTime } from "../../../utils/dateUtils";
 
 interface RequestCardProps {
   request: DeliveryRequest;
@@ -16,205 +19,268 @@ interface RequestCardProps {
   onClick: () => void;
   isMultiSelected?: boolean;
   onToggleSelection?: (requestId: string) => void;
+  isActiveTab?: boolean;
 }
 
-export const RequestCard: React.FC<RequestCardProps> = ({ 
-  request, 
-  isSelected, 
+export const RequestCard: React.FC<RequestCardProps> = ({
+  request,
+  isSelected,
   onClick,
   isMultiSelected = false,
-  onToggleSelection
+  onToggleSelection,
+  isActiveTab = false,
 }) => {
-  const { riderPresence } = useData();
-  
-  const getStatusConfig = (status: string, deliveryStatus?: string, isOptimistic?: boolean) => {
+  const getStatusConfig = (
+    status: string,
+    deliveryStatus?: string,
+    isOptimistic?: boolean,
+  ) => {
     if (isOptimistic) {
-      return { label: 'PROCESSING', color: 'bg-amber-50 text-amber-700 border-amber-100', dot: 'bg-amber-500 animate-pulse' };
+      return {
+        label: "PROCESSING",
+        color: "text-amber-500",
+        dot: "bg-amber-500",
+        pulse: true,
+      };
     }
-    if (status === 'approved' && deliveryStatus === 'in_progress') {
-      return { label: 'ON THE WAY', color: 'bg-amber-50 text-amber-700 border-amber-100', dot: 'bg-amber-500' };
+    if (deliveryStatus === "completed") {
+      return {
+        label: "COMPLETED",
+        color: "text-emerald-500",
+        dot: "bg-emerald-500",
+        pulse: false,
+      };
+    }
+    if (deliveryStatus === "failed") {
+      return {
+        label: "FAILED",
+        color: "text-rose-500",
+        dot: "bg-rose-500",
+        pulse: false,
+      };
+    }
+    if (status === "approved" && deliveryStatus === "in_progress") {
+      return {
+        label: "ON ROUTE",
+        color: "text-sky-500",
+        dot: "bg-sky-500",
+        pulse: true,
+      };
     }
     switch (status) {
-      case 'pending':
-      case 'submitted_waiting':
-        return { label: 'PENDING', color: 'bg-blue-50 text-blue-700 border-blue-100', dot: 'bg-blue-500' };
-      case 'returned_for_revision':
-        return { label: 'REVISION', color: 'bg-indigo-50 text-indigo-700 border-indigo-100', dot: 'bg-indigo-500' };
-      case 'approved':
-        return { label: 'ACTIVE', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' };
-      case 'disapproved':
-        return { label: 'DECLINED', color: 'bg-rose-50 text-rose-700 border-rose-100', dot: 'bg-rose-500' };
+      case "pending":
+      case "submitted_waiting":
+        return {
+          label: "PENDING",
+          color: "text-blue-500",
+          dot: "bg-blue-500",
+          pulse: true,
+        };
+      case "returned_for_revision":
+        return {
+          label: "REVISION",
+          color: "text-indigo-500",
+          dot: "bg-indigo-500",
+          pulse: true,
+        };
+      case "approved":
+        return {
+          label: "ACTIVE",
+          color: "text-emerald-500",
+          dot: "bg-emerald-500",
+          pulse: true,
+        };
+      case "disapproved":
+        return {
+          label: "DECLINED",
+          color: "text-rose-500",
+          dot: "bg-rose-500",
+          pulse: false,
+        };
       default:
-        return { label: status.toUpperCase(), color: 'bg-slate-50 text-slate-700 border-slate-100', dot: 'bg-slate-500' };
+        return {
+          label: status.toUpperCase(),
+          color: "text-slate-500",
+          dot: "bg-slate-500",
+          pulse: false,
+        };
     }
   };
 
-  const statusConfig = getStatusConfig(request.status, request.delivery_status, request.is_optimistic);
-  const isRevision = request.status === 'returned_for_revision';
-  const isResubmitted = request.status === 'submitted_waiting';
-
-  // Real-time Presence for assigned rider
-  const riderStatus = request.assigned_rider_id ? (riderPresence[request.assigned_rider_id] || 'offline') : null;
+  const statusConfig = getStatusConfig(
+    request.status,
+    request.delivery_status,
+    request.is_optimistic,
+  );
 
   return (
-    <Card 
+    <Card
       className={cn(
-        "rounded-[1.5rem] border-2 transition-all cursor-pointer group mb-4 relative overflow-hidden flex",
-        isSelected 
-          ? "border-primary bg-white shadow-xl shadow-primary/10 ring-4 ring-primary/5" 
-          : "border-transparent bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-lg",
-        request.is_optimistic && !isResubmitted ? "opacity-70 grayscale-[0.3] pointer-events-none" : "",
-        isRevision ? "opacity-50 grayscale-[0.2]" : "",
+        "rounded-lg border border-slate-100 transition-all duration-200 cursor-pointer group mb-1.5 relative overflow-hidden flex flex-col bg-white max-w-[350px]",
+        isSelected
+          ? "shadow-md ring-1 ring-slate-200"
+          : "shadow-sm hover:shadow-md",
+        request.is_optimistic && request.status !== "submitted_waiting"
+          ? "opacity-70 grayscale-[0.3] pointer-events-none"
+          : "",
       )}
       onClick={onClick}
     >
-      {/* Selection Strip (Fixed Width) */}
-      {onToggleSelection && (
-        <div 
-          className={cn(
-            "w-12 shrink-0 flex items-center justify-center border-r transition-all",
-            isMultiSelected ? "bg-primary/10 border-primary/20" : "bg-slate-100/30 border-slate-100 hover:bg-slate-100/50"
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelection(request.request_id);
-          }}
-        >
-          <div className={cn(
-            "h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all shadow-sm",
-            isMultiSelected 
-              ? "bg-primary border-primary scale-110" 
-              : "bg-white border-slate-200 group-hover:border-slate-300"
-          )}>
-            {isMultiSelected && <CheckCheck className="h-3.5 w-3.5 text-white" strokeWidth={4} />}
+      {/* 1. Header Section */}
+      <div className="p-2.5 pb-0 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded bg-[#F0FDF4] flex items-center justify-center shrink-0">
+            <Truck size={16} className="text-[#22C55E]" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+              Delivery
+            </span>
+            <h2 className="text-sm font-black text-slate-900 tracking-tighter mt-0.5 leading-none">
+              #{request.request_id.slice(-8).toUpperCase()}
+            </h2>
           </div>
         </div>
-      )}
 
-      <div className="p-5 flex-1 min-w-0">
-        {/* Transaction ID Header */}
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-[900] text-slate-900 tracking-tight">
-              #{request.request_id.slice(-8)}
-            </h2>
-            {isRevision && (
-              <Badge variant="outline" className="border-indigo-200 bg-indigo-50/50 text-indigo-600 font-black text-[8px] uppercase tracking-widest px-2 py-0">
-                For Revision
-              </Badge>
-            )}
+        <div className="flex items-center gap-1.5">
+          {onToggleSelection && (
+            <button
+              className={cn(
+                "w-6 h-6 rounded border flex items-center justify-center transition-all",
+                isMultiSelected
+                  ? "bg-slate-900 border-slate-900"
+                  : "bg-white border-slate-100 hover:border-slate-200",
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelection(request.request_id);
+              }}
+            >
+              {isMultiSelected ? (
+                <CheckCheck className="h-3 w-3 text-white" strokeWidth={4} />
+              ) : (
+                <div className="w-2 h-2 rounded-full border border-slate-100" />
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Horizontal Divider */}
+      <div className="px-2.5 mt-2">
+        <div className="h-[1px] bg-slate-100 w-full" />
+      </div>
+
+      {/* 2. Content Rows Section */}
+      <div className="p-2.5 py-2.5 space-y-2.5">
+        {/* Row 1: Who */}
+        <div className="flex items-center gap-3">
+          <div className="w-4 flex justify-center shrink-0">
+            <User size={14} className="text-[#581C87]" />
           </div>
-        
-        {/* Senior Status Indicator: Exception vs Presence */}
-        <div className="flex items-center gap-2">
-          {request.assigned_rider_id && (
-            <div className={cn(
-              "flex items-center gap-1.5 px-2 py-1 rounded-lg border",
-              riderStatus === 'online' ? "bg-emerald-50 border-emerald-100" : "bg-slate-100 border-slate-200"
-            )}>
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                riderStatus === 'online' ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
-              )} />
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">
-                {riderStatus === 'online' ? 'LIVE' : 'OFF'}
+          <span className="text-[11px] font-[900] text-slate-900 truncate leading-none">
+            {request.recipient_name}
+          </span>
+        </div>
+
+        {/* Row 2: Where */}
+        <div className="flex items-start gap-3">
+          <div className="w-4 flex justify-center shrink-0 mt-0.5">
+            <Building2 size={14} className="text-slate-400" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate leading-none">
+              {(() => {
+                const name =
+                  request.dropoff_location.businessName || "General Pickup";
+                return name.length > 30 ? name.substring(0, 30) + "..." : name;
+              })()}
+            </span>
+            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1 leading-none">
+              BY:{" "}
+              {(request.on_behalf_of || request.requester_name).toUpperCase()}
+              {request.on_behalf_of &&
+                request.on_behalf_of !== request.requester_name && (
+                  <span className="opacity-60 ml-1 italic">
+                    ({request.requester_name.split(" ")[0]})
+                  </span>
+                )}
+            </span>
+          </div>
+        </div>
+
+        {/* Row 3: Time */}
+        <div className="flex items-center gap-3">
+          <div className="w-4 flex justify-center shrink-0">
+            <Clock size={14} className="text-[#3B82F6]" />
+          </div>
+          <span className="text-[10px] font-black text-slate-900 truncate tracking-tight leading-none">
+            {request.time_window}
+          </span>
+        </div>
+
+        {/* Row 4: Approved At (Active/Done only) */}
+        {(isActiveTab ||
+          request.status === "approved" ||
+          request.delivery_status === "completed") && (
+          <div className="flex items-center gap-3">
+            <div className="w-4 flex justify-center shrink-0">
+              <Calendar size={14} className="text-[#22C55E]" />
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                Approved:
+              </span>
+              <span className="text-[10px] font-black text-slate-900 truncate tracking-tight leading-none">
+                {formatDateTime(request.updated_at, "MMM d, h:mm a")}
               </span>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Time & Type Badge */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-white rounded-lg shadow-sm border border-slate-100">
-            <Clock className="h-3.5 w-3.5 text-slate-400" />
           </div>
-          <span className="text-[11px] font-black text-slate-600 tracking-tight">{request.time_window}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {request.is_optimistic && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200 animate-pulse font-black text-[9px] uppercase tracking-wider px-2 py-0.5">
-              <Loader2 className="h-2 w-2 mr-1 animate-spin" />
-              Syncing
-            </Badge>
-          )}
-          <Badge variant="outline" className={cn("px-2.5 py-0.5 rounded-full font-black text-[9px] uppercase tracking-wider border", getTypeColor(request.request_type))}>
-            <span className="mr-1.5">{getTypeIcon(request.request_type)}</span>
-            {request.request_type === 'Delivery/Pickup' ? 'PICKUP' : request.request_type}
-          </Badge>
-        </div>
-      </div>
-
-      {/* Requester Info */}
-      <div className="mb-4">
-        <h4 className="text-base font-[900] text-slate-900 tracking-tight group-hover:text-primary transition-colors">
-          {request.requester_name}
-        </h4>
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-slate-300" />
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{request.requester_department}</p>
-          </div>
-          {request.assigned_rider_name && (
-            <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded-md">
-              <Bike className="h-3 w-3 text-slate-500" />
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-tight truncate max-w-[80px]">
-                {request.assigned_rider_name.split(' ')[0]}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Location Route */}
-      <div className="space-y-4 relative py-1">
-        <div className="absolute left-[7px] top-[12px] bottom-[12px] w-[1px] border-l border-dashed border-slate-200" />
-        
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-white z-10 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-500 line-clamp-1 leading-none">
-              {request.pickup_location.address}
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-3.5 h-3.5 rounded-full border-2 border-rose-500 bg-white z-10 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-black text-slate-800 line-clamp-1 leading-none">
-              {request.dropoff_location.address}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer Info */}
-      <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", statusConfig.dot)} />
-          <span className="text-[9px] font-black text-slate-400 tracking-[0.1em] uppercase">{statusConfig.label}</span>
-        </div>
-        {request.delivery_status === 'in_progress' && (
-          <Button 
-            size="sm" 
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(`/admin/tracking/${request.request_id}`, '_blank');
-            }}
-            className="h-8 px-3 rounded-xl bg-[#00B14F] hover:bg-[#009e46] text-white font-black text-[9px] uppercase tracking-widest animate-pulse"
-          >
-            <Bike className="h-3 w-3 mr-1.5" />
-            Track
-          </Button>
         )}
       </div>
-    </div>
 
-      {/* Active Indicator Bar */}
+      {/* Horizontal Divider */}
+      <div className="px-2.5">
+        <div className="h-[1px] bg-slate-100 w-full" />
+      </div>
+
+      {/* 3. Footer Section */}
+      <div className="px-2.5 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              statusConfig.dot,
+              statusConfig.pulse && "animate-pulse",
+            )}
+          />
+          <div className="flex items-center gap-1">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+              STATUS
+            </span>
+            <span
+              className={cn(
+                "text-[8px] font-black uppercase tracking-widest",
+                statusConfig.color,
+              )}
+            >
+              {statusConfig.label}
+            </span>
+          </div>
+        </div>
+
+        {request.assigned_rider_name && (
+          <Badge
+            variant="outline"
+            className="h-4 border-slate-100 font-black text-[6px] uppercase tracking-tighter bg-slate-50 text-slate-400 px-1 rounded"
+          >
+            {request.assigned_rider_name.split(" ")[0]}
+          </Badge>
+        )}
+      </div>
+
       {isSelected && (
-        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary" />
+        <div className="absolute inset-0 border ring-1 ring-emerald-500 pointer-events-none rounded-lg z-50 opacity-10" />
       )}
     </Card>
   );

@@ -1,169 +1,163 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { pool } from '../db';
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
+import { updateRiderPresence, onlineRiders } from '../presence';
+import { AuthRequest, authorize } from '../middleware/auth';
+import fs from 'fs';
+import { handleRiderLocationUpdate } from '../locationTracking';
 
 const router = Router();
 
-// Get all users
-router.get('/', async (req, res) => {
+// Get all users (Admin only)
+router.get('/', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   try {
-    const [rows] = await pool.query("SELECT id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled FROM users");
+    const [rows]: any = await pool.query("SELECT id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled FROM users");
+    const debugInfo = `[DEBUG ${new Date().toISOString()}] Fetched ${rows.length} users. First row keys: ${Object.keys(rows[0] || {}).join(', ')}\nSample data: ${JSON.stringify(rows[0])}\n`;
+    fs.appendFileSync('api_debug.log', debugInfo);
     res.json(rows);
-  } catch (error) {
-    console.error('Error fetching users:', error);
+  } catch (error: any) {
+    fs.appendFileSync('api_debug.log', `[ERROR] ${error.message}\n`);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-// Manual MFA reset
-router.post('/:id/reset-mfa', async (req, res) => {
+// Manual MFA reset (Admin only)
+router.post('/:id/reset-mfa', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    
-    const [result]: any = await pool.query(
-      'UPDATE users SET mfa_secret = NULL, mfa_enabled = FALSE WHERE id = ?',
-      [id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    const [result]: any = await pool.query('UPDATE users SET mfa_secret = NULL, mfa_enabled = FALSE WHERE id = ?', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ success: true, message: 'MFA reset successfully' });
   } catch (error) {
-    console.error('MFA reset error:', error);
     res.status(500).json({ error: 'Failed to reset MFA' });
   }
 });
 
-
 // Get all riders
-router.get('/riders', async (req, res) => {
+router.get('/riders', authorize(['admin', 'personnel']), async (req: AuthRequest, res: Response) => {
   try {
     const [rows] = await pool.query("SELECT id, name, email, role FROM users WHERE role = 'rider'");
     res.json(rows);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-// Update user push subscription
-router.put('/:id/push-subscription', async (req, res) => {
+// Get LIVE riders (for Map)
+router.get('/riders/live', authorize(['admin', 'personnel']), async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const { subscription } = req.body;
+    // Fetch all riders and their latest info, prioritizing users table for live coords
+    const [rows]: any = await pool.query(`
+      SELECT u.id, u.name, u.email, u.status as user_status, u.current_lat, u.current_lng,
+             dr.request_id, dr.delivery_status, dr.pickup_address, dr.time_window
+      FROM users u
+      LEFT JOIN delivery_requests dr ON u.id = dr.assigned_rider_id 
+        AND dr.delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')
+      WHERE u.role = 'rider'
+    `);
 
-    await pool.query(
-      'UPDATE users SET push_subscription = ? WHERE id = ?',
-      [JSON.stringify(subscription), id]
-    );
+    const riders = rows.map((r: any) => ({
+      ...r,
+      is_online: onlineRiders.has(r.id),
+      last_seen: onlineRiders.get(r.id)?.lastSeen || null
+    }));
 
-    res.json({ success: true });
+    res.json(riders);
   } catch (error) {
-    console.error('Error saving subscription:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-// Unified update for role, dept, status
-router.patch('/:id', async (req, res) => {
+// Update user details (Admin only)
+router.patch('/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { role, department, status } = req.body;
-    
+    const { role, department, status } = req.body || {};
     const updates: string[] = [];
     const values: any[] = [];
-
-    if (role !== undefined) {
-      updates.push('role = ?');
-      values.push(role);
-    }
-    if (department !== undefined) {
-      updates.push('department = ?');
-      values.push(department);
-    }
-    if (status !== undefined) {
-      updates.push('status = ?');
-      values.push(status);
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ error: 'No fields to update' });
-    }
-
+    if (role !== undefined) { updates.push('role = ?'); values.push(role); }
+    if (department !== undefined) { updates.push('department = ?'); values.push(department); }
+    if (status !== undefined) { updates.push('status = ?'); values.push(status); }
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields provided for update' });
     values.push(id);
-
-    const [result]: any = await pool.query(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
     res.json({ success: true });
   } catch (error) {
-    console.error('Update error:', error);
-    res.status(500).json({ error: 'Failed to update user' });
+    res.status(500).json({ error: 'Update failed' });
   }
 });
 
-// Manual account provisioning
-router.post('/', async (req, res) => {
+// Location Update (Rider only)
+router.post('/location', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, role, department } = req.body;
+    const { lat, lng, requestId } = req.body || {};
+    const user = req.user!;
+    const io = req.app.get('io');
     
-    if (!name || !email || !role) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // SECURITY: Only riders can update location
+    if (user.role !== 'rider') return res.status(403).json({ error: 'Forbidden' });
+    if (lat === undefined || lng === undefined) return res.status(400).json({ error: 'Missing coordinates' });
+
+    const riderId = user.id;
+    updateRiderPresence(riderId, 'rest-api', null);
+
+    const result = await handleRiderLocationUpdate({
+      riderId,
+      requestId,
+      lat,
+      lng,
+      riderName: (user as any).name || 'Rider',
+      verifyAssignment: true,
+      io,
+    });
+
+    if (result.reason === 'not_assigned') {
+      console.warn(`⚠️ [SECURITY] Rider ${riderId} attempted to log location for unassigned task ${requestId}`);
     }
 
-    // Generate a secure 12-character temporary password
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: 'Location log failed' });
+  }
+});
+
+// Account Provisioning (Admin only)
+router.post('/', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, email, role, department } = req.body || {};
+    if (!name || !email || !role) return res.status(400).json({ error: 'Missing required account details' });
+    
     const tempPassword = crypto.randomBytes(9).toString('base64');
     const hashedPassword = await argon2.hash(tempPassword);
-    
-    // Generate a unique ID based on the role
-    const userId = `${role}_${crypto.randomBytes(4).toString('hex')}`;
-
-    await pool.query(
-      'INSERT INTO users (id, email, name, role, department, password_hash, require_password_reset, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, email, name, role, department || null, hashedPassword, true, 'active']
-    );
-
-    res.status(201).json({ 
-      success: true, 
-      user: { id: userId, name, email, role, department, status: 'active' },
-      tempPassword 
-    });
+    const id = `${role}_${crypto.randomBytes(4).toString('hex')}`;
+    await pool.query('INSERT INTO users (id, email, name, role, department, password_hash, require_password_reset) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, email, name, role, department || null, hashedPassword, true]);
+    res.status(201).json({ success: true, user: { id, name, email, role }, tempPassword });
   } catch (error) {
-    console.error('Provisioning error:', error);
-    res.status(500).json({ error: 'Failed to provision user' });
+    res.status(500).json({ error: 'Provisioning failed' });
   }
 });
 
-// Manual password reset
-router.post('/:id/reset-password', async (req, res) => {
+// Password Reset (Admin only)
+router.post('/:id/reset-password', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    
     const tempPassword = crypto.randomBytes(12).toString('base64');
     const hashedPassword = await argon2.hash(tempPassword);
-
-    const [result]: any = await pool.query(
-      'UPDATE users SET password_hash = ?, require_password_reset = ? WHERE id = ?',
-      [hashedPassword, true, id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    await pool.query('UPDATE users SET password_hash = ?, require_password_reset = ? WHERE id = ?', [hashedPassword, true, id]);
     res.json({ success: true, tempPassword });
   } catch (error) {
-    console.error('Password reset error:', error);
-    res.status(500).json({ error: 'Failed to reset password' });
+    res.status(500).json({ error: 'Reset failed' });
+  }
+});
+
+// Delete account (Admin only)
+router.delete('/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 

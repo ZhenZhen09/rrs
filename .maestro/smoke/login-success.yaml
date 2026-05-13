@@ -1,0 +1,25 @@
+appId: host.exp.exponent
+---
+- assertVisible:
+    id: "login_email_input"
+- tapOn:
+    id: "login_email_input"
+- inputText: "rider1@company.com"
+- tapOn:
+    id: "login_continue_button"
+- assertVisible: "ENTER QUICK PIN"
+- tapOn:
+    id: "login_pin_key_1"
+- tapOn:
+    id: "login_pin_key_2"
+- tapOn:
+    id: "login_pin_key_3"
+- tapOn:
+    id: "login_pin_key_4"
+- extendedWaitUntil:
+    visible: "Today's Tasks"
+    timeout: 15000
+- assertVisible:
+    id: "header_notifications_button"
+- assertVisible:
+    id: "header_logout_button"

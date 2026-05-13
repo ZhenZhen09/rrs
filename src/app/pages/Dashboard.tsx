@@ -34,7 +34,7 @@ export function Dashboard() {
     navigate('/', { replace: true });
   };
 
-  // Filter notifications for current user and exclude those linked to completed/failed transactions or disapproved requests
+  // Filter notifications for current user and exclude those linked to completed/failed transactions
   // Then limit to 50 for UI performance to prevent flooding
   const myNotifications = (Array.isArray(notifications) ? notifications : []).filter(n => {
     if (n.user_id !== user?.id) return false;
@@ -44,7 +44,6 @@ export function Dashboard() {
       if (request && (
         request.delivery_status === 'completed' || 
         request.delivery_status === 'failed' ||
-        request.status === 'disapproved' ||
         request.status === 'submitted_waiting'
       )) {
         return false;
@@ -98,6 +97,8 @@ export function Dashboard() {
         return '✅';
       case 'request_disapproved':
         return '❌';
+      case 'request_cancelled':
+        return '🚫';
       case 'rider_assigned':
         return '🚚';
       case 'delivery_reminder':
@@ -235,7 +236,7 @@ export function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 pt-0 pb-8">
         {user?.role === 'personnel' && <PersonnelDashboard />}
         {user?.role === 'rider' && <RiderDashboard />}
       </main>

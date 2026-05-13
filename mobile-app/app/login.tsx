@@ -206,6 +206,7 @@ export default function LoginScreen() {
                     <View style={styles.inputWrapper}>
                       <MaterialIcons name="alternate-email" size={moderateScale(20)} color="#94A3B8" style={styles.inputIcon} />
                       <TextInput
+                        testID="login_email_input"
                         style={styles.input}
                         placeholder="rider@company.com"
                         placeholderTextColor="#94A3B8"
@@ -220,6 +221,7 @@ export default function LoginScreen() {
                   </View>
 
                   <TouchableOpacity 
+                    testID="login_continue_button"
                     style={[styles.primaryButton, !email && styles.buttonDisabled]} 
                     onPress={handleNext}
                     activeOpacity={0.8}
@@ -231,7 +233,7 @@ export default function LoginScreen() {
 
                 {/* STEP 2: PIN */}
                 <Animated.View style={pinStepStyle}>
-                  <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                  <TouchableOpacity testID="login_back_button" style={styles.backButton} onPress={handleBack}>
                     <Ionicons name="arrow-back" size={20} color="#64748B" />
                     <Text style={styles.backButtonText}>{email}</Text>
                   </TouchableOpacity>
@@ -255,6 +257,7 @@ export default function LoginScreen() {
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                       <TouchableOpacity 
                         key={num} 
+                        testID={`login_pin_key_${num}`}
                         style={styles.numberButton} 
                         onPress={() => handleNumberPress(num.toString())}
                         activeOpacity={0.6}
@@ -262,13 +265,13 @@ export default function LoginScreen() {
                         <Text style={styles.numberButtonText}>{num}</Text>
                       </TouchableOpacity>
                     ))}
-                    <TouchableOpacity style={styles.numberButton} onPress={() => setPassword('')} activeOpacity={0.6}>
+                    <TouchableOpacity testID="login_pin_clear" style={styles.numberButton} onPress={() => setPassword('')} activeOpacity={0.6}>
                       <Text style={[styles.numberButtonText, { fontSize: normalizeFontSize(14), color: '#94A3B8' }]}>CLR</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.numberButton} onPress={() => handleNumberPress('0')} activeOpacity={0.6}>
+                    <TouchableOpacity testID="login_pin_key_0" style={styles.numberButton} onPress={() => handleNumberPress('0')} activeOpacity={0.6}>
                       <Text style={styles.numberButtonText}>0</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.numberButton} onPress={handleDelete} activeOpacity={0.6}>
+                    <TouchableOpacity testID="login_pin_delete" style={styles.numberButton} onPress={handleDelete} activeOpacity={0.6}>
                       <MaterialIcons name="backspace" size={22} color="#475569" />
                     </TouchableOpacity>
                   </View>
