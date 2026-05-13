@@ -7,10 +7,10 @@ const IS_PRODUCTION = !__DEV__;
 export const Config = {
 // 1. Change YOUR_LOCAL_IP to your actual machine IP (e.g. 192.168.1.13)
 // 2. Change YOUR_RENDER_URL to your actual render .onrender.com URL
-API_URL: 'http://10.170.75.154:3001', 
+// API_URL: 'http://10.170.75.154:3001', 
 
-  //  API_URL: IS_PRODUCTION
-  //    ? 'https://rrs-vhgr.onrender.com'
-  //    : 'http://10.5.20.169:3001', // Note: Both use port 3001 now   
+    API_URL: IS_PRODUCTION
+      ? 'https://rrs-vhgr.onrender.com'
+      : 'http://10.5.20.169:3001', // Note: Both use port 3001 now   
    GEOAPIFY_KEY: 'e981beca841349698124675a91674f3a',
 };
