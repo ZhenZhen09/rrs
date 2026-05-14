@@ -74,10 +74,20 @@ router.get('/counts', async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    // SENIOR FIX: Align overdue logic with frontend (past date OR today + past time window)
     const [rows]: any = await pool.query(`
       SELECT 
-        COUNT(CASE WHEN delivery_date = CURRENT_DATE AND status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') THEN 1 END) as today,
-        COUNT(CASE WHEN delivery_date < CURRENT_DATE AND status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') THEN 1 END) as overdue
+        COUNT(CASE 
+          WHEN delivery_date = CURRENT_DATE 
+          AND (STR_TO_DATE(SUBSTRING_INDEX(time_window, ' - ', -1), '%H:%i') >= CURTIME())
+          AND status = 'approved' 
+          AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
+          THEN 1 END) as today,
+        COUNT(CASE 
+          WHEN (delivery_date < CURRENT_DATE OR (delivery_date = CURRENT_DATE AND STR_TO_DATE(SUBSTRING_INDEX(time_window, ' - ', -1), '%H:%i') < CURTIME()))
+          AND status = 'approved' 
+          AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
+          THEN 1 END) as overdue
       FROM delivery_requests 
       WHERE assigned_rider_id = ?
     `, [user.id]);

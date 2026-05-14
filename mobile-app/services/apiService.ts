@@ -2,7 +2,7 @@ import { api } from '@/utils/api';
 import { Job } from '@/types';
 
 export const getTasks = async (): Promise<Job[]> => {
-  const response = await api.get('/api/requests');
+  const response = await api.get('/api/requests', { params: { limit: 100 } });
   return Array.isArray(response.data) ? response.data : response.data.data;
 };
 

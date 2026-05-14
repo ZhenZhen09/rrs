@@ -30,11 +30,32 @@ export default function TodayScreen() {
 
   // Filter for today's active tasks
   const todayStr = getLocalDateStr(new Date());
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
   const tasks = allTasks.filter(req => {
-    const isToday = getLocalDateStr(req.delivery_date) === todayStr;
+    const deliveryDate = getLocalDateStr(req.delivery_date);
+    const isToday = deliveryDate === todayStr;
     const isApproved = req.status === 'approved';
     const isActive = !['completed', 'delivered', 'failed', 'cancelled'].includes(req.delivery_status);
-    return isToday && isApproved && isActive;
+    
+    if (!isToday || !isApproved || !isActive) return false;
+
+    // EXCLUDE if past time window (these move to Overdue tab)
+    const window = req.time_window || '';
+    const parts = window.split('-');
+    if (parts.length === 2) {
+      const endTimePart = parts[1].trim();
+      const [endHour, endMinute] = endTimePart.split(':').map(Number);
+      if (!isNaN(endHour) && !isNaN(endMinute)) {
+        if (currentHour > endHour || (currentHour === endHour && currentMinute > endMinute)) {
+          return false; // Move to Overdue
+        }
+      }
+    }
+
+    return true;
   });
 
   return (

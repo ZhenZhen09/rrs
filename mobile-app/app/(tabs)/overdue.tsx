@@ -29,11 +29,39 @@ export default function OverdueScreen() {
   } = useDashboard();
 
   const todayStr = getLocalDateStr(new Date());
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
   const tasks = allTasks.filter(req => {
-    const isPast = getLocalDateStr(req.delivery_date) < todayStr;
+    const deliveryDate = getLocalDateStr(req.delivery_date);
     const isApproved = req.status === 'approved';
     const isNotTerminal = !['completed', 'delivered', 'failed', 'cancelled'].includes(req.delivery_status);
-    return isPast && isApproved && isNotTerminal;
+    
+    if (!isApproved || !isNotTerminal) return false;
+
+    // 1. Items from previous days
+    if (deliveryDate < todayStr) return true;
+
+    // 2. Items from TODAY that have passed their time window
+    if (deliveryDate === todayStr) {
+      // time_window format: "HH:mm - HH:mm"
+      const window = req.time_window || '';
+      const parts = window.split('-');
+      if (parts.length === 2) {
+        const endTimePart = parts[1].trim(); // e.g., "09:00"
+        const [endHour, endMinute] = endTimePart.split(':').map(Number);
+        
+        if (!isNaN(endHour) && !isNaN(endMinute)) {
+          // If current time is strictly past the end of the window
+          if (currentHour > endHour || (currentHour === endHour && currentMinute > endMinute)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   });
 
   return (
