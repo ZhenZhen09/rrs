@@ -104,7 +104,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput) {
   let fleetLocationUpdated = false;
   if (shouldWriteLatest(riderState, now)) {
     await pool.query(
-      'UPDATE users SET status = "active", current_lat = ?, current_lng = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      "UPDATE users SET status = 'active', current_lat = ?, current_lng = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [lat, lng, riderId],
     );
     riderLatestState.set(riderId, {
