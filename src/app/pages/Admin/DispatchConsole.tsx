@@ -47,6 +47,7 @@ import {
 import { LiveTrackingMap } from "../../components/LiveTrackingMap";
 
 import { NotificationBell } from "../../components/Admin/NotificationBell";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function DispatchConsole() {
   const { logout } = useAuth();
@@ -414,36 +415,47 @@ export function DispatchConsole() {
           <ResizableHandle className="w-0.5 bg-transparent hover:bg-slate-200 transition-colors" />
 
           <ResizablePanel defaultSize={70}>
-            <div className="h-full bg-slate-50/30">
-              <RequestDetailsPanel
-                request={selectedRequest}
-                riders={riders}
-                activeRequests={requests || []}
-                onApprove={async (riderId, remark) => {
-                  setIsSubmitting(true);
-                  try {
-                    await approveRequest(selectedRequestId!, riderId, remark);
-                    toast.success("Request approved and assigned");
-                  } catch (err) {
-                    toast.error("Failed to approve request");
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                onDecline={async (remark) => {
-                  setIsSubmitting(true);
-                  try {
-                    await disapproveRequest(selectedRequestId!, remark);
-                    toast.error("Request declined");
-                  } catch (err) {
-                    toast.error("Failed to decline request");
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                isSubmitting={isSubmitting}
-                readOnly={filterTab === "completed"}
-              />
+            <div className="h-full bg-slate-50/30 overflow-hidden">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={selectedRequestId || "empty"}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="h-full"
+                >
+                  <RequestDetailsPanel
+                    request={selectedRequest}
+                    riders={riders}
+                    activeRequests={requests || []}
+                    onApprove={async (riderId, remark) => {
+                      setIsSubmitting(true);
+                      try {
+                        await approveRequest(selectedRequestId!, riderId, remark);
+                        toast.success("Request approved and assigned");
+                      } catch (err) {
+                        toast.error("Failed to approve request");
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    onDecline={async (remark) => {
+                      setIsSubmitting(true);
+                      try {
+                        await disapproveRequest(selectedRequestId!, remark);
+                        toast.error("Request declined");
+                      } catch (err) {
+                        toast.error("Failed to decline request");
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    isSubmitting={isSubmitting}
+                    readOnly={filterTab === "completed"}
+                  />
+                </motion.div>
+              </AnimatePresence>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

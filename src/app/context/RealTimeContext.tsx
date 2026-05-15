@@ -33,6 +33,7 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
       const socket = socketRef.current;
 
       socket.on("connect", () => {
+        socket.emit("join", user.id);
         socket.emit("join-room", user.id);
         socket.emit("join-room", "admin-room");
       });

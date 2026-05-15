@@ -4,6 +4,7 @@ import { DeliveryRequest } from '../../../types';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Package } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface RequestListProps {
   requests: DeliveryRequest[];
@@ -85,17 +86,35 @@ export const RequestList: React.FC<RequestListProps> = ({
               <p className="text-slate-400 font-bold text-sm tracking-tight">No requests found</p>
             </div>
           ) : (
-            displayRequests.map(req => (
-              <RequestCard 
-                key={req.request_id}
-                request={req}
-                isSelected={selectedId === req.request_id}
-                onClick={() => onSelect(req.request_id)}
-                isMultiSelected={selectedIds.includes(req.request_id)}
-                onToggleSelection={onToggleSelect}
-                isActiveTab={filter === 'active'}
-              />
-            ))
+            <div className="space-y-2">
+              <AnimatePresence initial={false}>
+                {displayRequests.map(req => (
+                  <motion.div
+                    key={req.request_id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9, height: 0 }}
+                    animate={{ opacity: 1, scale: 1, height: 'auto' }}
+                    exit={{ 
+                      opacity: 0, 
+                      scale: 0.8, 
+                      x: filter === 'pending' ? 100 : -100, 
+                      height: 0,
+                      transition: { duration: 0.3 }
+                    }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  >
+                    <RequestCard 
+                      request={req}
+                      isSelected={selectedId === req.request_id}
+                      onClick={() => onSelect(req.request_id)}
+                      isMultiSelected={selectedIds.includes(req.request_id)}
+                      onToggleSelection={onToggleSelect}
+                      isActiveTab={filter === 'active'}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           )}
         </div>
       </ScrollArea>

@@ -7,6 +7,8 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Truck, AlertCircle, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LightTrails } from '../components/LightTrails';
 
 export function Login() {
   const navigate = useNavigate();
@@ -121,82 +123,10 @@ export function Login() {
     }
   };
 
-  if (mfaStep === 'setup' || mfaStep === 'verify') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-none shadow-2xl shadow-slate-200/50 rounded-[2rem] overflow-hidden bg-white">
-          <CardHeader className="pt-10 pb-6 text-center">
-            <div className="mx-auto w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-slate-900/20">
-              <Lock className="text-white h-8 w-8" />
-            </div>
-            <CardTitle className="text-3xl font-black text-slate-900 tracking-tight">
-              {mfaStep === 'setup' ? 'Security Setup' : 'Verification'}
-            </CardTitle>
-            <CardDescription className="text-slate-500 font-medium px-6">
-              {mfaStep === 'setup' 
-                ? 'Scan the QR code with your Google Authenticator app and enter the 6-digit code below.' 
-                : 'Enter the 6-digit code from your Google Authenticator app.'}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="px-8 pb-10">
-            {mfaStep === 'setup' && mfaData?.qrCode && (
-              <div className="flex justify-center mb-8 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <img src={mfaData.qrCode} alt="QR Code" className="w-48 h-48 mix-blend-multiply" />
-              </div>
-            )}
-
-            <form onSubmit={handleMfaVerify} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="mfa-token" className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">
-                  6-Digit Verification Code
-                </Label>
-                <Input
-                  id="mfa-token"
-                  type="text"
-                  placeholder="000 000"
-                  className="h-14 rounded-2xl border-slate-200 focus:ring-slate-900 focus:border-slate-900 text-center text-2xl font-black tracking-[0.5em]"
-                  value={mfaToken}
-                  onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                />
-              </div>
-
-              {error && (
-                <Alert variant="destructive" className="bg-rose-50 border-rose-100 text-rose-600 rounded-2xl border">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="font-bold text-xs uppercase tracking-tight ml-2">{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button
-                type="submit"
-                disabled={isLoading || mfaToken.length < 6}
-                className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black font-black text-white shadow-xl shadow-slate-900/20 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {isLoading ? 'VERIFYING...' : 'VERIFY & CONTINUE'}
-              </Button>
-              
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setMfaStep('credentials')}
-                className="w-full h-12 rounded-xl text-slate-500 font-bold hover:bg-slate-50"
-              >
-                BACK TO LOGIN
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] font-sans overflow-hidden">
       {/* LEFT SIDE: Branding & Image Context */}
       <div className="relative flex-1 hidden md:flex flex-col justify-center px-12 lg:px-24 overflow-hidden">
-        {/* Warehouse Background with Amber Overlay */}
         <div className="absolute inset-0 z-0">
           <img 
             src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=2000" 
@@ -206,139 +136,253 @@ export function Login() {
           <div className="absolute inset-0 bg-gradient-to-tr from-[#b45309]/90 via-[#d97706]/40 to-transparent" />
         </div>
 
-        <div className="relative z-10 space-y-6 max-w-xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/30 mb-4">
-            <Truck size={16} className="text-white" />
-            <span className="text-white text-xs font-bold uppercase tracking-widest">Global Logistics</span>
-          </div>
-          
-          <h1 className="text-5xl lg:text-6xl font-extrabold text-white leading-[1.1] tracking-tight">
-            Your Trusted <br/>
-            <span className="text-[#fef3c7]">Partner in Logistics.</span>
-          </h1>
-          
-          <p className="text-amber-50 text-lg leading-relaxed opacity-90">
-            At RSS, we ensure fast and reliable delivery services, 
-            tailored to meet your needs with efficiency and care.
-          </p>
+        {/* Dynamic Light Trails */}
+        <LightTrails />
 
-          {/* Dynamic Light Trails (SVG Decor) */}
-          <svg className="absolute -bottom-24 -left-12 opacity-30 w-[600px]" viewBox="0 0 400 200">
-            <path d="M0,100 C100,50 300,150 400,100" stroke="white" strokeWidth="0.5" fill="none" className="animate-[dash_10s_linear_infinite]" />
-            <path d="M0,120 C150,80 250,160 400,120" stroke="white" strokeWidth="0.5" fill="none" className="animate-[dash_8s_linear_infinite]" />
-          </svg>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, x: -50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative z-10 space-y-6 max-w-xl"
+        >
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
+            className="absolute -inset-4 bg-amber-500/10 blur-3xl rounded-full"
+          />
+          <h1 className="text-5xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight relative">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-amber-100 to-white animate-pulse">
+              Rider 
+            </span><br/>
+            <span className="text-[#fef3c7] drop-shadow-[0_2px_10px_rgba(251,191,36,0.3)]">Scheduling System.</span>
+          </h1>
+        </motion.div>
       </div>
 
-      {/* RIGHT SIDE: Login Interface */}
+      {/* RIGHT SIDE: Interfaces */}
       <div className="flex-[0.8] lg:flex-[0.7] relative flex items-center justify-center p-6 bg-slate-50 md:bg-transparent">
-        {/* Subtle background for mobile/tablet */}
         <div className="absolute inset-0 md:hidden bg-gradient-to-br from-amber-600 to-amber-800" />
         
         <div className="relative z-10 w-full max-w-md">
-          {/* Mobile Brand Label */}
-          <div className="md:hidden text-center mb-8">
-            <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">RSS: Logistic App</h1>
-          </div>
-
-          <Card className="border-white/40 bg-white/70 backdrop-blur-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] rounded-[2.5rem] p-4 border-2">
-            <CardHeader className="space-y-1 text-center pt-8 pb-6">
-              <CardTitle className="text-3xl font-bold tracking-tight text-slate-800">Sign in</CardTitle>
-              <CardDescription className="text-slate-500 font-medium">
-                Enter your gateway credentials
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="px-6 pb-10">
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="space-y-2">
-                  <div className="relative group">
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="E-mail"
-                      className="bg-white border-slate-200 h-14 rounded-2xl px-4 text-slate-800 placeholder:text-slate-400 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-sm"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                    />
-                  </div>
+          <AnimatePresence mode="wait">
+            {mfaStep === 'credentials' ? (
+              <motion.div
+                key="login-step"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                transition={{ duration: 0.4, ease: "circOut" }}
+              >
+                <div className="md:hidden text-center mb-8">
+                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">RSS: Logistic App</h1>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Input
-                      id="login-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Password"
-                      className="bg-white border-slate-200 h-14 rounded-2xl px-4 text-slate-800 placeholder:text-slate-400 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-sm pr-12"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
-                  </div>
-                  <div className="flex justify-end px-1">
-                    <button 
-                      type="button"
-                      onClick={() => alert("Please contact your administrator to reset your secure credentials.")}
-                      className="text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
-                    >
-                      Forgot your password?
-                    </button>
-                  </div>
-                </div>
+                <Card className="border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] p-4 border-2 ring-1 ring-white/20">
+                  <CardHeader className="space-y-1 text-center pt-8 pb-6">
+                    <CardTitle className="text-4xl font-black tracking-tight text-slate-900">Sign in</CardTitle>
+                    <CardDescription className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                      Authorized Personnel Gateway
+                    </CardDescription>
+                  </CardHeader>
 
-                {error && (
-                  <Alert className="bg-red-50 border-red-100 text-red-600 rounded-xl py-3 border">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs font-semibold">{error}</AlertDescription>
-                  </Alert>
-                )}
+                  <CardContent className="px-6 pb-10">
+                    <form onSubmit={handleLogin} className="space-y-6">
+                      <div className="space-y-2">
+                        <div className="relative group">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-600 transition-colors" size={20} />
+                          <Input
+                            id="login-email"
+                            type="email"
+                            placeholder="Email address"
+                            className="bg-white/80 border-slate-200 h-14 rounded-2xl pl-12 pr-4 text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm"
+                            value={loginEmail}
+                            onChange={(e) => setLoginEmail(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
 
-                <div className="space-y-4 pt-2">
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className="w-full h-14 bg-[#ca8a04] hover:bg-[#b45309] text-white text-lg font-bold rounded-2xl transition-all shadow-lg shadow-amber-600/20 active:scale-[0.98]"
-                  >
-                    {isLoading ? "Verifying..." : "Login"}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                      <div className="space-y-2">
+                        <div className="relative group">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-600 transition-colors" size={20} />
+                          <Input
+                            id="login-password"
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="Password"
+                            className="bg-white/80 border-slate-200 h-14 rounded-2xl pl-12 pr-12 text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm"
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            required
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                          >
+                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                          </button>
+                        </div>
+                        <div className="flex justify-end px-1">
+                          <button 
+                            type="button"
+                            onClick={() => alert("Please contact your administrator to reset your secure credentials.")}
+                            className="text-xs font-bold text-amber-700 hover:text-amber-800 transition-colors"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {error && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                            animate={{ opacity: 1, height: "auto", marginTop: 8 }}
+                            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                          >
+                            <Alert className="bg-red-50/50 border-red-100 text-red-600 rounded-xl py-3 border backdrop-blur-sm">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription className="text-xs font-bold uppercase tracking-tight ml-2">{error}</AlertDescription>
+                            </Alert>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="space-y-4 pt-2">
+                        <Button 
+                          type="submit" 
+                          disabled={isLoading}
+                          className="w-full h-14 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-lg font-black rounded-2xl transition-all shadow-xl shadow-amber-600/30 active:scale-[0.98] border-none"
+                        >
+                          {isLoading ? (
+                            <motion.div 
+                              className="flex items-center justify-center gap-3"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                            >
+                              <motion.div
+                                animate={{ x: [-20, 20], opacity: [0, 1, 0] }}
+                                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                              >
+                                <Truck size={24} />
+                              </motion.div>
+                              <span className="uppercase tracking-widest text-sm">Verifying</span>
+                            </motion.div>
+                          ) : (
+                            <span className="uppercase tracking-widest">Sign In</span>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="mfa-step"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                transition={{ duration: 0.4, ease: "circOut" }}
+              >
+                <Card className="w-full max-w-md border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] overflow-hidden p-4 border-2 ring-1 ring-white/20">
+                  <CardHeader className="pt-10 pb-6 text-center">
+                    <div className="mx-auto w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center mb-6 shadow-2xl shadow-slate-900/40 border border-slate-700">
+                      <Lock className="text-white h-8 w-8" />
+                    </div>
+                    <CardTitle className="text-3xl font-black text-slate-900 tracking-tight">
+                      {mfaStep === 'setup' ? 'Security Setup' : 'Verification'}
+                    </CardTitle>
+                    <CardDescription className="text-slate-500 font-bold px-6">
+                      {mfaStep === 'setup' 
+                        ? 'Scan the QR code with your Authenticator app.' 
+                        : 'Enter your 6-digit verification code.'}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="px-8 pb-10">
+                    {mfaStep === 'setup' && mfaData?.qrCode && (
+                      <div className="flex justify-center mb-8 bg-white/50 p-6 rounded-[2rem] border border-white/50 shadow-inner backdrop-blur-md">
+                        <img src={mfaData.qrCode} alt="QR Code" className="w-48 h-48 mix-blend-multiply" />
+                      </div>
+                    )}
+
+                    <form onSubmit={handleMfaVerify} className="space-y-6">
+                      <div className="space-y-2 text-center">
+                        <Input
+                          id="mfa-token"
+                          type="text"
+                          placeholder="000000"
+                          className="h-16 rounded-2xl border-slate-200 bg-white/50 focus:ring-slate-900 text-center text-3xl font-black tracking-[0.6em] placeholder:text-slate-300"
+                          value={mfaToken}
+                          onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          required
+                        />
+                      </div>
+
+                      <AnimatePresence>
+                        {error && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                          >
+                            <Alert variant="destructive" className="bg-rose-50/50 border-rose-100 text-rose-600 rounded-2xl border backdrop-blur-sm">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription className="font-bold text-xs uppercase tracking-tight ml-2">{error}</AlertDescription>
+                            </Alert>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <Button
+                        type="submit"
+                        disabled={isLoading || mfaToken.length < 6}
+                        className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black font-black text-white shadow-2xl shadow-slate-900/40 transition-all active:scale-[0.98] uppercase tracking-widest"
+                      >
+                        {isLoading ? 'Verifying' : 'Continue'}
+                      </Button>
+                      
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setMfaStep('credentials')}
+                        className="w-full h-12 rounded-xl text-slate-500 font-bold hover:bg-white/50 transition-colors"
+                      >
+                        BACK TO LOGIN
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Legal / Contact Branding */}
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-600/30">
-                <Truck size={18} className="text-white" />
-              </div>
-              <span className="text-xl font-black text-slate-800 md:text-slate-700 tracking-tighter uppercase italic">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="mt-8 flex flex-col items-center gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <motion.div 
+                whileHover={{ rotate: [0, -10, 10, 0] }}
+                className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center shadow-xl shadow-amber-600/40"
+              >
+                <Truck size={22} className="text-white" />
+              </motion.div>
+              <span className="text-2xl font-black text-slate-900 md:text-slate-800 tracking-tighter uppercase italic drop-shadow-sm">
                 RSS: <span className="text-amber-600">Logistic App</span>
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
-              Authorized Logistics Personnel Gateway
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] opacity-80">
+              Authorized Personnel Gateway
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes dash {
-          to {
-            stroke-dashoffset: -1000;
-          }
-        }
-      `}</style>
     </div>
   );
 }

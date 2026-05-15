@@ -8,6 +8,7 @@ import React, {
 import { DeliveryRequest, Notification, DeliveryStatus } from "../types";
 import { useAuth } from "./AuthContext";
 import { useRealTime } from "./RealTimeContext";
+import { toast } from "sonner";
 
 interface DataContextType {
   requests: DeliveryRequest[];
@@ -225,7 +226,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       },
     );
 
-    socket.on("delivery-status-updated", () => {
+    socket.on("delivery-status-updated", (data: { request_id: string; status: string; remark?: string }) => {
+      const msg = `Delivery #${data.request_id.slice(-6).toUpperCase()} is now ${data.status.replace("_", " ").toUpperCase()}`;
+      if (data.status === 'completed') toast.success(msg);
+      else if (data.status === 'failed') toast.error(msg);
+      else toast.info(msg);
       fetchRequests();
     });
 
@@ -236,6 +241,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         exceptions: string[];
         severity: "warning" | "critical";
       }) => {
+        toast.error(`System Exception: ${data.exceptions.join(", ")} on Request #${data.requestId.slice(-6).toUpperCase()}`, {
+          duration: 5000,
+        });
         setRequests((prev) =>
           (prev || []).map((req) =>
             req.request_id === data.requestId
@@ -260,7 +268,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
     });
 
-    socket.on("request-updated", () => {
+    socket.on("request-updated", (data: { request_id: string; status: string; delivery_status?: string }) => {
+      // Toast message based on status
+      const id = data.request_id.slice(-6).toUpperCase();
+      switch (data.status) {
+        case 'pending':
+          toast.success(`Request #${id} is now under Review.`);
+          break;
+        case 'approved':
+          toast.success(`Request #${id} has been Approved!`);
+          break;
+        case 'disapproved':
+          toast.error(`Request #${id} was declined.`);
+          break;
+        case 'returned_for_revision':
+          toast.warning(`Action Required: Request #${id} needs revision.`, { duration: 6000 });
+          break;
+        case 'cancelled':
+          toast.info(`Request #${id} has been cancelled.`);
+          break;
+      }
+
+      setRequests((prev) => 
+        prev.map((req) => 
+          req.request_id === data.request_id 
+            ? { ...req, ...data, is_optimistic: false } 
+            : req
+        )
+      );
+      // Background fetch to ensure full data consistency
       fetchRequests();
     });
 
