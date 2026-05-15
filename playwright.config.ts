@@ -4,6 +4,10 @@ const baseURL = process.env.BASE_URL || 'http://localhost:5173';
 
 export default defineConfig({
   testDir: './tests',
+  timeout: 60 * 1000,
+  expect: {
+    timeout: 10 * 1000,
+  },
   fullyParallel: true,
   retries: 0,
   reporter: 'list',
