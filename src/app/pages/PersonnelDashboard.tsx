@@ -1443,29 +1443,15 @@ export function PersonnelDashboard() {
                 <TableHeader className="bg-slate-50/80 border-b border-slate-100">
                   <TableRow className="hover:bg-transparent border-none">
                     <TableHead className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Request ID
+                      Request & Recipient
                     </TableHead>
                     <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Date & Schedule
+                      Journey Timeline
                     </TableHead>
-                    <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Destination Address
+                    <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-center">
+                      Status & Rider
                     </TableHead>
-                    <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Recipient
-                    </TableHead>
-                    <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Status Details
-                    </TableHead>
-                    <TableHead className="py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-left">
-                      Actual Completion
-                    </TableHead>
-                    <TableHead className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-right">
-                      Result
-                    </TableHead>
-                    <TableHead className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 text-right">
-                      Actions
-                    </TableHead>
+                    <th className="px-10 py-6 text-right"></th>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
