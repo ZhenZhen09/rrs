@@ -1,0 +1,28 @@
+appId: com.hon01.cfarss
+---
+- clearState
+- launchApp
+- assertVisible: "LOGIN"
+- tapOn: "Email address"
+- inputText: "rider1@company.com"
+- tapOn: "Password"
+- inputText: "rider1"
+- tapOn: "LOGIN"
+- extendedWaitUntil:
+    visible: "Today's Tasks"
+    timeout: 30000
+- assertVisible: "Active Deliveries"
+- tapOn:
+    id: "today_task_card_0"
+- extendedWaitUntil:
+    visible: "TRANSACTION ID"
+    timeout: 15000
+- assertVisible: "START DELIVERY"
+- tapOn: "START DELIVERY"
+- extendedWaitUntil:
+    visible: "COMPLETE DELIVERY"
+    timeout: 15000
+- tapOn: "COMPLETE DELIVERY"
+- assertVisible: "Delivery Success"
+- tapOn: "Close"
+- assertVisible: "Today's Tasks"

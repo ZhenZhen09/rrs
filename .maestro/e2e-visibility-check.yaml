@@ -1,0 +1,15 @@
+appId: com.hon01.cfarss
+---
+- launchApp
+- waitForVisible: "Today's Tasks"
+- assertVisible: "Today's Tasks"
+- scrollUntilVisible:
+    element: "E2E Test Recipient"
+- assertVisible: "ARRIVED"
+- tapOn: "E2E Test Recipient"
+- eval:
+    command: >
+      const fullId = "${REQUEST_ID}";
+      output.shortId = "#" + fullId.slice(-8).toUpperCase();
+- assertVisible: ${output.shortId}
+- assertVisible: "ARRIVED"

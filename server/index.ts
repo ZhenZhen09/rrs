@@ -77,10 +77,14 @@ const DISCONNECT_GRACE_PERIOD = 90000;
 class RequestWatchdog {
   private io: Server;
   constructor(io: Server) { this.io = io; }
-  start() { setInterval(() => this.check(), 60000); }
+  start() { 
+    console.log('🛡️ Watchdog: Starting with 30s interval');
+    setInterval(() => this.check(), 30000); 
+  }
 
   async check() {
     const now = Date.now();
+    console.log(`🔍 Watchdog: Checking state at ${new Date(now).toISOString()}`);
     try {
       // --- TASK 1: TRANSITION STUCK "QUEUEING" REQUESTS ---
       // Transition requests from 'submitted_waiting' to 'pending' if they are older than 60 seconds
@@ -134,24 +138,44 @@ class RequestWatchdog {
         const currentExceptions = new Set<string>();
         const isOnline = onlineRiders.has(req.assigned_rider_id);
 
-        if (!state) {
-          if (!isOnline && req.assigned_rider_id) currentExceptions.add('signal_lost');
-        } else {
-          if (!isOnline || (now - state.lastPing > 300000)) currentExceptions.add('signal_lost');
+        // Logic: signal is lost if rider is not in onlineRiders Map
+        // OR if state exists but lastPing (from location update) is > 5 minutes old
+        if (!isOnline && req.assigned_rider_id) {
+          currentExceptions.add('signal_lost');
+        } else if (state && (now - state.lastPing > 300000)) {
+          currentExceptions.add('signal_lost');
         }
 
         const stateWithExceptions = state || { exceptions: new Set() };
-        const oldExceptions = Array.from(stateWithExceptions.exceptions).sort().join(',');
+        const oldExceptionsList = Array.from(stateWithExceptions.exceptions).sort();
+        const oldExceptionsStr = oldExceptionsList.join(',');
         const newExceptionsList = Array.from(currentExceptions).sort();
-        if (newExceptionsList.join(',') !== oldExceptions) {
-          if (state) state.exceptions = currentExceptions as any;
-          else requestPingState.set(req.request_id, { lastPing: now, lastLat: Number(req.current_lat || 0), lastLng: Number(req.current_lng || 0), stagnantSince: null, exceptions: currentExceptions as any });
+        const newExceptionsStr = newExceptionsList.join(',');
+
+        if (newExceptionsStr !== oldExceptionsStr) {
+          console.log(`⚠️ Watchdog: Exception change for ${req.request_id}: [${oldExceptionsStr}] -> [${newExceptionsStr}]`);
+          
+          if (state) {
+            state.exceptions = currentExceptions as any;
+          } else {
+            requestPingState.set(req.request_id, { 
+              lastPing: now, 
+              lastLat: Number(req.current_lat || 0), 
+              lastLng: Number(req.current_lng || 0), 
+              stagnantSince: null, 
+              exceptions: currentExceptions as any 
+            });
+          }
           
           await pool.execute('UPDATE delivery_requests SET exceptions = ? WHERE request_id = ?', [JSON.stringify(newExceptionsList), req.request_id]);
-          this.io.emit(newExceptionsList.length > 0 ? 'exception-detected' : 'exception-cleared', { requestId: req.request_id, exceptions: newExceptionsList });
+          
+          const event = newExceptionsList.length > 0 ? 'exception-detected' : 'exception-cleared';
+          this.io.emit(event, { requestId: req.request_id, exceptions: newExceptionsList });
         }
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('❌ Watchdog Error:', err);
+    }
   }
 }
 

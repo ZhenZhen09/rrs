@@ -16,10 +16,15 @@ const router = Router();
 
 const canViewRequest = (user: AuthRequest['user'], request: any) => {
   if (!user) return false;
-  return user.role === 'admin' ||
+  const isAuthorized = user.role === 'admin' ||
     request.requester_id === user.id ||
     (user.department && request.requester_department === user.department) ||
     request.assigned_rider_id === user.id;
+  
+  if (!isAuthorized) {
+    console.log(`[AUTH DEBUG] Access denied for user ${user.id} (${user.role}) on request ${request.request_id}. Owner: ${request.requester_id}, Dept: ${request.requester_department}, Rider: ${request.assigned_rider_id}`);
+  }
+  return isAuthorized;
 };
 
 const formatRequestRow = (row: any) => ({
@@ -45,20 +50,30 @@ try {
 }
 
 // Get availability/occupancy (Personnel and Admin)
-router.get('/availability', authorize(['admin', 'personnel']), async (req, res) => {
+router.get('/availability', authorize(['admin', 'personnel']), async (req: AuthRequest, res) => {
   try {
     const { date } = req.query;
     if (!date) return res.status(400).json({ error: 'Date is required' });
 
-    const [rows] = await pool.query(`
+    const user = req.user!;
+    let query = `
       SELECT time_window, COUNT(*) as count 
       FROM delivery_requests 
       WHERE delivery_date = ? 
       AND status IN ('pending', 'approved', 'assigned', 'submitted_waiting')
       AND (delivery_status IS NULL OR delivery_status NOT IN ('completed', 'failed', 'cancelled'))
-      GROUP BY time_window
-    `, [date]);
+    `;
+    const params: any[] = [date];
 
+    // BOLA PROTECTION: Personnel only see availability for their own department
+    if (user.role === 'personnel') {
+      query += ' AND (requester_department = ? OR requester_id = ?)';
+      params.push(user.department, user.id);
+    }
+
+    query += ' GROUP BY time_window';
+
+    const [rows] = await pool.query(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Availability error:', error);
@@ -67,15 +82,16 @@ router.get('/availability', authorize(['admin', 'personnel']), async (req, res) 
 });
 
 // GET /api/requests/counts - Efficient counting for dashboard
-router.get('/counts', async (req: AuthRequest, res: Response) => {
+router.get('/counts', authorize(['rider', 'admin']), async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
-    if (!user || user.role !== 'rider') {
+    const user = req.user!;
+    
+    // BOLA PROTECTION: Riders only count their assigned jobs. Admins can see global (if we ever need that, but for now strictly rider-focused)
+    if (user.role !== 'rider' && user.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // SENIOR FIX: Align overdue logic with frontend (past date OR today + past time window)
-    const [rows]: any = await pool.query(`
+    let query = `
       SELECT 
         COUNT(CASE 
           WHEN delivery_date = CURRENT_DATE 
@@ -88,9 +104,16 @@ router.get('/counts', async (req: AuthRequest, res: Response) => {
           AND status = 'approved' 
           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
           THEN 1 END) as overdue
-      FROM delivery_requests 
-      WHERE assigned_rider_id = ?
-    `, [user.id]);
+      FROM delivery_requests
+    `;
+    const params: any[] = [];
+
+    if (user.role === 'rider') {
+      query += ' WHERE assigned_rider_id = ?';
+      params.push(user.id);
+    }
+
+    const [rows]: any = await pool.query(query, params);
 
     res.json(rows[0] || { today: 0, overdue: 0 });
   } catch (error) {
@@ -160,13 +183,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get request tracking payload with authorized rider-location fallback
+// Get request tracking payload with authorized SQL-level check
 router.get('/:id/tracking', async (req, res) => {
   try {
     const { id } = req.params;
     const user = (req as AuthRequest).user;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
+    // SECURE QUERY: Use JOIN to verify authorization before returning sensitive data
     const [rows]: any = await pool.query(`
       SELECT dr.*,
              u.current_lat AS rider_current_lat,
@@ -176,17 +200,22 @@ router.get('/:id/tracking', async (req, res) => {
       FROM delivery_requests dr
       LEFT JOIN users u ON u.id = dr.assigned_rider_id
       WHERE dr.request_id = ?
-    `, [id]);
+      AND (
+        ? = 'admin' OR
+        dr.assigned_rider_id = ? OR
+        dr.requester_id = ? OR
+        (dr.requester_department = ? AND dr.requester_department IS NOT NULL)
+      )
+    `, [id, user.role, user.id, user.id, user.department]);
 
     if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: 'Request not found' });
-    }
-
-    const row = rows[0];
-    if (!canViewRequest(user, row)) {
+      // Differentiate between 404 (Not Found) and 403 (Forbidden/No Access)
+      const [exists]: any = await pool.query('SELECT 1 FROM delivery_requests WHERE request_id = ?', [id]);
+      if (exists.length === 0) return res.status(404).json({ error: 'Request not found' });
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const row = rows[0];
     const request = formatRequestRow(row);
     const requestCurrentLocation = row.current_lat !== null && row.current_lat !== undefined && row.current_lng !== null && row.current_lng !== undefined
       ? { lat: Number(row.current_lat), lng: Number(row.current_lng), source: 'request' }
@@ -219,7 +248,7 @@ router.get('/:id/tracking', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Tracking payload error:', error);
+    console.error('[TRACKING] Secure query failed:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -374,14 +403,39 @@ router.put('/:id/cancel', async (req, res) => {
 
 // Approve a request (Admin only)
 router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema), async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
     const { rider_id, admin_remark } = req.body;
     
-    const [riderRows] = await pool.query('SELECT name FROM users WHERE id = ?', [rider_id]) as any[];
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1. LOCK the row and check status to prevent race conditions (BUG 05)
+    const [rows]: any = await conn.query(
+      'SELECT status FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      [id]
+    );
+
+    if (!rows || rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const currentStatus = rows[0].status;
+    if (currentStatus === 'approved') {
+      await conn.rollback();
+      return res.status(409).json({ 
+        error: 'Conflict: This request has already been approved by another admin.',
+        code: 'ALREADY_APPROVED'
+      });
+    }
+
+    // 2. Proceed with assignment
+    const [riderRows] = await conn.query('SELECT name FROM users WHERE id = ?', [rider_id]) as any[];
     const riderName = riderRows[0]?.name || 'Unknown Rider';
 
-    await pool.query(`
+    await conn.query(`
       UPDATE delivery_requests 
       SET status = 'approved', assigned_rider_id = ?, assigned_rider_name = ?, admin_remark = ?, delivery_status = 'assigned'
       WHERE request_id = ?
@@ -389,10 +443,12 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
 
     const notifId = `notif_${Date.now()}_assign_${Math.random().toString(36).substring(2, 7)}`;
     const msg = `New delivery task assigned to you. Request #${String(id).slice(-6).toUpperCase()}.`;
-    await pool.query(
+    await conn.query(
       'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
       [notifId, rider_id, msg, 'new_assignment', id]
     );
+
+    await conn.commit();
 
     // REAL-TIME BROADCAST: Notify the specific rider and all admins
     const io = req.app.get('io');
@@ -409,8 +465,11 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
 
     res.json({ success: true, riderName });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error("Approval error:", error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

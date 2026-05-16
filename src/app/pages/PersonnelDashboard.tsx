@@ -145,31 +145,31 @@ const CountdownTimer = ({
   if (timeLeft === 0) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       <div
-        className="relative h-10 w-10 flex items-center justify-center group cursor-help"
+        className="relative h-9 w-9 flex items-center justify-center group cursor-help"
         title="Processing delay"
       >
         <svg className="h-full w-full rotate-[-90deg]">
           <circle
-            cx="20"
-            cy="20"
-            r="17"
+            cx="18"
+            cy="18"
+            r="16"
             className="stroke-slate-100 fill-none"
-            strokeWidth="2.5"
+            strokeWidth="2"
           />
           <circle
-            cx="20"
-            cy="20"
-            r="17"
-            className="stroke-amber-500 fill-none transition-all duration-1000"
-            strokeWidth="2.5"
-            strokeDasharray="106.8"
-            strokeDashoffset={106.8 - (106.8 * timeLeft) / 60}
+            cx="18"
+            cy="18"
+            r="16"
+            className="stroke-amber-600/80 fill-none transition-all duration-1000"
+            strokeWidth="2"
+            strokeDasharray="100.5"
+            strokeDashoffset={100.5 - (100.5 * timeLeft) / 60}
             strokeLinecap="round"
           />
         </svg>
-        <span className="absolute text-[10px] font-black text-slate-900">
+        <span className="absolute text-[10px] font-medium text-slate-900 font-sans">
           {timeLeft}s
         </span>
       </div>
@@ -177,7 +177,7 @@ const CountdownTimer = ({
         variant="ghost"
         size="sm"
         onClick={onCancel}
-        className="h-7 px-2 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 font-black text-[8px] uppercase tracking-widest border border-slate-100 transition-colors"
+        className="h-8 px-3 rounded-md text-slate-500 hover:text-rose-700 hover:bg-rose-50/50 font-medium text-[10px] uppercase tracking-wider border border-slate-200 transition-colors font-sans"
       >
         Cancel
       </Button>
@@ -451,7 +451,7 @@ export function PersonnelDashboard() {
       return (
         <Badge
           variant="outline"
-          className="bg-emerald-50 text-emerald-600 border-none flex items-center gap-1.5 px-3 py-1 rounded-full font-black text-[10px] uppercase tracking-wider"
+          className="bg-white text-emerald-700 border-emerald-100 flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold text-[10px] uppercase tracking-wide shadow-sm"
         >
           <Bike className="h-3 w-3" />
           On Way
@@ -463,7 +463,7 @@ export function PersonnelDashboard() {
         return (
           <Badge
             variant="outline"
-            className="bg-amber-50 text-amber-500 border-none px-4 py-1.5 rounded-xl font-black text-[11px] uppercase tracking-widest"
+            className="bg-white text-amber-700 border-amber-100 px-3 py-1 rounded-md font-semibold text-[10px] uppercase tracking-wide shadow-sm"
           >
             Queuing
           </Badge>
@@ -472,7 +472,7 @@ export function PersonnelDashboard() {
         return (
           <Badge
             variant="outline"
-            className="bg-slate-50 text-slate-500 border-none px-4 py-1.5 rounded-xl font-black text-[11px] uppercase tracking-widest"
+            className="bg-white text-slate-600 border-slate-200 px-3 py-1 rounded-md font-semibold text-[10px] uppercase tracking-wide shadow-sm"
           >
             Review
           </Badge>
@@ -481,7 +481,7 @@ export function PersonnelDashboard() {
         return (
           <Badge
             variant="outline"
-            className="bg-blue-50 text-blue-600 border-none px-4 py-1.5 rounded-xl font-black text-[11px] uppercase tracking-widest"
+            className="bg-white text-blue-700 border-blue-100 px-3 py-1 rounded-md font-semibold text-[10px] uppercase tracking-wide shadow-sm"
           >
             Approved
           </Badge>
@@ -490,7 +490,7 @@ export function PersonnelDashboard() {
         return (
           <Badge
             variant="outline"
-            className="px-4 py-1.5 rounded-xl font-black text-[11px] tracking-widest uppercase border-slate-100"
+            className="bg-white px-3 py-1 rounded-md font-semibold text-[10px] tracking-wide uppercase border-slate-200"
           >
             {status}
           </Badge>
@@ -553,16 +553,16 @@ export function PersonnelDashboard() {
   };
 
   return (
-    <div className="space-y-3 pb-8">
-      {/* Sleek Grab-inspired Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.04)] border border-slate-100">
-        <div className="space-y-2 text-left">
-          <h1 className="text-2xl font-[900] text-slate-900 tracking-tight">
+    <div className="space-y-6 pb-12 px-2 md:px-4">
+      {/* Refined Editorial Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 bg-white/70 backdrop-blur-sm p-8 rounded-2xl shadow-sm border border-black/[0.03]">
+        <div className="space-y-1.5 text-left">
+          <h1 className="text-3xl font-medium text-slate-900 tracking-tight leading-none">
             Delivery Center
           </h1>
-          <p className="text-slate-500 font-medium text-base">
+          <p className="text-slate-500 font-normal text-base">
             Welcome back,{" "}
-            <span className="text-slate-900 font-black">{user?.name}</span>.
+            <span className="text-slate-900 font-semibold">{user?.name}</span>.
             Manage your logistics operations.
           </p>
         </div>
@@ -575,31 +575,31 @@ export function PersonnelDashboard() {
           }}
         >
           <DialogTrigger asChild>
-            <Button className="h-12 px-6 rounded-[1.5rem] bg-[#00B14F] hover:bg-[#009e46] text-white font-[900] text-sm uppercase tracking-widest shadow-[0_10px_30px_rgb(0,177,79,0.25)] transition-all active:scale-95 flex items-center gap-3 group">
+            <Button className="h-11 px-8 rounded-lg bg-slate-900 hover:bg-black text-white font-medium text-sm transition-all active:scale-95 flex items-center gap-3 group">
               <Plus
-                className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300"
-                strokeWidth={3}
+                className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300"
+                strokeWidth={2.5}
               />
               New Delivery Request
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[95vw] lg:max-w-[60vw] max-h-[92vh] overflow-y-auto rounded-[3rem] border-none p-0 bg-white shadow-2xl">
+          <DialogContent className="sm:max-w-[95vw] lg:max-w-[65vw] max-h-[92vh] overflow-y-auto rounded-2xl border-none p-0 bg-white shadow-2xl">
             <div className="relative">
-              {/* Header Banner */}
-              <div className="bg-slate-900 p-10 pb-20 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#00B14F]/10 rounded-full -mr-20 -mt-20 blur-3xl" />
+              {/* Refined Header Banner */}
+              <div className="bg-slate-900 p-12 pb-24 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-white/[0.03] rounded-full -mr-32 -mt-32 blur-3xl" />
                 <div className="relative z-10 flex items-center justify-between">
-                  <div className="flex items-center gap-5">
-                    <div className="p-4 bg-[#00B14F] rounded-2xl shadow-xl shadow-[#00B14F]/20">
-                      <Plus className="text-white w-7 h-7" strokeWidth={3} />
+                  <div className="flex items-center gap-6">
+                    <div className="p-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">
+                      <Plus className="text-white w-7 h-7" strokeWidth={2} />
                     </div>
                     <div>
-                      <DialogTitle className="text-xl font-[900] tracking-tight mb-1">
+                      <DialogTitle className="text-3xl font-medium tracking-tight mb-1 font-serif">
                         {editingRequestId
                           ? "Update Request"
                           : "Create New Request"}
                       </DialogTitle>
-                      <DialogDescription className="text-slate-400 text-sm">
+                      <DialogDescription className="text-slate-400 text-base font-normal">
                         {editingRequestId
                           ? "Review and adjust the details for your resubmission."
                           : "Fill in the details below to schedule your delivery."}
@@ -610,12 +610,12 @@ export function PersonnelDashboard() {
               </div>
 
               {/* Form Content */}
-              <div className="px-10 -mt-12 relative z-20 pb-12 space-y-8">
+              <div className="px-12 -mt-16 relative z-20 pb-16 space-y-8">
                 {/* General Information Card */}
-                <Card className="border-none shadow-[0_20px_50px_rgba(0,0,0,0.04)] rounded-[2.5rem] p-8 space-y-8 bg-white">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-1.5 w-8 bg-[#00B14F] rounded-full" />
-                    <span className="text-[7px] font-black uppercase tracking-widest text-slate-400">
+                <Card className="border-none shadow-sm rounded-xl p-10 space-y-10 bg-white">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-4 w-1 bg-slate-900 rounded-full" />
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                       Request Basics
                     </span>
                   </div>
@@ -784,10 +784,10 @@ export function PersonnelDashboard() {
                 </Card>
 
                 {/* Locations Card */}
-                <Card className="border-none shadow-[0_20px_50px_rgba(0,0,0,0.04)] rounded-[2.5rem] p-8 space-y-8 bg-white">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-1.5 w-8 bg-amber-500 rounded-full" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <Card className="border-none shadow-sm rounded-xl p-10 space-y-10 bg-white">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-4 w-1 bg-amber-500 rounded-full" />
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                       Route & Personalized Details
                     </span>
                   </div>

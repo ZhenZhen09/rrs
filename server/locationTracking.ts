@@ -2,10 +2,10 @@ import { Server } from 'socket.io';
 import { pool } from './db';
 
 const LATEST_LOCATION_WRITE_INTERVAL_MS = 15000;
+const PROXIMITY_WRITE_INTERVAL_MS = 3000;
+const PROXIMITY_RADIUS_M = 500;
 const HISTORY_LOG_INTERVAL_MS = 30000;
 const HISTORY_LOG_DISTANCE_M = 30;
-const GEOFENCE_CHECK_INTERVAL_MS = 15000;
-const GEOFENCE_RADIUS_M = 200;
 
 interface LocationCheckpoint {
   lat: number;
@@ -16,7 +16,6 @@ interface LocationCheckpoint {
 interface LocationState {
   latestDb?: LocationCheckpoint;
   history?: LocationCheckpoint;
-  geofenceCheckedAt?: number;
 }
 
 interface RequestPingState {
@@ -55,8 +54,9 @@ export function getDistance(lat1: number, lon1: number, lat2: number, lon2: numb
   return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const shouldWriteLatest = (state: LocationState | undefined, now: number) => {
-  return !state?.latestDb || now - state.latestDb.timestamp >= LATEST_LOCATION_WRITE_INTERVAL_MS;
+const shouldWriteLatest = (state: LocationState | undefined, now: number, customInterval?: number) => {
+  const interval = customInterval || LATEST_LOCATION_WRITE_INTERVAL_MS;
+  return !state?.latestDb || now - state.latestDb.timestamp >= interval;
 };
 
 const shouldWriteHistory = (state: LocationState | undefined, lat: number, lng: number, now: number) => {
@@ -161,26 +161,12 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput) {
     }
   }
 
+  const distanceToDropoff = getDistance(lat, lng, Number(request.dropoff_lat), Number(request.dropoff_lng));
+  const isNearDropoff = distanceToDropoff <= PROXIMITY_RADIUS_M;
+  const currentInterval = isNearDropoff ? PROXIMITY_WRITE_INTERVAL_MS : LATEST_LOCATION_WRITE_INTERVAL_MS;
+
   const requestState = requestLatestState.get(normalizedRequestId);
-  const shouldCheckGeofence = !requestState?.geofenceCheckedAt ||
-    now - requestState.geofenceCheckedAt >= GEOFENCE_CHECK_INTERVAL_MS;
-
-  if (
-    shouldCheckGeofence &&
-    request.delivery_status === 'in_progress' &&
-    getDistance(lat, lng, Number(request.dropoff_lat), Number(request.dropoff_lng)) <= GEOFENCE_RADIUS_M
-  ) {
-    await pool.execute(
-      'UPDATE delivery_requests SET delivery_status = ? WHERE request_id = ?',
-      ['arrived', normalizedRequestId],
-    );
-    io?.to(`job_${normalizedRequestId}`).emit('job-status-changed', {
-      requestId: normalizedRequestId,
-      status: 'arrived',
-    });
-  }
-
-  const writeLatest = shouldWriteLatest(requestState, now);
+  const writeLatest = shouldWriteLatest(requestState, now, currentInterval);
   const writeHistory = shouldWriteHistory(requestState, lat, lng, now);
 
   if (writeLatest) {
@@ -200,7 +186,6 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput) {
   requestLatestState.set(normalizedRequestId, {
     latestDb: writeLatest ? { lat, lng, timestamp: now } : requestState?.latestDb,
     history: writeHistory ? { lat, lng, timestamp: now } : requestState?.history,
-    geofenceCheckedAt: shouldCheckGeofence ? now : requestState?.geofenceCheckedAt,
   });
 
   return {
