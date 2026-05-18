@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 
@@ -36,7 +36,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userData = await AsyncStorage.getItem('user');
 
       if (token && userData) {
-        setUser(JSON.parse(userData));
+        try {
+          setUser(JSON.parse(userData));
+        } catch (parseError) {
+          console.error('Failed to parse stored user data:', parseError);
+          // If data is corrupted, clear it to prevent repeated failures
+          await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('authToken');
+          setUser(null);
+        }
       }
     } catch (error) {
       console.error('Failed to load stored auth:', error);
@@ -45,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const response = await api.post('/api/auth/login', { email, password });
       const { token, refreshToken, ...userProfile } = response.data;
@@ -61,9 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Login failed:', error);
       throw error;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('refreshToken');
@@ -72,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout failed:', error);
     }
-  };
+  }, []);
 
   const value = useMemo(() => ({
     user,
@@ -80,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     login,
     logout
-  }), [user, isAuthenticated, isLoading]);
+  }), [user, isAuthenticated, isLoading, login, logout]);
 
   return (
     <AuthContext.Provider value={value}>
