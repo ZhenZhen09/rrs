@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { COLORS, RADIUS, TYPOGRAPHY } from '../../constants/Theme';
+import { moderateScale, verticalScale } from '../../utils/responsive';
+import { PremiumJobCard } from '../../components/Dispatch/PremiumJobCard';
+import { useRealTime } from '../../context/RealTimeContext';
+import api from '../../services/api';
 
 const TABS = ['Pending', 'Active', 'Done'];
 
@@ -12,97 +17,56 @@ const PREVIOUS_EXAMPLES = [
   { id: 'EX-04', customer: 'City Hospital', location: 'Medical Zone', type: 'Urgent Lab', avgTime: '20 mins', icon: 'local-hospital' },
 ];
 
-const MOCK_JOBS = [
-  { id: 'REQ-1001', customer: 'Alice Johnson', location: 'Downtown Hub', time: '09:00 AM', status: 'Pending', type: 'Delivery', priority: 'High', items: '2x Pizza, 1x Coke' },
-  { id: 'REQ-1002', customer: 'Bob Smith', location: 'West End Plaza', time: '10:30 AM', status: 'Active', type: 'Pickup', rider: 'Rider #42', items: 'Documents' },
-  { id: 'REQ-1003', customer: 'Charlie Davis', location: 'North Station', time: '11:15 AM', status: 'Active', type: 'Delivery', rider: 'Rider #12', items: 'Laptop Repair' },
-  { id: 'REQ-1004', customer: 'Diana Prince', location: 'Central Mall', time: '01:00 PM', status: 'Pending', type: 'Express', priority: 'Medium', items: 'Gifts' },
-  { id: 'REQ-1005', customer: 'Ethan Hunt', location: 'Port Area', time: '02:45 PM', status: 'Done', type: 'Return', completedAt: '03:15 PM', rider: 'Rider #07', amount: '$15.50', duration: '30m' },
-  { id: 'REQ-1006', customer: 'Fiona Glenanne', location: 'South Beach', time: '08:30 AM', status: 'Done', type: 'Delivery', completedAt: '09:15 AM', rider: 'Rider #19', amount: '$22.00', duration: '45m' },
-  { id: 'REQ-1007', customer: 'George Bluth', location: 'Banana Stand', time: '12:00 PM', status: 'Done', type: 'Pickup', completedAt: '12:45 PM', rider: 'Rider #03', amount: '$10.00', duration: '25m' },
-  { id: 'REQ-1008', customer: 'Hank Hill', location: 'Strickland Propane', time: '04:00 PM', status: 'Done', type: 'Express', completedAt: '04:30 PM', rider: 'Rider #11', amount: '$35.00', duration: '20m' },
-];
-
 export default function DispatchCenter() {
+  const { lastRequestUpdate } = useRealTime();
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Pending');
   const [search, setSearch] = useState('');
   const [selectedJob, setSelectedJob] = useState<any>(null);
 
-  const filteredJobs = MOCK_JOBS.filter(job => 
-    job.status === activeTab &&
-    (job.customer.toLowerCase().includes(search.toLowerCase()) || job.id.includes(search))
-  );
+  const fetchJobs = async () => {
+    try {
+      const response = await api.get('/requests?limit=100');
+      const backendJobs = response.data.delivery_requests || [];
+      
+      const mappedJobs = backendJobs.map((bj: any) => {
+        let status = 'Pending';
+        if (bj.status === 'pending' || bj.status === 'submitted_waiting') {
+          status = 'Pending';
+        } else if (bj.status === 'approved' && !['completed', 'failed', 'cancelled'].includes(bj.delivery_status)) {
+          status = 'Active';
+        } else if (['completed', 'failed'].includes(bj.delivery_status)) {
+          status = 'Done';
+        }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High': return '#EF4444';
-      case 'Medium': return '#F59E0B';
-      default: return '#3B82F6';
+        return {
+          id: bj.request_id,
+          customer: bj.requester_name,
+          location: bj.dropoff_location?.address || bj.dropoff_address || 'Unknown',
+          time: bj.time_window || 'ASAP',
+          status: status,
+          type: bj.request_type || 'Delivery',
+          priority: bj.urgency_level,
+          rider: bj.assigned_rider_name,
+        };
+      });
+      
+      setJobs(mappedJobs);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderJobCard = (job: any) => (
-    <View key={job.id} style={styles.jobCard}>
-      <View style={styles.jobCardHeader}>
-        <View style={styles.idBadge}>
-          <Text style={styles.jobIdText}>{job.id}</Text>
-        </View>
-        {job.priority && (
-          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(job.priority) + '15' }]}>
-            <Text style={[styles.priorityText, { color: getPriorityColor(job.priority) }]}>{job.priority}</Text>
-          </View>
-        )}
-        {activeTab === 'Done' && (
-          <View style={styles.successBadge}>
-            <MaterialIcons name="check-circle" size={12} color="#10B981" />
-            <Text style={styles.successText}>COMPLETED</Text>
-          </View>
-        )}
-      </View>
+  useEffect(() => {
+    fetchJobs();
+  }, [lastRequestUpdate]);
 
-      <Text style={styles.customerName}>{job.customer}</Text>
-      
-      <View style={styles.infoRow}>
-        <MaterialIcons name="location-on" size={16} color="#64748B" />
-        <Text style={styles.infoText}>{job.location}</Text>
-      </View>
-
-      {activeTab === 'Done' ? (
-        <View style={styles.transactionDetails}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Rider</Text>
-            <Text style={styles.detailValue}>{job.rider}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Amount</Text>
-            <Text style={styles.detailValue}>{job.amount}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Duration</Text>
-            <Text style={styles.detailValue}>{job.duration}</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.jobCardFooter}>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeText}>{job.type}</Text>
-          </View>
-          <Text style={styles.timeText}>
-            {`Due: ${job.time}`}
-          </Text>
-        </View>
-      )}
-
-      {activeTab !== 'Done' && (
-        <TouchableOpacity 
-          style={styles.manageButton}
-          onPress={() => setSelectedJob(job)}
-        >
-          <Text style={styles.manageButtonText}>Manage Dispatch</Text>
-          <MaterialIcons name="settings-input-component" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
-    </View>
+  const filteredJobs = jobs.filter(job => 
+    job.status === activeTab &&
+    (job.customer?.toLowerCase().includes(search.toLowerCase()) || job.id.includes(search))
   );
 
   return (
@@ -111,10 +75,11 @@ export default function DispatchCenter() {
       <View style={styles.header}>
         <Text style={styles.title}>Dispatch Console</Text>
         <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color="#94A3B8" />
+          <MaterialIcons name="search" size={20} color={COLORS.muted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search requests..."
+            placeholderTextColor={COLORS.muted}
             value={search}
             onChangeText={setSearch}
           />
@@ -136,7 +101,7 @@ export default function DispatchCenter() {
       </View>
 
       {/* Main Content */}
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {activeTab === 'Pending' && (
           <View style={styles.exampleSection}>
             <Text style={styles.sectionHeader}>Quick Templates from History</Text>
@@ -144,12 +109,12 @@ export default function DispatchCenter() {
               {PREVIOUS_EXAMPLES.map((ex) => (
                 <TouchableOpacity key={ex.id} style={styles.exampleCard}>
                   <View style={styles.exampleIconContainer}>
-                    <MaterialIcons name={ex.icon as any} size={24} color="#3B82F6" />
+                    <MaterialIcons name={ex.icon as any} size={24} color={COLORS.accentBlue} />
                   </View>
                   <Text style={styles.exampleCustomer}>{ex.customer}</Text>
                   <Text style={styles.exampleType}>{ex.type}</Text>
                   <View style={styles.exampleFooter}>
-                    <MaterialIcons name="timer" size={12} color="#64748B" />
+                    <MaterialIcons name="timer" size={12} color={COLORS.secondary} />
                     <Text style={styles.exampleTime}>{ex.avgTime} avg.</Text>
                   </View>
                 </TouchableOpacity>
@@ -160,16 +125,23 @@ export default function DispatchCenter() {
 
         <Text style={styles.sectionHeader}>{activeTab} Requests</Text>
         {filteredJobs.length > 0 ? (
-          filteredJobs.map(renderJobCard)
+          filteredJobs.map(job => (
+            <PremiumJobCard 
+              key={job.id} 
+              job={job} 
+              onPress={setSelectedJob} 
+              activeTab={activeTab} 
+            />
+          ))
         ) : (
           <View style={styles.emptyContainer}>
-            <FontAwesome5 name="clipboard-list" size={50} color="#E2E8F0" />
+            <FontAwesome5 name="clipboard-list" size={50} color={COLORS.border} />
             <Text style={styles.emptyText}>No {activeTab.toLowerCase()} requests</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Dispatch Management Modal (Mock) */}
+      {/* Dispatch Management Modal */}
       <Modal
         visible={!!selectedJob}
         animationType="slide"
@@ -180,23 +152,34 @@ export default function DispatchCenter() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Dispatch Management</Text>
               <TouchableOpacity onPress={() => setSelectedJob(null)}>
-                <MaterialIcons name="close" size={24} color="#64748B" />
+                <MaterialIcons name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
             </View>
 
             {selectedJob && (
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalJobInfo}>
                   <Text style={styles.modalJobId}>{selectedJob.id}</Text>
                   <Text style={styles.modalCustomer}>{selectedJob.customer}</Text>
                 </View>
 
+                <View style={styles.instructionSection}>
+                  <Text style={styles.modalSectionTitle}>Admin Instructions</Text>
+                  <View style={styles.instructionCard}>
+                    <Text style={styles.instructionText}>
+                      Ensure rider confirms pickup with customer via call. High priority items require photos.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.spacer} />
+
                 <Text style={styles.modalSectionTitle}>Select Available Rider</Text>
                 {['Rider #01 (Near)', 'Rider #15 (Available)', 'Rider #22 (Busy)'].map((rider) => (
                   <TouchableOpacity key={rider} style={styles.riderOption}>
-                    <FontAwesome5 name="biking" size={16} color="#1E293B" />
+                    <FontAwesome5 name="biking" size={16} color={COLORS.primary} />
                     <Text style={styles.riderOptionText}>{rider}</Text>
-                    <MaterialIcons name="add-circle-outline" size={24} color="#3B82F6" />
+                    <MaterialIcons name="add-circle-outline" size={24} color={COLORS.accentBlue} />
                   </TouchableOpacity>
                 ))}
 
@@ -216,146 +199,153 @@ export default function DispatchCenter() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { padding: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  title: { fontSize: 24, fontWeight: '900', color: '#1E293B', marginBottom: 16, letterSpacing: -0.5 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: { 
+    padding: moderateScale(20), 
+    backgroundColor: '#FFFFFF', 
+    borderBottomWidth: 1, 
+    borderBottomColor: COLORS.border 
+  },
+  title: { 
+    fontSize: TYPOGRAPHY.size['2xl'], 
+    fontWeight: '900' as any, 
+    color: COLORS.primary, 
+    marginBottom: verticalScale(16), 
+    letterSpacing: -0.5 
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
+    paddingHorizontal: moderateScale(12),
+    height: verticalScale(48),
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, fontWeight: '500' },
+  searchIcon: {
+    marginRight: moderateScale(10),
+  },
+  searchInput: { 
+    flex: 1, 
+    fontSize: TYPOGRAPHY.size.base, 
+    fontWeight: '500' as any,
+    color: COLORS.primary,
+  },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: COLORS.border,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 16 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: verticalScale(16) },
   activeTab: {},
-  tabText: { fontSize: 14, fontWeight: '700', color: '#94A3B8' },
-  activeTabText: { color: '#1E293B' },
+  tabText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: '700' as any, color: COLORS.muted },
+  activeTabText: { color: COLORS.primary },
   activeIndicator: {
     position: 'absolute',
     bottom: 0,
     width: '40%',
     height: 3,
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.primary,
     borderRadius: 3,
   },
-  scrollContent: { padding: 20 },
-  jobCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20 },
-      android: { elevation: 4 },
-    }),
+  scrollContent: { padding: moderateScale(20) },
+  sectionHeader: { 
+    fontSize: TYPOGRAPHY.size.xs, 
+    fontWeight: '800' as any, 
+    color: COLORS.secondary, 
+    marginBottom: verticalScale(16), 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5 
   },
-  jobCardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  idBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  jobIdText: { fontSize: 12, fontWeight: '800', color: '#475569' },
-  priorityBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  priorityText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
-  customerName: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 8 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  infoText: { fontSize: 14, color: '#64748B', marginLeft: 6, fontWeight: '500' },
-  jobCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    marginBottom: 16,
-  },
-  typeBadge: { backgroundColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  typeText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase' },
-  timeText: { fontSize: 12, fontWeight: '700', color: '#94A3B8' },
-  manageButton: {
-    backgroundColor: '#1E293B',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-  },
-  manageButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', marginRight: 8 },
-  emptyContainer: { alignItems: 'center', marginTop: 100 },
-  emptyText: { marginTop: 16, fontSize: 16, fontWeight: '600', color: '#94A3B8' },
+  emptyContainer: { alignItems: 'center', marginTop: verticalScale(100) },
+  emptyText: { marginTop: verticalScale(16), fontSize: TYPOGRAPHY.size.base, fontWeight: '600' as any, color: COLORS.muted },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    maxHeight: '80%',
+    borderTopLeftRadius: RADIUS.modal,
+    borderTopRightRadius: RADIUS.modal,
+    padding: moderateScale(24),
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: verticalScale(24),
   },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
-  modalJobInfo: { marginBottom: 24 },
-  modalJobId: { fontSize: 14, fontWeight: '800', color: '#3B82F6' },
-  modalCustomer: { fontSize: 24, fontWeight: '900', color: '#1E293B', marginTop: 4 },
-  modalSectionTitle: { fontSize: 14, fontWeight: '800', color: '#64748B', marginBottom: 16, textTransform: 'uppercase' },
+  modalTitle: { fontSize: TYPOGRAPHY.size.xl, fontWeight: '900' as any, color: COLORS.primary },
+  modalJobInfo: { marginBottom: verticalScale(24) },
+  modalJobId: { fontSize: TYPOGRAPHY.size.sm, fontWeight: '800' as any, color: COLORS.accentBlue, textTransform: 'uppercase' },
+  modalCustomer: { fontSize: TYPOGRAPHY.size['2xl'], fontWeight: '900' as any, color: COLORS.primary, marginTop: verticalScale(4) },
+  modalSectionTitle: { 
+    fontSize: TYPOGRAPHY.size.xs, 
+    fontWeight: '900' as any, 
+    color: COLORS.secondary, 
+    marginBottom: verticalScale(16), 
+    textTransform: 'uppercase' 
+  },
+  instructionSection: {
+    marginBottom: verticalScale(12),
+  },
+  instructionCard: {
+    backgroundColor: '#F1F5F9',
+    padding: moderateScale(16),
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  instructionText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.primary,
+    fontWeight: '600' as any,
+    lineHeight: 20,
+  },
+  spacer: {
+    height: verticalScale(24),
+  },
   riderOption: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    padding: 16,
+    padding: moderateScale(16),
     borderRadius: 16,
-    marginBottom: 12,
+    marginBottom: verticalScale(12),
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
-  riderOptionText: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1E293B', marginLeft: 12 },
+  riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontWeight: '700' as any, color: COLORS.primary, marginLeft: moderateScale(12) },
   confirmDispatchButton: {
-    backgroundColor: '#1E293B',
-    padding: 18,
-    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    padding: moderateScale(18),
+    borderRadius: RADIUS.button,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: verticalScale(12),
   },
-  confirmDispatchText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  exampleSection: { marginBottom: 24 },
-  sectionHeader: { fontSize: 14, fontWeight: '800', color: '#64748B', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  exampleScroll: { marginHorizontal: -20, paddingHorizontal: 20 },
+  confirmDispatchText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.base, fontWeight: '800' as any },
+  exampleSection: { marginBottom: verticalScale(24) },
+  exampleScroll: { marginHorizontal: moderateScale(-20), paddingHorizontal: moderateScale(20) },
   exampleCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 16,
-    marginRight: 16,
-    width: 160,
+    padding: moderateScale(16),
+    marginRight: moderateScale(16),
+    width: moderateScale(160),
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
-  exampleIconContainer: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  exampleCustomer: { fontSize: 15, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
-  exampleType: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 12 },
+  exampleIconContainer: { 
+    width: moderateScale(40), 
+    height: moderateScale(40), 
+    borderRadius: 12, 
+    backgroundColor: '#EFF6FF', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: verticalScale(12) 
+  },
+  exampleCustomer: { fontSize: TYPOGRAPHY.size.base, fontWeight: '800' as any, color: COLORS.primary, marginBottom: verticalScale(4) },
+  exampleType: { fontSize: TYPOGRAPHY.size.xs, fontWeight: '600' as any, color: COLORS.secondary, marginBottom: verticalScale(12) },
   exampleFooter: { flexDirection: 'row', alignItems: 'center' },
-  exampleTime: { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginLeft: 4 },
-  transactionDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 0,
-  },
-  detailItem: { alignItems: 'center' },
-  detailLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 2 },
-  detailValue: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
-  successBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  successText: { fontSize: 10, fontWeight: '800', color: '#10B981', marginLeft: 4 },
+  exampleTime: { fontSize: TYPOGRAPHY.size.xs, fontWeight: '700' as any, color: COLORS.muted, marginLeft: moderateScale(4) },
 });
