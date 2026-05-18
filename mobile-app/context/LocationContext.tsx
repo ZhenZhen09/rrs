@@ -24,6 +24,7 @@ type LocationState = {
   isSocketConnected: boolean;
   startTracking: (requestId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
+  simulateLocation: (lat: number, lng: number, heading?: number | null) => void;
 };
 
 const LocationContext = createContext<LocationState | null>(null);
@@ -124,6 +125,23 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     activeRequestId.current = null;
     await AsyncStorage.removeItem(STORAGE_REQUEST_ID);
     setIsTracking(false);
+  };
+
+  const simulateLocation = (lat: number, lng: number, heading?: number | null) => {
+    if (!user?.id) return;
+    
+    // Update local state so the app UI reacts
+    setLastLocation({ lat, lng, heading });
+
+    // Emit to system via socket so Admin/Personnel see it
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('update-location', {
+        riderId: user.id,
+        lat,
+        lng,
+        requestId: activeRequestId.current || 'idle'
+      });
+    }
   };
 
   useEffect(() => {
@@ -237,7 +255,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       backgroundPermissionGranted,
       isSocketConnected,
       startTracking,
-      stopTracking
+      stopTracking,
+      simulateLocation
     }}>
       {children}
     </LocationContext.Provider>

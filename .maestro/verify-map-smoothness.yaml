@@ -1,0 +1,47 @@
+appId: com.hon01.cfarss
+---
+- clearState
+- launchApp
+- tapOn: "Email address"
+- inputText: "rider1@company.com"
+- tapOn: "Password"
+- inputText: "rider1"
+- tapOn: "LOGIN"
+- extendedWaitUntil:
+    visible: "Today's Tasks"
+    timeout: 30000
+- tapOn:
+    id: "today_task_card_0"
+- extendedWaitUntil:
+    visible: "DELIVERY START"
+    timeout: 15000
+- tapOn: "DELIVERY START"
+- extendedWaitUntil:
+    visible: "COMPLETE DELIVERY"
+    timeout: 15000
+# Simulate movement to verify interpolation and no-blinking
+- setLocation: 
+    latitude: 14.5800
+    longitude: 121.0500
+- script: |-
+    // Wait for the JS interpolation glide (1.5s) to complete
+    Thread.sleep(2000)
+- setLocation: 
+    latitude: 14.5810
+    longitude: 121.0510
+- script: |-
+    // Wait for the next glide
+    Thread.sleep(2000)
+- assertVisible: "Navigation"
+- assertVisible: "COMPLETE DELIVERY"
+# Drag map to verify free-roam doesn't snap back immediately
+- swipe:
+    from:
+      x: 50%
+      y: 50%
+    to:
+      x: 10%
+      y: 10%
+- script: |-
+    Thread.sleep(1000)
+- assertVisible: "Recenter rider"

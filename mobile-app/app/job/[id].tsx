@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useJobDetails } from '@/hooks/data/useJobDetails';
 import { useLocation } from '@/context/LocationContext';
+import { encode as base64Encode } from 'base-64';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,11 +33,61 @@ export default function JobDetailsScreen() {
     isStartingDelivery,
   } = useJobDetails();
 
-  const { backgroundPermissionGranted, isSocketConnected, lastLocation } = useLocation();
+  const { backgroundPermissionGranted, isSocketConnected, lastLocation, simulateLocation } = useLocation();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const webViewRef = useRef<WebView>(null);
   
   const [roadPath, setRoadPath] = useState<{latitude: number, longitude: number}[]>([]);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const simulationInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const startSimulation = () => {
+    if (roadPath.length === 0) {
+      Alert.alert("No Route", "Please wait for the route to load before simulating.");
+      return;
+    }
+    
+    setIsSimulating(true);
+    let step = 0;
+    
+    simulationInterval.current = setInterval(() => {
+      if (step >= roadPath.length) {
+        clearInterval(simulationInterval.current!);
+        setIsSimulating(false);
+        Alert.alert("Destination Reached", "Simulation complete.");
+        return;
+      }
+      
+      const point = roadPath[step];
+      
+      // 1. Update system (Socket.io) so Admin/Personnel see it
+      simulateLocation(point.latitude, point.longitude, null);
+
+      // 2. Update local WebView map
+      const payload = JSON.stringify({ 
+        lat: point.latitude, 
+        lng: point.longitude,
+        heading: null
+      });
+      webViewRef.current?.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
+      
+      step += Math.max(1, Math.floor(roadPath.length / 50)); 
+    }, 2000);
+  };
+
+  const stopSimulation = () => {
+    if (simulationInterval.current) {
+      clearInterval(simulationInterval.current);
+      simulationInterval.current = null;
+    }
+    setIsSimulating(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (simulationInterval.current) clearInterval(simulationInterval.current);
+    };
+  }, []);
 
   // --- FULL JOURNEY ROUTING (Rider -> Pickup -> Dropoff) ---
   useEffect(() => {
@@ -88,6 +139,20 @@ export default function JobDetailsScreen() {
   }, [lastLocation]);
 
   useEffect(() => {
+    if (webViewRef.current && job) {
+      const initialPos = lastLocation || { 
+        lat: Number(job.pickup_location?.lat || 0), 
+        lng: Number(job.pickup_location?.lng || 0) 
+      };
+      const payload = JSON.stringify(initialPos);
+      // Small delay to ensure WebView is ready
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
+      }, 1000);
+    }
+  }, [job?.request_id]);
+
+  useEffect(() => {
     if (webViewRef.current && roadPath.length > 0) {
       const payload = JSON.stringify(roadPath);
       webViewRef.current.injectJavaScript(`if(window.updatePath) window.updatePath(${payload}); true;`);
@@ -120,23 +185,29 @@ export default function JobDetailsScreen() {
     return () => bh.remove();
   }, [job?.delivery_status]);
 
-  if (loading && !job) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0F172A" />
-      </View>
-    );
-  }
+  // --- MAP CONFIG HOOKS (MUST BE ABOVE ALL RETURNS) ---
+  const pickup = useMemo(() => ({ 
+    latitude: Number(job?.pickup_location?.lat || 0), 
+    longitude: Number(job?.pickup_location?.lng || 0) 
+  }), [job?.pickup_location]);
 
-  if (!job) return null;
+  const dropoff = useMemo(() => ({ 
+    latitude: Number(job?.dropoff_location?.lat || 0), 
+    longitude: Number(job?.dropoff_location?.lng || 0) 
+  }), [job?.dropoff_location]);
 
-  const pickup = { latitude: Number(job.pickup_location.lat), longitude: Number(job.pickup_location.lng) };
-  const dropoff = { latitude: Number(job.dropoff_location.lat), longitude: Number(job.dropoff_location.lng) };
   const isLocked = ['assigned', 'in_progress'].includes(deliveryStatus || '');
-  const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="#073f5a" d="M256 25c-82 0-103 29-103 88v22c-11 4-18 9-18 16v24c0 4 3 6 7 5l14-5v226c0 57 25 84 100 86 75-2 100-29 100-86V175l14 5c4 1 7-1 7-5v-24c0-7-7-12-18-16v-22C359 54 338 25 256 25Z"/><path fill="#3aa3d9" d="M256 39c-72 0-91 24-91 76v34c-16 4-28 10-28 18v14c0 3 2 4 5 3l23-9v223c0 48 20 72 91 74 71-2 91-26 91-74V175l23 9c3 1 5 0 5-3v-14c0-8-12-14-28-18v-34c0-52-19-76-91-76Z"/><path fill="#053d56" d="M192 162c43-13 85-18 128-5l-10 70c-36-14-72-18-108 0l-10-65Z"/><path fill="#053d56" d="M187 329c44 14 91 16 138-1l2 61c-49 26-95 27-142 0l2-60Z"/><path fill="#053d56" opacity=".72" d="M169 175l10 53v100l-18 58V184l8-9Z"/><path fill="#053d56" opacity=".72" d="M343 175l-10 53v100l18 58V184l-8-9Z"/><path fill="#134f68" d="M188 371c44 26 90 26 136 0l3 18c-49 27-95 27-142 0l3-18Z"/><path fill="#64bee9" d="M190 279c44 10 88 10 132 0v46c-41 19-85 19-132 0v-46Z"/><path fill="#64bee9" d="M178 146c53-20 106-26 156-7l-13 18c-42-14-86-10-130 5l-13-16Z"/><path fill="#b7d6f5" d="M176 62c17-11 39-13 50-6 4 3 3 7-1 9l-36 14c-9 4-17-8-13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 64c8-6 17-9 28-10-10 8-19 16-28 25-5-3-6-10 0-15Z"/><path fill="#b7d6f5" d="M336 62c-17-11-39-13-50-6-4 3-3 7 1 9l36 14c9 4 17-8 13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 64c-8-6-17-9-28-10 10 8 19 16 28 25 5-3 6-10 0-15Z"/><path fill="#b7d6f5" d="M176 450c17 11 39 13 50 6 4-3 3-7-1-9l-36-14c-9-4-17 8-13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 448c8 6 17 9 28 10-10-8-19-16-28-25-5 3-6 10 0 15Z"/><path fill="#b7d6f5" d="M336 450c-17 11-39 13-50 6-4-3-3-7 1-9l36-14c9-4 17 8 13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 448c-8 6-17 9-28 10 10-8 19-16 28-25 5 3 6 10 0 15Z"/><path fill="#0a5977" d="M160 275h18v5h-18z"/><path fill="#0a5977" d="M334 275h18v5h-18z"/><path fill="#197aa5" opacity=".35" d="M256 39c-72 0-91 24-91 76v34c-10 3-19 6-24 10 54-19 132-32 206-10v-34c0-52-19-76-91-76Z"/></svg>`;
-  const carMarkerDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(carMarkerSvg)}`;
+  
+  const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="#073f5a" d="M256 25c-82 0-103 29-103 88v22c-11 4-18 9-18 16v24c0 4 3 6 7 5l14-5v226c0 57 25 84 100 86 75-2 100-29 100-86V175l14 5c4 1 7-1 7-5v-24c0-7-7-12-18-16v-22C359 54 338 25 256 25Z"/><path fill="#3aa3d9" d="M256 39c-72 0-91 24-91 76v34c-16 4-28 10-28 18v14c0 3 2 4 5 3l23-9v223c0 48 20 72 91 74 71-2 91-26 91-74V175l23 9c3 1 5 0 5-3v-14c0-8-12-14-28-18v-34c0-52-19-76-91-76Z"/><path fill="#053d56" d="M192 162c43-13 85-18 128-5l-10 70c-36-14-72-18-108 0l-10-65Z"/><path fill="#053d56" d="M187 329c44 14 91 16 138-1l2 61c-49 26-95 27-142 0l2-60Z"/><path fill="#053d56" opacity=".72" d="M169 175l10 53v100l-18 58V184l8-9Z"/><path fill="#053d56" opacity=".72" d="M343 175l-10 53v100l18 58V184l-8-9Z"/><path fill="#134f68" d="M188 371c44 26 90 26 136 0l3 18c-49 27-95 27-142 0l3-18Z"/><path fill="#64bee9" d="M190 279c44 10 88 10 132 0v46c-41 19-85 19-132 0v-46Z"/><path fill="#64bee9" d="M178 146c53-20 106-26 156-7l-13 18c-42-14-86-10-130 5l-13-16Z"/><path fill="#b7d6f5" d="M176 62c17-11 39-13 50-6 4 3 3 7-1 9l-36 14c-9 4-17-8-13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 64c8-6 17-9 28-10-10 8-19 16-28 25-5-3-6-10 0-15Z"/><path fill="#b7d6f5" d="M336 62c-17-11-39-13-50-6-4 3-3 7 1 9l36 14c9 4 17-8 13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 64c-8-6-17-9-28-10 10 8 19 16 28 25-5-3-6-10 0-15Z"/><path fill="#b7d6f5" d="M176 450c17 11 39 13 50 6 4-3 3-7-1-9l-36-14c-9-4-17 8-13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 448c8 6 17 9 28 10-10-8-19-16-28-25-5 3-6 10 0 15Z"/><path fill="#b7d6f5" d="M336 450c-17 11-39 13-50 6-4-3-3-7 1-9l36-14c9-4 17 8 13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 448c-8 6-17 9-28 10 10-8 19-16 28-25 5 3 6 10 0 15Z"/><path fill="#0a5977" d="M160 275h18v5h-18z"/><path fill="#0a5977" d="M334 275h18v5h-18z"/><path fill="#197aa5" opacity=".35" d="M256 39c-72 0-91 24-91 76v34c-10 3-19 6-24 10 54-19 132-32 206-10v-34c0-52-19-76-91-76Z"/></svg>`;
+  
+  // Use Base64 for data URIs for maximum compatibility in all WebViews
+  const carMarkerDataUri = useMemo(() => {
+    return `data:image/svg+xml;base64,${base64Encode(carMarkerSvg)}`;
+  }, [carMarkerSvg]);
 
-  const mapHtml = `
+  const mapHtml = useMemo(() => {
+    if (!job) return '';
+    return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -148,7 +219,7 @@ export default function JobDetailsScreen() {
           #map { height: 100vh; width: 100vw; background: #f8fafc; }
           .marker-pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: #c30b82; position: absolute; transform: rotate(-45deg); left: 50%; top: 50%; margin: -15px 0 0 -15px; }
           .marker-pin::after { content: ''; width: 24px; height: 24px; margin: 3px 0 0 3px; background: #fff; position: absolute; border-radius: 50%; }
-          .rider-car-icon { background: transparent; border: 0; transition: transform 0.7s linear; }
+          .rider-car-icon { background: transparent; border: 0; transition: transform 0.7s linear; z-index: 9999 !important; }
           .rider-car-wrap { position: relative; width: 48px; height: 48px; animation: car-road-glide 1.4s ease-in-out infinite; }
           .rider-car-body { width: 48px; height: 48px; transform-origin: 50% 50%; transition: transform 0.35s ease; }
           .rider-car-body img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(15,23,42,0.28)); }
@@ -186,8 +257,8 @@ export default function JobDetailsScreen() {
           let riderMarker = null;
           let roadPolyline = null;
           let roadPath = [];
-          let navigationMode = ${isNavigationMode ? 'true' : 'false'};
-          let followMode = navigationMode;
+          let navigationMode = false;
+          let followMode = true;
           let currentRiderPosition = null;
           let targetRiderPosition = null;
           let currentHeading = 0;
@@ -213,9 +284,9 @@ export default function JobDetailsScreen() {
           function moveNavigationCamera(position, force) {
             if (!navigationMode || !followMode || !position) return;
             const now = Date.now();
-            if (!force && now - lastCameraMoveAt < 650) return;
+            if (!force && now - lastCameraMoveAt < 250) return;
             lastCameraMoveAt = now;
-            map.panTo(position, { animate: true, duration: 0.55, easeLinearity: 0.35, noMoveStart: true });
+            map.panTo(position, { animate: true, duration: 1.5, easeLinearity: 0.1, noMoveStart: true });
           }
 
           map.on('dragstart zoomstart', function() {
@@ -290,10 +361,10 @@ export default function JobDetailsScreen() {
               currentHeading = targetHeading;
             } else {
               currentRiderPosition = [
-                lerp(currentRiderPosition[0], targetRiderPosition[0], 0.18),
-                lerp(currentRiderPosition[1], targetRiderPosition[1], 0.18),
+                lerp(currentRiderPosition[0], targetRiderPosition[0], 0.05),
+                lerp(currentRiderPosition[1], targetRiderPosition[1], 0.05),
               ];
-              currentHeading += normalizeAngleDelta(currentHeading, targetHeading) * 0.2;
+              currentHeading += normalizeAngleDelta(currentHeading, targetHeading) * 0.1;
             }
 
             if (riderMarker) riderMarker.setLatLng(currentRiderPosition);
@@ -301,9 +372,9 @@ export default function JobDetailsScreen() {
             if (el) el.style.transform = 'rotate(' + currentHeading + 'deg)';
             moveNavigationCamera(currentRiderPosition, false);
 
-            const latDone = Math.abs(currentRiderPosition[0] - targetRiderPosition[0]) < 0.000001;
-            const lngDone = Math.abs(currentRiderPosition[1] - targetRiderPosition[1]) < 0.000001;
-            const headingDone = Math.abs(normalizeAngleDelta(currentHeading, targetHeading)) < 0.5;
+            const latDone = Math.abs(currentRiderPosition[0] - targetRiderPosition[0]) < 0.0000001;
+            const lngDone = Math.abs(currentRiderPosition[1] - targetRiderPosition[1]) < 0.0000001;
+            const headingDone = Math.abs(normalizeAngleDelta(currentHeading, targetHeading)) < 0.1;
 
             if (latDone && lngDone && headingDone) {
               currentRiderPosition = targetRiderPosition;
@@ -321,18 +392,30 @@ export default function JobDetailsScreen() {
 
           window.updateRider = (data) => {
             if (data.lat && data.lng) {
-              const snapped = snapToRoute([Number(data.lat), Number(data.lng)], 80);
+              const newPos = [Number(data.lat), Number(data.lng)];
+              const snapped = snapToRoute(newPos, 80);
               targetRiderPosition = snapped.point;
-              targetHeading = snapped.bearing ?? Number(data.heading || 0);
+              
+              if (snapped.bearing !== null) {
+                targetHeading = snapped.bearing;
+              } else if (data.heading !== undefined && data.heading !== null) {
+                targetHeading = Number(data.heading);
+              } else if (currentRiderPosition) {
+                const b = calculateBearing(currentRiderPosition, targetRiderPosition);
+                if (Math.abs(currentRiderPosition[0]-targetRiderPosition[0]) > 0.00001 || 
+                    Math.abs(currentRiderPosition[1]-targetRiderPosition[1]) > 0.00001) {
+                  targetHeading = b;
+                }
+              }
 
               if (!riderMarker) {
                 currentRiderPosition = targetRiderPosition;
                 currentHeading = targetHeading;
                 riderMarker = L.marker(currentRiderPosition, { icon: riderIcon }).addTo(map);
+                moveNavigationCamera(currentRiderPosition, true);
               }
 
               startRiderAnimation();
-              moveNavigationCamera(targetRiderPosition, true);
             }
           };
 
@@ -359,13 +442,22 @@ export default function JobDetailsScreen() {
           };
 
           setNavigationUi();
-          window.updatePath(${JSON.stringify(roadPath)});
-          if (${lastLocation ? 'true' : 'false'}) window.updateRider({ lat: ${lastLocation?.lat}, lng: ${lastLocation?.lng}, heading: ${lastLocation?.heading || 0} });
-          window.setNavigationMode(${isNavigationMode ? 'true' : 'false'});
         </script>
       </body>
     </html>
   `;
+  }, [job?.request_id, pickup.latitude, pickup.longitude, dropoff.latitude, dropoff.longitude, carMarkerDataUri]);
+
+  // --- EARLY RETURNS (AFTER ALL HOOKS) ---
+  if (loading && !job) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0F172A" />
+      </View>
+    );
+  }
+
+  if (!job) return null;
 
   return (
     <View style={styles.container}>
@@ -399,6 +491,17 @@ export default function JobDetailsScreen() {
         ) : (
           <View style={{ width: 48 }} />
         )}
+        
+        {__DEV__ && (
+          <TouchableOpacity 
+            style={[styles.simulateBtn, isSimulating && { backgroundColor: '#EF4444' }]} 
+            onPress={isSimulating ? stopSimulation : startSimulation}
+          >
+            <MaterialIcons name={isSimulating ? "stop" : "play-arrow"} size={20} color="white" />
+            <Text style={styles.simulateBtnText}>{isSimulating ? "STOP" : "SIMULATE"}</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.badgeRow}>
           {!backgroundPermissionGranted && (
             <TouchableOpacity style={styles.warningBadge} onPress={() => Linking.openSettings()}><MaterialIcons name="report-problem" size={18} color="white" /></TouchableOpacity>
@@ -539,6 +642,8 @@ const styles = StyleSheet.create({
   navigationStartingTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   navigationStartingText: { color: '#CBD5E1', fontSize: 12, fontWeight: '700', marginTop: 3 },
   overlayHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', padding: 20 },
+  simulateBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', paddingHorizontal: 12, height: 36, borderRadius: 18, marginRight: 8, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },
+  simulateBtnText: { color: 'white', fontSize: 10, fontWeight: '900', marginLeft: 4, letterSpacing: 0.5 },
   iconBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', elevation: 8 },
   badgeRow: { flexDirection: 'row' },
   warningBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginRight: 8, elevation: 4 },
