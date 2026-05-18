@@ -41,19 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         credentials: 'include'
       });
       
-      if (response.status === 428) {
-        // Handle cPanel Technical Domain interception
-        alert("Security checkpoint required. The page will now reload so you can accept the warning.");
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (let registration of registrations) {
-            await registration.unregister();
-          }
-        }
-        window.location.reload();
-        return { success: false };
-      }
-      
       const data = await response.json();
 
       if (response.ok) {
