@@ -2,6 +2,9 @@ import './db'; // Force environment variables to load first
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
@@ -19,6 +22,12 @@ import { handleRiderLocationUpdate } from './locationTracking';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+
+// Standard Security Practice: Use Helmet to set secure HTTP headers (CSP, HSTS, etc.)
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for now to avoid breaking Leaflet/External maps
+  crossOriginEmbedderPolicy: false
+}));
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -41,6 +50,18 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Standard Security Practice: Rate limiting for Authentication routes
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login attempts per window
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authRateLimiter);
+app.use('/api/auth/signup', authRateLimiter);
+app.use('/api/auth/mfa', authRateLimiter);
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -53,6 +74,27 @@ const io = new Server(httpServer, {
   connectTimeout: 45000,
   transports: ['websocket', 'polling'],
   allowUpgrades: true
+});
+
+// Standard Security Practice: Socket.io Auth Middleware (The Bouncer)
+io.use((socket: any, next) => {
+  const token = socket.handshake.auth.token || 
+                (socket.handshake.headers.cookie ? 
+                  socket.handshake.headers.cookie.split('; ').find((row: any) => row.startsWith('authToken='))?.split('=')[1] 
+                  : null);
+
+  if (!token) {
+    return next(new Error('Authentication error: No token provided'));
+  }
+
+  try {
+    const secret = process.env.JWT_SECRET || 'fallback_secret_for_dev_only';
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as any;
+    socket.user = decoded; // Store decoded user for room authorization
+    next();
+  } catch (err) {
+    return next(new Error('Authentication error: Invalid token'));
+  }
 });
 
 app.get('/api/ping', (req, res) => {
@@ -179,10 +221,25 @@ class RequestWatchdog {
   }
 }
 
-io.on('connection', (socket) => {
+io.on('connection', (socket: any) => {
   let sessionRiderId: string | null = null;
-  socket.on('join-room', (room) => { socket.join(room); });
-  socket.on('join', (userID) => {
+
+  socket.on('join-room', (room: string) => { 
+    // Standard Security Practice: Enforce room authorization
+    if (room === 'admin-room' && socket.user.role !== 'admin') {
+      console.warn(`🛑 Unauthorized room join attempt by ${socket.user.id} to ${room}`);
+      return;
+    }
+    socket.join(room); 
+  });
+
+  socket.on('join', (userID: string) => {
+    // Standard Security Practice: Prevent rider from spoofing another user's room
+    if (userID !== socket.user.id && socket.user.role !== 'admin') {
+      console.warn(`🛑 Unauthorized join attempt by ${socket.user.id} as ${userID}`);
+      return;
+    }
+    
     if (userID) {
       socket.join(userID);
       sessionRiderId = userID;
@@ -191,9 +248,15 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('update-location', async (data) => {
+  socket.on('update-location', async (data: any) => {
     const { requestId, lat, lng, riderId, heading } = data;
     if (lat === undefined || lng === undefined || !riderId) return;
+
+    // Standard Security Practice: Prevent rider from spoofing location for another rider
+    if (riderId !== socket.user.id) {
+      console.warn(`🛑 Location spoofing attempt detected from ${socket.user.id} for rider ${riderId}`);
+      return;
+    }
 
     try {
       await handleRiderLocationUpdate({

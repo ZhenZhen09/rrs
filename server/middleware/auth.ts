@@ -34,7 +34,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as any;
+    // Standard Security Practice: Explicitly enforce HS256 algorithm to prevent protocol confusion attacks
+    const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as any;
     req.user = decoded;
     next();
   } catch (error) {
