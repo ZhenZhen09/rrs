@@ -144,7 +144,7 @@ class RequestWatchdog {
         
         for (const req of stRequests) {
           await pool.execute(
-            "UPDATE delivery_requests SET status = 'pending' WHERE request_id = ?",
+            "UPDATE delivery_requests SET status = 'pending' WHERE request_id = ? AND status = 'submitted_waiting'",
             [req.request_id]
           );
 
