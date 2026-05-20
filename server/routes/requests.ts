@@ -366,14 +366,19 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
 
 // Cancel a request (Admin can cancel anytime; Personnel only within 60s window)
 router.put('/:id/cancel', async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
     const { admin_remark } = req.body;
     const user = (req as AuthRequest).user!;
     
-    const [rows] = await pool.query('SELECT status, delivery_status, requester_id, requester_department, delivery_date FROM delivery_requests WHERE request_id = ?', [id]) as any[];
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query('SELECT status, delivery_status, requester_id, assigned_rider_id, requester_department, delivery_date FROM delivery_requests WHERE request_id = ? FOR UPDATE', [id]) as any[];
     
     if (!rows || rows.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ error: 'Request not found.' });
     }
 
@@ -383,21 +388,88 @@ router.put('/:id/cancel', async (req, res) => {
     const isAuthorized = user.role === 'admin' || (user.role === 'personnel' && request.status === 'submitted_waiting' && (request.requester_id === user.id || request.requester_department === user.department));
     
     if (!isAuthorized) {
+      await conn.rollback();
       return res.status(403).json({ error: 'You do not have permission to cancel this request.' });
     }
 
     if (['completed', 'failed'].includes(request.delivery_status)) {
+      await conn.rollback();
       return res.status(400).json({ error: 'Cannot cancel a request that is already terminal.' });
     }
 
-    await pool.query(`
+    await conn.query(`
       UPDATE delivery_requests SET status = 'cancelled', delivery_status = 'cancelled', admin_remark = ? WHERE request_id = ?
     `, [admin_remark || 'Cancelled by requester', id]);
 
+    // Create notifications for Personnel and Rider (if assigned)
+    const requesterId = request.requester_id;
+    const riderId = request.assigned_rider_id;
+    
+    const personnelNotifId = `notif_${Date.now()}_cancel_p_${Math.random().toString(36).substring(7)}`;
+    const personnelMsg = `Your request #${String(id).slice(-6).toUpperCase()} has been cancelled.`;
+    await conn.query(
+      'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+      [personnelNotifId, requesterId, personnelMsg, 'request_cancelled', id]
+    );
+
+    let riderNotifId = null;
+    let riderMsg = null;
+    if (riderId) {
+      riderNotifId = `notif_${Date.now()}_cancel_r_${Math.random().toString(36).substring(7)}`;
+      riderMsg = `Assigned task #${String(id).slice(-6).toUpperCase()} has been cancelled.`;
+      await conn.query(
+        'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+        [riderNotifId, riderId, riderMsg, 'assignment_cancelled', id]
+      );
+    }
+
+    await conn.commit();
+
+    // REAL-TIME BROADCAST
+    const io = req.app.get('io');
+    if (io) {
+      // 1. Notify the Personnel
+      io.to(requesterId).emit('notification-added', { 
+        id: personnelNotifId, 
+        message: personnelMsg, 
+        type: 'request_cancelled', 
+        request_id: id 
+      });
+
+      // 2. Notify the Rider (if exists)
+      if (riderId) {
+        io.to(riderId).emit('notification-added', { 
+          id: riderNotifId, 
+          message: riderMsg, 
+          type: 'assignment_cancelled', 
+          request_id: id 
+        });
+      }
+
+      // 3. Global update for dashboards
+      io.emit('request-updated', { 
+        request_id: id, 
+        status: 'cancelled', 
+        delivery_status: 'cancelled',
+        updated_at: new Date().toISOString()
+      });
+
+      // 4. Delivery status specific update
+      io.emit('delivery-status-updated', { 
+        request_id: id, 
+        status: 'cancelled' 
+      });
+
+      console.log(`📡 Broadcast: Request ${id} cancelled. Notified requester ${requesterId}${riderId ? ` and rider ${riderId}` : ''}`);
+    }
+
     res.json({ success: true });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error('Cancellation error:', error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -448,6 +520,19 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
       [notifId, rider_id, msg, 'new_assignment', id]
     );
 
+    // FIX: Also notify the Personnel (Requester) that their request was approved/assigned
+    const [reqDetails]: any = await conn.query('SELECT requester_id FROM delivery_requests WHERE request_id = ?', [id]);
+    const requesterId = reqDetails[0]?.requester_id;
+    const personnelNotifId = `notif_${Date.now()}_pers_${Math.random().toString(36).substring(2, 7)}`;
+    const personnelMsg = `Your request #${String(id).slice(-8).toUpperCase()} has been approved and assigned to ${riderName}.`;
+    
+    if (requesterId) {
+      await conn.query(
+        'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+        [personnelNotifId, requesterId, personnelMsg, 'request_approved', id]
+      );
+    }
+
     await conn.commit();
 
     // REAL-TIME BROADCAST: Notify the specific rider and all admins
@@ -457,8 +542,27 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
       io.to(rider_id).emit('new_assignment', { request_id: id, rider_name: riderName });
       io.to(rider_id).emit('notification-added', { id: notifId, message: msg, type: 'new_assignment', request_id: id });
       
-      // 2. Refresh lists for everyone (admin dashboards)
-      io.emit('request-updated', { request_id: id, status: 'approved' });
+      // 2. Tell the Personnel (Requester) directly
+      if (requesterId) {
+        io.to(requesterId).emit('notification-added', { 
+          id: personnelNotifId, 
+          message: personnelMsg, 
+          type: 'request_approved', 
+          request_id: id 
+        });
+      }
+
+      // 3. Refresh lists for everyone (admin dashboards)
+      // ENRICHED PAYLOAD (FIX 08): Include delivery_status and rider info for instant sync
+      io.emit('request-updated', { 
+        request_id: id, 
+        status: 'approved',
+        delivery_status: 'assigned',
+        assigned_rider_id: rider_id,
+        assigned_rider_name: riderName,
+        admin_remark: admin_remark,
+        updated_at: new Date().toISOString()
+      });
       
       console.log(`📡 Broadcast: Task ${id} assigned to ${rider_id}`);
     }
@@ -492,7 +596,7 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
       if (details.length > 0) {
         const { requester_id } = details[0];
         const requestIdStr = id as string;
-        const msg = `Your request #${requestIdStr.slice(-6).toUpperCase()} has been declined.`;
+        const msg = `Your request #${requestIdStr.slice(-6).toUpperCase()} has been declined${admin_remark ? `: ${admin_remark}` : '.'}`;
         const notifId = `notif_${Date.now()}_d_${Math.random().toString(36).substring(7)}`;
         await pool.query(
           'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
@@ -581,6 +685,25 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
     const io = req.app.get('io');
     if (io) {
       io.emit('request-updated', { request_id: id, status: 'pending' });
+
+      // Notify admins
+      const [admins]: any = await pool.query('SELECT id FROM users WHERE role = "admin"');
+      const requestIdStr = id as string;
+      const msg = `Request #${requestIdStr.slice(-6).toUpperCase()} has been resubmitted for approval.`;
+      
+      for (const admin of admins) {
+        const notifId = `notif_${Date.now()}_resub_${Math.random().toString(36).substring(7)}`;
+        await pool.query(
+          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+          [notifId, admin.id, msg, 'request_submitted', id]
+        );
+        io.to(admin.id).emit('notification-added', { 
+          id: notifId, 
+          message: msg, 
+          type: 'request_submitted', 
+          request_id: id 
+        });
+      }
     }
 
     res.json({ success: true });
@@ -650,7 +773,7 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
           if (details.length > 0) {
             const { requester_id, assigned_rider_name } = details[0];
             const type = status === 'failed' ? 'delivery_failed' : 'delivery_completed';
-            const msg = `Delivery #${String(id).slice(-6).toUpperCase()} has been marked as ${status.toUpperCase()} by ${assigned_rider_name}.`;
+            const msg = `Delivery #${String(id).slice(-6).toUpperCase()} has been marked as ${status.toUpperCase()} by ${assigned_rider_name}${remark ? `: ${remark}` : '.'}`;
 
             // A. Notify Requester (Personnel)
             const notifIdP = `notif_${Date.now()}_p_${Math.random().toString(36).substring(7)}`;
@@ -702,37 +825,6 @@ router.get('/:id/history', async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-// GET /api/requests/:id/status-history - Get audit logs for a request (BOLA protection)
-router.get('/:id/status-history', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const user = (req as AuthRequest).user!;
-
-    // BOLA PROTECTION: Check permissions first
-    const [rows] = await pool.query('SELECT requester_id, requester_department, assigned_rider_id FROM delivery_requests WHERE request_id = ?', [id]);
-    if ((rows as any[]).length === 0) return res.status(404).json({ error: 'Request not found' });
-
-    const request = (rows as any[])[0];
-    const isAuthorized = user.role === 'admin' || 
-                       request.requester_id === user.id || 
-                       (user.department && request.requester_department === user.department) ||
-                       request.assigned_rider_id === user.id;
-
-    if (!isAuthorized) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    const [logs] = await pool.query(
-      'SELECT timestamp, status, remark FROM status_logs WHERE request_id = ? ORDER BY timestamp ASC',
-      [id]
-    );
-    res.json(logs);
-  } catch (error) {
-    console.error('Status history error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });
