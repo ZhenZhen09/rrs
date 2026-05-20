@@ -18,10 +18,14 @@ export default function AdminLoginScreen() {
     }
 
     try {
-      await login(email, password);
-      router.replace('/(tabs)');
+      const result = await login(email, password);
+      if (result.success) {
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Login Failed', result.error || 'Invalid email or password. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+      Alert.alert('Login Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
