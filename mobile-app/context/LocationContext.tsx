@@ -148,8 +148,23 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     socketRef.current = io(Config.API_URL, { transports: ['websocket'] });
     const socket = socketRef.current;
 
-    const refreshRiderData = () => {
+    const refreshRiderData = (data?: any) => {
       if (!user?.id) return;
+
+      // Handle remote job termination or re-assignment
+      if (data?.request_id && data.request_id === activeRequestId.current) {
+        const status = data.delivery_status || data.status;
+        const terminalStatuses = ['cancelled', 'completed', 'failed', 'disapproved'];
+        
+        const isTerminated = terminalStatuses.includes(status);
+        const isReassigned = data.assigned_rider_id && data.assigned_rider_id !== user.id;
+
+        if (isTerminated || isReassigned) {
+          console.log(`[LocationContext] Stopping tracking for ${data.request_id} due to remote ${isReassigned ? 're-assignment' : 'termination (' + status + ')'}`);
+          stopTracking();
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
       queryClient.invalidateQueries({ queryKey: ['requestCounts', user.id] });
