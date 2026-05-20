@@ -698,8 +698,10 @@ router.put('/:id/return', authorize(['admin']), validate(returnRequestSchema), a
 
 // Resubmit a request (Personnel only)
 router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRequestSchema), async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
+    const user = (req as AuthRequest).user!;
     const {
       delivery_date, time_window, pickup_location, dropoff_location,
       pickup_contact_name, pickup_contact_mobile,
@@ -707,7 +709,38 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
       personnel_instructions
     } = req.body;
 
-    await pool.query(`
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1. LOCK the row and check status to prevent resubmitting jobs that aren't returned for revision
+    // BOLA PROTECTION: Also fetch requester_id and department for authorization
+    const [rows]: any = await conn.query(
+      'SELECT status, requester_id, requester_department FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      [id]
+    );
+
+    if (!rows || rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const request = rows[0];
+
+    // BOLA Check: Personnel can only resubmit if it's their own or their department's
+    if (user.role === 'personnel' && request.requester_id !== user.id && request.requester_department !== user.department) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to resubmit this request' });
+    }
+
+    const currentStatus = request.status;
+    if (currentStatus !== 'returned_for_revision') {
+      await conn.rollback();
+      return res.status(400).json({ 
+        error: `Cannot resubmit a request that is currently '${currentStatus}'. Only jobs returned for revision can be resubmitted.` 
+      });
+    }
+
+    await conn.query(`
       UPDATE delivery_requests SET 
         delivery_date = ?, time_window = ?, 
         pickup_lat = ?, pickup_lng = ?, pickup_address = ?, pickup_business_name = ?, pickup_landmarks = ?,
@@ -729,6 +762,8 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
       request_type, urgency_level, personnel_instructions || null, on_behalf_of || null,
       id
     ]);
+
+    await conn.commit();
 
     const io = req.app.get('io');
     if (io) {
@@ -756,8 +791,11 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
 
     res.json({ success: true });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error("Resubmit error:", error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
