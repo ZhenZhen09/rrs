@@ -715,19 +715,43 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
 
 // Update delivery status (Riders only for their own tasks)
 router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const { id } = req.params;
     const { status, remark, current_lat, current_lng, timestamp } = req.body;
     const user = (req as AuthRequest).user!;
 
+    await connection.beginTransaction();
+
+    // SECURITY & INTEGRITY: Fetch current state with lock
+    const [currentRows] = await connection.query(
+      'SELECT status, delivery_status, assigned_rider_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      [id]
+    ) as any[];
+
+    if (!currentRows || currentRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    const current = currentRows[0];
+
     // SECURITY: Ensure only the assigned rider can update status
     if (user.role === 'rider') {
-       const [checkRows] = await pool.query('SELECT assigned_rider_id FROM delivery_requests WHERE request_id = ?', [id]) as any[];
-       if (!checkRows || checkRows[0]?.assigned_rider_id !== user.id) {
+       if (current.assigned_rider_id !== user.id) {
+          await connection.rollback();
           return res.status(403).json({ error: 'Access denied.' });
        }
     } else if (user.role !== 'admin') {
+       await connection.rollback();
        return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // INTEGRITY CHECK: Reject updates if job is terminal
+    const terminalStatuses = ['completed', 'failed', 'cancelled', 'disapproved', 'delivered'];
+    if (terminalStatuses.includes(current.delivery_status) || terminalStatuses.includes(current.status)) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Cannot update status of a terminal job.' });
     }
 
     let query = 'UPDATE delivery_requests SET delivery_status = ?, rider_remark = ?';
@@ -746,17 +770,19 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     query += ' WHERE request_id = ?';
     params.push(id);
 
-    await pool.query(query, params);
+    await connection.query(query, params);
+
+    // 1. Audit Log Entry (Inside Transaction)
+    await connection.query(
+      'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
+      [id, user.id, status, remark || `Status updated to ${status}`]
+    );
+
+    await connection.commit();
 
     // --- SENIOR FIX: REAL-TIME BROADCAST & NOTIFICATIONS ---
     const io = req.app.get('io');
     if (io) {
-      // 1. Audit Log Entry
-      await pool.query(
-        'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
-        [id, user.id, status, remark || `Status updated to ${status}`]
-      );
-
       // 2. Broadcast UI refresh signals (Global and Specific)
       io.emit('delivery-status-updated', { request_id: id, status, remark });
       io.emit('request-updated', { request_id: id, status: 'approved', delivery_status: status });
@@ -802,8 +828,11 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
+    if (connection) await connection.rollback();
     console.error(error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
