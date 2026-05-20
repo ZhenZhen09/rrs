@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { encode as base64Encode } from 'base-64';
@@ -27,20 +27,8 @@ interface FleetPulseMapProps {
   activeJobs: FleetJob[];
 }
 
-/**
- * FleetPulseMap Component
- * A reusable dashboard component that displays multiple riders and active jobs on a single map.
- * Optimized for real-time overview with dynamic updates.
- */
-export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
-  riders,
-  activeJobs
-}) => {
-  const webViewRef = useRef<WebView>(null);
-  const initialBoundsSet = useRef(false);
-
-  // Blue Car SVG - Matches TrackingMap.tsx and Admin Portal style
-  const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+// Optimization: Moved carMarkerSvg outside the component to prevent re-allocation
+const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <path fill="#073f5a" d="M256 25c-82 0-103 29-103 88v22c-11 4-18 9-18 16v24c0 4 3 6 7 5l14-5v226c0 57 25 84 100 86 75-2 100-29 100-86V175l14 5c4 1 7-1 7-5v-24c0-7-7-12-18-16v-22C359 54 338 25 256 25Z"/>
   <path fill="#3aa3d9" d="M256 39c-72 0-91 24-91 76v34c-16 4-28 10-28 18v14c0 3 2 4 5 3l23-9v223c0 48 20 72 91 74 71-2 91-26 91-74V175l23 9c3 1 5 0 5-3v-14c0-8-12-14-28-18v-34c0-52-19-76-91-76Z"/>
   <path fill="#053d56" d="M192 162c43-13 85-18 128-5l-10 70c-36-14-72-18-108 0l-10-65Z"/>
@@ -63,9 +51,22 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
   <path fill="#197aa5" opacity=".35" d="M256 39c-72 0-91 24-91 76v34c-10 3-19 6-24 10 54-19 132-32 206-10v-34c0-52-19-76-91-76Z"/>
 </svg>`;
 
+/**
+ * FleetPulseMap Component
+ * A reusable dashboard component that displays multiple riders and active jobs on a single map.
+ * Optimized for real-time overview with dynamic updates.
+ */
+export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
+  riders,
+  activeJobs
+}) => {
+  const webViewRef = useRef<WebView>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const initialBoundsSet = useRef(false);
+
   const carMarkerDataUri = useMemo(() => {
     return `data:image/svg+xml;base64,${base64Encode(carMarkerSvg)}`;
-  }, [carMarkerSvg]);
+  }, []);
 
   const mapHtml = useMemo(() => {
     return `
@@ -129,7 +130,7 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
           const pickupIcon = createPinIcon('#10B981'); // Green
           const dropoffIcon = createPinIcon('#EF4444'); // Red
 
-          window.updateFleet = (riders, jobs, shouldCenter) => {
+          function updateFleet(riders, jobs, shouldCenter) {
             const currentRiderIds = new Set(riders.map(r => r.id));
             
             // Cleanup missing riders
@@ -192,24 +193,36 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
                 map.fitBounds(group.getBounds(), { padding: [60, 60], animate: true });
               }
             }
-          };
+          }
+
+          // Safety: Listen for message event to handle data updates
+          window.addEventListener('message', (event) => {
+            try {
+              const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+              if (data && data.riders && data.activeJobs) {
+                updateFleet(data.riders, data.activeJobs, data.shouldCenter);
+              }
+            } catch (e) {
+              console.error('Failed to parse message data', e);
+            }
+          });
         </script>
       </body>
     </html>
     `;
   }, [carMarkerDataUri]);
 
-  // Handle real-time updates
+  // Handle real-time updates - Reliability: ensure initial data is sent only after WebView onLoad
   useEffect(() => {
-    if (webViewRef.current) {
+    if (isLoaded && webViewRef.current) {
       const shouldCenter = !initialBoundsSet.current;
       const payload = JSON.stringify({ riders, activeJobs, shouldCenter });
       
+      // Safety: Use window.postMessage via injectJavaScript to send structured data
       webViewRef.current.injectJavaScript(`
-        if(window.updateFleet) {
-          const data = ${payload};
-          window.updateFleet(data.riders, data.activeJobs, data.shouldCenter);
-        }
+        (function() {
+          window.postMessage(${payload}, '*');
+        })();
         true;
       `);
 
@@ -217,7 +230,7 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
         initialBoundsSet.current = true;
       }
     }
-  }, [riders, activeJobs]);
+  }, [riders, activeJobs, isLoaded]);
 
   return (
     <View style={styles.container}>
@@ -226,9 +239,10 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
         originWhitelist={['*']} 
         source={{ html: mapHtml }} 
         scrollEnabled={false} 
-        style={{ flex: 1 }} 
+        style={styles.webView} 
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onLoad={() => setIsLoaded(true)}
         onError={(syntheticEvent) => {
           const { nativeEvent } = syntheticEvent;
           console.warn('WebView error: ', nativeEvent);
@@ -240,4 +254,5 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
 
 const styles = StyleSheet.create({
   container: { width: '100%', height: '100%', backgroundColor: '#f8fafc' },
+  webView: { flex: 1 },
 });
