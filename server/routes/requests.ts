@@ -579,72 +579,120 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
 
 // Disapprove a request (Admin only)
 router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSchema), async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
     const { admin_remark } = req.body;
     
-    await pool.query(`
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // LOCK and VALIDATE: Only pending/submitted_waiting can be disapproved
+    const [rows]: any = await conn.query(
+      'SELECT status, requester_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      [id]
+    );
+
+    if (!rows || rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const { status, requester_id } = rows[0];
+    if (status !== 'pending' && status !== 'submitted_waiting') {
+      await conn.rollback();
+      return res.status(400).json({ 
+        error: `Cannot disapprove a request that is currently '${status}'. Only pending requests can be disapproved.` 
+      });
+    }
+
+    await conn.query(`
       UPDATE delivery_requests SET status = 'disapproved', admin_remark = ? WHERE request_id = ?
     `, [admin_remark, id]);
+
+    const requestIdStr = id as string;
+    const msg = `Your request #${requestIdStr.slice(-6).toUpperCase()} has been declined${admin_remark ? `: ${admin_remark}` : '.'}`;
+    const notifId = `notif_${Date.now()}_d_${Math.random().toString(36).substring(7)}`;
+    
+    await conn.query(
+      'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+      [notifId, requester_id, msg, 'request_disapproved', id]
+    );
+
+    await conn.commit();
 
     const io = req.app.get('io');
     if (io) {
       io.emit('request-updated', { request_id: id, status: 'disapproved' });
-      
-      // Notify requester
-      const [details]: any = await pool.query('SELECT requester_id FROM delivery_requests WHERE request_id = ?', [id]);
-      if (details.length > 0) {
-        const { requester_id } = details[0];
-        const requestIdStr = id as string;
-        const msg = `Your request #${requestIdStr.slice(-6).toUpperCase()} has been declined${admin_remark ? `: ${admin_remark}` : '.'}`;
-        const notifId = `notif_${Date.now()}_d_${Math.random().toString(36).substring(7)}`;
-        await pool.query(
-          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-          [notifId, requester_id, msg, 'request_disapproved', id]
-        );
-        io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_disapproved', request_id: id });
-      }
+      io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_disapproved', request_id: id });
     }
 
     res.json({ success: true });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error("Disapprove error:", error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
 // Return for revision (Admin only)
 router.put('/:id/return', authorize(['admin']), validate(returnRequestSchema), async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
     const { admin_remark } = req.body;
     
-    await pool.query(`
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // LOCK and VALIDATE: Only pending/submitted_waiting can be returned
+    const [rows]: any = await conn.query(
+      'SELECT status, requester_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      [id]
+    );
+
+    if (!rows || rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const { status, requester_id } = rows[0];
+    if (status !== 'pending' && status !== 'submitted_waiting') {
+      await conn.rollback();
+      return res.status(400).json({ 
+        error: `Cannot return a request that is currently '${status}'. Only pending requests can be returned.` 
+      });
+    }
+
+    await conn.query(`
       UPDATE delivery_requests SET status = 'returned_for_revision', admin_remark = ? WHERE request_id = ?
     `, [admin_remark, id]);
+
+    const msg = `Action Required: Your request #${String(id).slice(-6).toUpperCase()} needs revision.`;
+    const notifId = `notif_${Date.now()}_rev_${Math.random().toString(36).substring(7)}`;
+    
+    await conn.query(
+      'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+      [notifId, requester_id, msg, 'request_revision', id]
+    );
+
+    await conn.commit();
 
     const io = req.app.get('io');
     if (io) {
       io.emit('request-updated', { request_id: id, status: 'returned_for_revision' });
-      
-      // Notify requester
-      const [details]: any = await pool.query('SELECT requester_id FROM delivery_requests WHERE request_id = ?', [id]);
-      if (details.length > 0) {
-        const { requester_id } = details[0];
-        const msg = `Action Required: Your request #${String(id).slice(-6).toUpperCase()} needs revision.`;
-        const notifId = `notif_${Date.now()}_rev_${Math.random().toString(36).substring(7)}`;
-        await pool.query(
-          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-          [notifId, requester_id, msg, 'request_revision', id]
-        );
-        io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_revision', request_id: id });
-      }
+      io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_revision', request_id: id });
     }
 
     res.json({ success: true });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error("Return error:", error);
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
