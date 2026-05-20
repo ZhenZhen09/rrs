@@ -17,7 +17,7 @@ import userRoutes from './routes/users';
 import analyticsRoutes from './routes/analytics';
 import { pool } from './db';
 import { authenticate } from './middleware/auth';
-import { onlineRiders, updateRiderPresence } from './presence';
+import { onlineRiders, updateRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate } from './locationTracking';
 
 const app = express();
@@ -125,6 +125,7 @@ class RequestWatchdog {
   }
 
   async check() {
+    cleanupOfflineRiders(this.io);
     const now = Date.now();
     console.log(`🔍 Watchdog: Checking state at ${new Date(now).toISOString()}`);
     try {
@@ -169,8 +170,8 @@ class RequestWatchdog {
 
       // --- TASK 2: MONITOR ACTIVE SHIPMENTS ---
       const [rows] = await pool.execute(
-        `SELECT request_id, assigned_rider_id, delivery_status, current_lat, current_lng 
-         FROM delivery_requests 
+        `SELECT request_id, assigned_rider_id, delivery_status, current_lat, current_lng, updated_at
+         FROM delivery_requests
          WHERE status = 'approved' AND delivery_status NOT IN ('completed', 'failed', 'disapproved')`
       );
       const activeRequests = rows as any[];
@@ -180,14 +181,17 @@ class RequestWatchdog {
         const currentExceptions = new Set<string>();
         const isOnline = onlineRiders.has(req.assigned_rider_id);
 
+        const timeSinceUpdate = now - new Date(req.updated_at).getTime();
+        const gracePeriod = 120000; // 2 minutes
+
         // Logic: signal is lost if rider is not in onlineRiders Map
+        // AND grace period has passed
         // OR if state exists but lastPing (from location update) is > 5 minutes old
-        if (!isOnline && req.assigned_rider_id) {
+        if (req.assigned_rider_id && !isOnline && timeSinceUpdate > gracePeriod) {
           currentExceptions.add('signal_lost');
         } else if (state && (now - state.lastPing > 300000)) {
           currentExceptions.add('signal_lost');
         }
-
         const stateWithExceptions = state || { exceptions: new Set() };
         const oldExceptionsList = Array.from(stateWithExceptions.exceptions).sort();
         const oldExceptionsStr = oldExceptionsList.join(',');
