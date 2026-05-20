@@ -40,7 +40,7 @@ interface DataContextType {
     currentLat?: number,
     currentLng?: number,
   ) => Promise<void>;
-  cancelRequest: (requestId: string) => Promise<void>;
+  cancelRequest: (requestId: string, adminRemark?: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   getRequestById: (requestId: string) => DeliveryRequest | undefined;
@@ -308,6 +308,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       fetchNotifications();
     });
 
+    socket.on("connect", () => {
+      console.log("Socket reconnected, refreshing state...");
+      refreshData();
+    });
+
     return () => {
       socket.off("presence-sync");
       socket.off("delivery-status-updated");
@@ -316,6 +321,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       socket.off("request-updated");
       socket.off("new_assignment");
       socket.off("notification-added");
+      socket.off("connect");
     };
   }, [socket, fetchRequests, fetchNotifications, refreshData]);
 
