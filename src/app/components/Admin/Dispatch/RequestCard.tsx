@@ -8,11 +8,16 @@ import {
   CheckCheck,
   Building2,
   Calendar,
+  AlertCircle,
+  Ban,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "../../ui/utils";
 import { DeliveryRequest } from "../../../types";
 import { formatDateTime } from "../../../utils/dateUtils";
 import { motion } from "framer-motion";
+
+import { getGroupedStatus } from "../../../utils/statusMapping";
 
 interface RequestCardProps {
   request: DeliveryRequest;
@@ -42,68 +47,54 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         color: "text-amber-500",
         dot: "bg-amber-500",
         pulse: true,
+        icon: <Clock size={10} className="text-amber-500" />
       };
     }
-    if (deliveryStatus === "completed") {
-      return {
-        label: "COMPLETED",
-        color: "text-emerald-500",
-        dot: "bg-emerald-500",
-        pulse: false,
-      };
-    }
-    if (deliveryStatus === "failed") {
-      return {
-        label: "FAILED",
-        color: "text-rose-500",
-        dot: "bg-rose-500",
-        pulse: false,
-      };
-    }
-    if (status === "approved" && deliveryStatus === "in_progress") {
-      return {
-        label: "ON ROUTE",
-        color: "text-sky-500",
-        dot: "bg-sky-500",
-        pulse: true,
-      };
-    }
-    switch (status) {
-      case "pending":
-      case "submitted_waiting":
+
+    const group = getGroupedStatus(status, deliveryStatus);
+    const riderName = request.assigned_rider_name?.split(" ")[0] || "RIDER";
+    const remark = request.rider_remark ? `: ${request.rider_remark.substring(0, 15)}${request.rider_remark.length > 15 ? '...' : ''}` : "";
+
+    switch (group) {
+      case 'done':
         return {
-          label: "PENDING",
-          color: "text-blue-500",
-          dot: "bg-blue-500",
-          pulse: true,
-        };
-      case "returned_for_revision":
-        return {
-          label: "REVISION",
-          color: "text-indigo-500",
-          dot: "bg-indigo-500",
-          pulse: true,
-        };
-      case "approved":
-        return {
-          label: "ACTIVE",
+          label: request.assigned_rider_id ? `COMPLETE (${riderName})` : "COMPLETE (ADMIN)",
           color: "text-emerald-500",
           dot: "bg-emerald-500",
-          pulse: true,
+          pulse: false,
+          icon: <CheckCircle2 size={10} className="text-emerald-500" />
         };
-      case "disapproved":
+      case 'failed':
         return {
-          label: "DECLINED",
+          label: request.assigned_rider_id ? `FAILED (${riderName})${remark}` : "FAILED (ADMIN)",
           color: "text-rose-500",
           dot: "bg-rose-500",
           pulse: false,
+          icon: <AlertCircle size={10} className="text-rose-500" />
+        };
+      case 'declined':
+        return {
+          label: "DECLINED",
+          color: "text-red-600",
+          dot: "bg-red-600",
+          pulse: false,
+          icon: <Ban size={10} className="text-red-600" />
+        };
+      case 'active':
+        return {
+          label: deliveryStatus === 'in_progress' ? "ON ROUTE" : "ACTIVE",
+          color: "text-sky-500",
+          dot: "bg-sky-500",
+          pulse: true,
+          icon: <Truck size={10} className="text-sky-500" />
         };
       default:
         return {
-          label: status.toUpperCase(),
-          color: "text-slate-500",
-          dot: "bg-slate-500",
-          pulse: false,
+          label: "PENDING",
+          color: "text-amber-500",
+          dot: "bg-amber-500",
+          pulse: true,
+          icon: <Clock size={10} className="text-amber-500" />
         };
     }
   };
@@ -274,14 +265,17 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
                 STATUS
               </span>
-              <span
-                className={cn(
-                  "text-[8px] font-black uppercase tracking-widest",
-                  statusConfig.color,
-                )}
-              >
-                {statusConfig.label}
-              </span>
+              <div className="flex items-center gap-1">
+                {statusConfig.icon}
+                <span
+                  className={cn(
+                    "text-[8px] font-black uppercase tracking-widest",
+                    statusConfig.color,
+                  )}
+                >
+                  {statusConfig.label}
+                </span>
+              </div>
             </div>
           </div>
 
