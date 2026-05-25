@@ -33,6 +33,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "bugsnag": {
+        "apiKey": "59f6e3946102d84f8000c2739bdc0a48"
+      }
     }
   }
 }

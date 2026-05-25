@@ -13,6 +13,13 @@ import { AuthManager } from '@/utils/AuthManager';
 const LOCATION_TASK_NAME = 'background-location-task';
 const STORAGE_USER_ID = '@rider_id';
 const STORAGE_REQUEST_ID = '@active_request_id';
+
+// HARDENING CONSTANTS (Slice 1)
+const FG_MAX_AGE_MS = 30000;      // 30 seconds
+const FG_MAX_ACCURACY_M = 100;    // 100 meters
+const BG_MAX_AGE_MS = 120000;     // 120 seconds
+const BG_MAX_ACCURACY_M = 300;    // 300 meters
+
 let isStoppingBackgroundTask = false;
 let hasStoppedBackgroundTask = false;
 
@@ -24,10 +31,51 @@ type LocationState = {
   isSocketConnected: boolean;
   startTracking: (requestId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
-  simulateLocation: (lat: number, lng: number, heading?: number | null) => void;
+  simulateLocation: (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => void;
 };
 
 const LocationContext = createContext<LocationState | null>(null);
+
+const isValidCoordinate = (lat: number, lng: number) => {
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0);
+};
+
+const normalizeLocation = (location: Location.LocationObject, mode: 'foreground' | 'background' = 'foreground') => {
+  const { latitude, longitude, heading, accuracy } = location.coords;
+  const timestamp = Number(location.timestamp || 0);
+  const age = Date.now() - timestamp;
+
+  if (!isValidCoordinate(latitude, longitude)) {
+    return null;
+  }
+
+  const maxAge = mode === 'foreground' ? FG_MAX_AGE_MS : BG_MAX_AGE_MS;
+  const maxAccuracy = mode === 'foreground' ? FG_MAX_ACCURACY_M : BG_MAX_ACCURACY_M;
+
+  if (!timestamp || age < 0 || age > maxAge) {
+    console.warn(`[Location] Rejecting stale ${mode} fix. Age: ${Math.round(age/1000)}s`);
+    return null;
+  }
+
+  if (accuracy !== null && accuracy !== undefined && accuracy > maxAccuracy) {
+    console.warn(`[Location] Rejecting inaccurate ${mode} fix. Accuracy: ${Math.round(accuracy)}m`);
+    return null;
+  }
+
+  return {
+    lat: latitude,
+    lng: longitude,
+    heading,
+    accuracy,
+    timestamp,
+  };
+};
 
 const resetBackgroundTaskStopState = () => {
   isStoppingBackgroundTask = false;
@@ -67,7 +115,11 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const { locations } = data as { locations?: Location.LocationObject[] };
     const location = locations?.[0];
     if (location) {
-      const { latitude, longitude } = location.coords;
+      const safeLocation = normalizeLocation(location, 'background');
+      if (!safeLocation) {
+        return;
+      }
+
       try {
         const token = await AuthManager.getValidToken();
         if (!token) {
@@ -85,9 +137,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         
         await updateLocationBackground({ 
           riderId, 
-          lat: latitude, 
-          lng: longitude, 
-          requestId 
+          lat: safeLocation.lat,
+          lng: safeLocation.lng,
+          heading: safeLocation.heading,
+          accuracy: safeLocation.accuracy,
+          timestamp: safeLocation.timestamp,
+          requestId,
         });
       } catch (err: any) {
         const status = err?.response?.status;
@@ -102,7 +157,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 });
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [isTracking, setIsTracking] = useState(false);
   const [locationPermission, setLocationPermission] =
@@ -113,6 +168,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const activeRequestId = useRef<string | null>(null);
   const foregroundSubscription = useRef<Location.LocationSubscription | null>(null);
+  const socketAuthRefreshInFlight = useRef(false);
 
   // --- TRACKING CONTROL FUNCTIONS ---
   const startTracking = async (requestId: string) => {
@@ -127,8 +183,9 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     setIsTracking(false);
   };
 
-  const simulateLocation = (lat: number, lng: number, heading?: number | null) => {
-    if (!user?.id) return;
+  const simulateLocation = (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => {
+    const targetRiderId = overrideRiderId || user?.id;
+    if (!targetRiderId || !isValidCoordinate(lat, lng)) return;
     
     // Update local state so the app UI reacts
     setLastLocation({ lat, lng, heading });
@@ -136,16 +193,53 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     // Emit to system via socket so Admin/Personnel see it
     if (socketRef.current?.connected) {
       socketRef.current.emit('update-location', {
-        riderId: user.id,
+        riderId: targetRiderId,
         lat,
         lng,
+        heading,
+        timestamp: Date.now(),
         requestId: activeRequestId.current || 'idle'
       });
     }
   };
 
   useEffect(() => {
-    socketRef.current = io(Config.API_URL, { transports: ['websocket'] });
+    if (!user?.id || !token) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      setIsSocketConnected(false);
+      setLastLocation(null);
+      return;
+    }
+
+    const recoverSocketAuth = async (reason: string) => {
+      if (socketAuthRefreshInFlight.current) return;
+
+      socketAuthRefreshInFlight.current = true;
+      try {
+        console.warn(`[LocationContext] Socket auth recovery triggered: ${reason}`);
+        const freshToken = await AuthManager.getValidToken();
+        if (!freshToken || !socketRef.current) {
+          return;
+        }
+
+        socketRef.current.auth = { token: freshToken };
+        if (!socketRef.current.connected) {
+          socketRef.current.connect();
+        }
+      } catch (err) {
+        console.error('[LocationContext] Socket auth recovery failed:', err);
+      } finally {
+        socketAuthRefreshInFlight.current = false;
+      }
+    };
+
+    socketRef.current = io(Config.API_URL, { 
+      transports: ['websocket'],
+      auth: { token }
+    });
     const socket = socketRef.current;
 
     const refreshRiderData = (data?: any) => {
@@ -165,9 +259,13 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      if (data?.request_id) {
+        queryClient.invalidateQueries({ queryKey: ['job', data.request_id] });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['historyTasks', user.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-      queryClient.invalidateQueries({ queryKey: ['requestCounts', user.id] });
     };
 
     socket.on('connect', () => {
@@ -175,7 +273,42 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       if (user?.id) socket.emit('join', user.id);
     });
 
+    let lastRefreshTime = 0;
+    const REFRESH_COOLDOWN_MS = 60000; // Only refresh once per minute maximum
+
+    const refreshSocketTokenForReconnect = async () => {
+      const now = Date.now();
+      if (now - lastRefreshTime < REFRESH_COOLDOWN_MS) {
+        return;
+      }
+
+      try {
+        console.log('[LocationContext] Proactively refreshing token for reconnect attempt...');
+        const freshToken = await AuthManager.getValidToken();
+        if (freshToken) {
+          socket.auth = { token: freshToken };
+          lastRefreshTime = Date.now();
+        }
+      } catch (err) {
+        console.error('[LocationContext] Pre-reconnect token refresh failed:', err);
+      }
+    };
+
+    socket.io.on('reconnect_attempt', () => {
+      // Socket.io listeners don't support async/await directly for blocking,
+      // but updating the .auth object before the next attempt is effective.
+      refreshSocketTokenForReconnect();
+    });
+
     socket.on('disconnect', () => setIsSocketConnected(false));
+    socket.on('connect_error', (error: Error) => {
+      setIsSocketConnected(false);
+      const message = error?.message || '';
+      console.warn('[LocationContext] Socket connect error:', message);
+      if (/auth|token|jwt/i.test(message)) {
+        recoverSocketAuth(message);
+      }
+    });
     socket.on('new_assignment', refreshRiderData);
     socket.on('request-updated', refreshRiderData);
     socket.on('delivery-status-updated', refreshRiderData);
@@ -186,9 +319,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       socket.off('request-updated', refreshRiderData);
       socket.off('delivery-status-updated', refreshRiderData);
       socket.off('notification-added', refreshRiderData);
+      socket.off('connect_error');
+      socket.io.off('reconnect_attempt', refreshSocketTokenForReconnect);
       socket.disconnect();
     };
-  }, [queryClient, user?.id]);
+  }, [queryClient, user?.id, token]);
 
   // Request permissions and setup always-on tracking
   useEffect(() => {
@@ -217,7 +352,60 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
       setBackgroundPermissionGranted(bgStatus === 'granted');
 
-      // 5. Start Foreground Tracking (Always-On for Online Riders)
+      const publishLocation = async (
+        location: Location.LocationObject,
+        source: 'initial' | 'watch',
+      ) => {
+        const safeLocation = normalizeLocation(location);
+        if (!safeLocation) {
+          console.warn(`[LocationContext] Ignoring stale or inaccurate ${source} location`);
+          return;
+        }
+
+        setLastLocation({
+          lat: safeLocation.lat,
+          lng: safeLocation.lng,
+          heading: safeLocation.heading,
+        });
+
+        const payload = {
+          riderId: user.id,
+          lat: safeLocation.lat,
+          lng: safeLocation.lng,
+          heading: safeLocation.heading,
+          accuracy: safeLocation.accuracy,
+          timestamp: safeLocation.timestamp,
+          requestId: activeRequestId.current || 'idle',
+        };
+
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('update-location', payload);
+          return;
+        }
+
+        try {
+          await updateLocationBackground(payload);
+        } catch (err: any) {
+          const status = err?.response?.status;
+          if (status === 401 || status === 403) {
+            console.warn(`[LocationContext] Foreground location fallback rejected: ${status}`);
+          } else {
+            console.error('[LocationContext] Foreground location fallback failed:', err);
+          }
+        }
+      };
+
+      // 5. Send a fresh first fix before starting continuous watching.
+      try {
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        await publishLocation(initialLocation, 'initial');
+      } catch (err) {
+        console.warn('[LocationContext] Initial location fix failed:', err);
+      }
+
+      // 6. Start Foreground Tracking (Always-On for Online Riders)
       if (foregroundSubscription.current) foregroundSubscription.current.remove();
       
       foregroundSubscription.current = await Location.watchPositionAsync(
@@ -227,21 +415,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           timeInterval: 5000,
         },
         (location) => {
-          const { latitude, longitude, heading } = location.coords;
-          setLastLocation({ lat: latitude, lng: longitude, heading });
-          
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('update-location', {
-              riderId: user.id,
-              lat: latitude,
-              lng: longitude,
-              requestId: activeRequestId.current || 'idle'
-            });
-          }
+          publishLocation(location, 'watch');
         }
       );
 
-      // 6. Start Background Task
+      // 7. Start Background Task
       const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
       if (!isRegistered && bgStatus === 'granted') {
         await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {

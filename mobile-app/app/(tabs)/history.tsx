@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl, P
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { formatDisplayDate, getLocalDateStr } from '@/utils/dateUtils';
+import { formatDisplayDate } from '@/utils/dateUtils';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -14,7 +14,7 @@ import { NotificationModal } from '@/components/NotificationModal';
 export default function HistoryScreen() {
   // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
   const { 
-    tasks: allTasks,
+    historyTasks: tasks,
     loading,
     refreshing,
     onRefresh,
@@ -27,15 +27,6 @@ export default function HistoryScreen() {
     handleMarkAllRead,
     router
   } = useDashboard();
-
-  // Filter terminal statuses for History
-  const todayStr = getLocalDateStr(new Date());
-  const tasks = allTasks.filter(req => {
-    const isTerminal = ['completed', 'delivered', 'cancelled', 'disapproved', 'failed'].includes(req.delivery_status) || 
-                       ['cancelled', 'disapproved'].includes(req.status);
-    
-    return isTerminal;
-  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

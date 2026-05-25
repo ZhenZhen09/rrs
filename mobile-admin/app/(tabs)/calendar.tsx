@@ -1,24 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Modal, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { COLORS, RADIUS, TYPOGRAPHY } from '../../constants/Theme';
 import api from '../../services/api';
 import { useRealTime } from '../../context/RealTimeContext';
-import { getGroupedStatus } from '../../utils/statusMapping';
+import { getGroupedStatus, getStatusColor, UIGroupStatus } from '../../utils/statusMapping';
 import { PremiumJobCard } from '../../components/Dispatch/PremiumJobCard';
 import { moderateScale, verticalScale } from '../../utils/responsive';
 
 import { useAuth } from '../../context/AuthContext';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function CalendarScreen() {
+  const router = useRouter();
   const { lastRequestUpdate, showToast } = useRealTime();
-  const { user: authUser } = useAuth();
+  const { user: authUser, isAuthenticated, isLoading: authLoading } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
   // Modal State
   const [selectedJob, setSelectedJob] = useState<any>(null);
@@ -28,8 +35,11 @@ export default function CalendarScreen() {
   const [isAssigning, setIsAssigning] = useState(false);
 
   const fetchRiders = async () => {
+    // SECURITY GUARD: Only fetch if authorized
+    if (authUser?.role !== 'admin' && authUser?.role !== 'personnel') return;
+    
     try {
-      const response = await api.get('/api/users/riders');
+      const response = await api.get('/users/riders');
       const allUsers = Array.isArray(response.data) ? response.data : response.data.data || [];
       setRiders(allUsers);
     } catch (error) {
@@ -42,7 +52,7 @@ export default function CalendarScreen() {
     if (authUser?.role !== 'admin') return;
 
     if (job.uiGroup === 'active' || job.uiGroup === 'done' || job.uiGroup === 'failed' || job.uiGroup === 'declined') {
-      // For now, let's allow viewing details or just leave it
+      router.push({ pathname: '/job/[id]', params: { id: job.id } });
     } else {
       setSelectedJob(job);
     }
@@ -53,7 +63,7 @@ export default function CalendarScreen() {
 
     setIsAssigning(true);
     try {
-      await api.put(`/api/requests/${selectedJob.id}/approve`, {
+      await api.put(`/requests/${selectedJob.id}/approve`, {
         rider_id: selectedRiderId,
         admin_remark: adminRemark,
       });
@@ -72,9 +82,15 @@ export default function CalendarScreen() {
   };
 
   const fetchRequests = useCallback(async () => {
+    if (authLoading || !isAuthenticated || !authUser) {
+      setIsLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await api.get('/api/requests?limit=100');
+      const response = await api.get('/requests?limit=100');
       setRequests(response.data.data || []);
       fetchRiders();
     } catch (error) {
@@ -83,7 +99,7 @@ export default function CalendarScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [authLoading, isAuthenticated, authUser]);
 
   useEffect(() => {
     fetchRequests();
@@ -96,6 +112,34 @@ export default function CalendarScreen() {
 
   const daysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
+  const toDateString = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const dateFromParts = (year: number, month: number, day: number) => new Date(year, month, day);
+
+  const toggleCalendar = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsCalendarExpanded(prev => !prev);
+  };
+
+  const selectDate = (date: Date) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedDate(date);
+    setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    if (isCalendarExpanded) setIsCalendarExpanded(false);
+  };
+
+  const changeMonth = (delta: number) => {
+    const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCurrentMonth(nextMonth);
+    setSelectedDate(nextMonth);
+  };
+
+  const getGroupsForDate = (dateString: string): UIGroupStatus[] => {
+    const groups = requests
+      .filter(req => req.delivery_date === dateString)
+      .map(req => getGroupedStatus(req.status, req.delivery_status));
+    return Array.from(new Set(groups)).slice(0, 4);
+  };
 
   const renderHeader = () => {
     const monthNames = ["January", "February", "March", "April", "May", "June",
@@ -110,18 +154,39 @@ export default function CalendarScreen() {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity 
-            onPress={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1)))}
+            onPress={() => changeMonth(-1)}
             style={styles.headerButton}
           >
             <MaterialIcons name="chevron-left" size={28} color={COLORS.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)))}
+            onPress={() => changeMonth(1)}
             style={styles.headerButton}
           >
             <MaterialIcons name="chevron-right" size={28} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  };
+
+  const renderLegend = () => {
+    const items: { label: string; group: UIGroupStatus }[] = [
+      { label: 'Pending', group: 'pending' },
+      { label: 'Active', group: 'active' },
+      { label: 'Done', group: 'done' },
+      { label: 'Failed', group: 'failed' },
+      { label: 'Declined', group: 'declined' },
+    ];
+
+    return (
+      <View style={styles.legendRow}>
+        {items.map(item => (
+          <View key={item.group} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: getStatusColor(item.group) }]} />
+            <Text style={styles.legendText}>{item.label}</Text>
+          </View>
+        ))}
       </View>
     );
   };
@@ -137,12 +202,66 @@ export default function CalendarScreen() {
     );
   };
 
+  const renderDateCell = (date: Date, key: string, isOutsideMonth = false) => {
+    const dateString = toDateString(date);
+    const groups = getGroupsForDate(dateString);
+    const isSelected = toDateString(selectedDate) === dateString;
+    const isToday = toDateString(new Date()) === dateString;
+
+    return (
+      <View key={key} style={[
+        isOutsideMonth && styles.outsideMonthWrapper,
+        isSelected && styles.selectedDayWrapper,
+      ]}>
+      <TouchableOpacity
+        style={[
+          styles.daySlot,
+          isSelected && styles.selectedDaySlot,
+          isOutsideMonth && styles.outsideMonthSlot
+        ]}
+        onPress={() => selectDate(date)}
+      >
+        <Text style={[
+          styles.dayText,
+          isSelected && styles.selectedDayText,
+          isToday && !isSelected && styles.todayText,
+          isOutsideMonth && styles.outsideMonthText
+        ]}>
+          {date.getDate()}
+        </Text>
+        {groups.length > 0 && (
+          <View style={styles.eventDotsRow}>
+            {groups.map((group, index) => (
+              <View
+                key={group}
+                style={[styles.eventDot, { backgroundColor: getStatusColor(group) }]}
+              />
+            ))}
+          </View>
+        )}
+      </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderCalendarGrid = () => {
     const month = currentMonth.getMonth();
     const year = currentMonth.getFullYear();
     const totalDays = daysInMonth(month, year);
     const firstDay = firstDayOfMonth(month, year);
-    
+
+    if (!isCalendarExpanded) {
+      const weekStart = new Date(selectedDate);
+      weekStart.setDate(selectedDate.getDate() - selectedDate.getDay());
+      const weekDays = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(weekStart);
+        date.setDate(weekStart.getDate() + index);
+        return renderDateCell(date, `week-${toDateString(date)}`, date.getMonth() !== month);
+      });
+
+      return <View style={styles.calendarGrid}>{weekDays}</View>;
+    }
+
     const calendarDays = [];
     // Empty slots for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
@@ -151,32 +270,7 @@ export default function CalendarScreen() {
     
     // Days of the month
     for (let i = 1; i <= totalDays; i++) {
-      const isSelected = selectedDate.getDate() === i && 
-                         selectedDate.getMonth() === month && 
-                         selectedDate.getFullYear() === year;
-      const isToday = new Date().getDate() === i && 
-                      new Date().getMonth() === month && 
-                      new Date().getFullYear() === year;
-
-      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      const hasEvents = requests.some(req => req.delivery_date === dateString);
-
-      calendarDays.push(
-        <TouchableOpacity 
-          key={i} 
-          style={[styles.daySlot, isSelected && styles.selectedDaySlot]}
-          onPress={() => setSelectedDate(new Date(year, month, i))}
-        >
-          <Text style={[
-            styles.dayText, 
-            isSelected && styles.selectedDayText,
-            isToday && !isSelected && styles.todayText
-          ]}>
-            {i}
-          </Text>
-          {hasEvents && <View style={styles.eventDot} />}
-        </TouchableOpacity>
-      );
+      calendarDays.push(renderDateCell(dateFromParts(year, month, i), `month-${i}`));
     }
 
     return (
@@ -186,12 +280,14 @@ export default function CalendarScreen() {
     );
   };
 
-  const renderScheduleItem = ({ item }: { item: any }) => (
-    <PremiumJobCard 
-      job={item} 
-      onPress={handleJobPress} 
-      activeTab={item.uiGroup === 'pending' ? 'Pending' : (item.uiGroup === 'active' ? 'Active' : (item.uiGroup === 'queuing' ? 'Queuing' : 'Done'))} 
-    />
+  const renderScheduleItem = ({ item, index }: { item: any; index: number }) => (
+    <View>
+      <PremiumJobCard
+        job={item}
+        onPress={handleJobPress}
+        activeTab={item.uiGroup === 'pending' ? 'Pending' : (item.uiGroup === 'active' ? 'Active' : (item.uiGroup === 'queuing' ? 'Queuing' : 'Done'))}
+      />
+    </View>
   );
 
   const selectedDateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
@@ -218,8 +314,18 @@ export default function CalendarScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.calendarContainer}>
         {renderHeader()}
+        {renderLegend()}
         {renderDaysOfWeek()}
         {renderCalendarGrid()}
+        <TouchableOpacity style={styles.calendarToggle} onPress={toggleCalendar} activeOpacity={0.8}>
+          <View style={isCalendarExpanded && styles.expandedToggleIcon}>
+            <MaterialIcons
+              name="keyboard-arrow-down"
+              size={22}
+              color={COLORS.secondary}
+            />
+          </View>
+        </TouchableOpacity>
       </View>
       
       <View style={styles.scheduleSection}>
@@ -356,7 +462,7 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 10,
     backgroundColor: COLORS.primaryForeground,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -380,6 +486,29 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 12,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.secondary,
+    textTransform: 'uppercase',
   },
   headerButton: {
     width: 40,
@@ -406,6 +535,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
+  outsideMonthWrapper: {
+    opacity: 0.55,
+  },
+  selectedDayWrapper: {
+    transform: [{ scale: 1.08 }],
+  },
   daySlot: {
     width: 40,
     height: 40,
@@ -413,6 +548,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 4,
     borderRadius: 20,
+  },
+  outsideMonthSlot: {
+    opacity: 0.45,
   },
   selectedDaySlot: {
     backgroundColor: COLORS.primary,
@@ -429,13 +567,35 @@ const styles = StyleSheet.create({
     color: COLORS.accentBlue,
     fontWeight: '800',
   },
+  outsideMonthText: {
+    color: COLORS.muted,
+  },
+  eventDotsRow: {
+    position: 'absolute',
+    bottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   eventDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.accentBlue,
-    position: 'absolute',
-    bottom: 4,
+  },
+  calendarToggle: {
+    alignSelf: 'center',
+    width: 72,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  expandedToggleIcon: {
+    transform: [{ rotate: '180deg' }],
   },
   scheduleSection: {
     flex: 1,

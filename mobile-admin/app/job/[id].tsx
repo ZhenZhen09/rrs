@@ -9,6 +9,38 @@ import { TrackingMap } from '../../components/Dispatch/TrackingMap';
 import { COLORS, TYPOGRAPHY } from '../../constants/Theme';
 import { Badge } from '../../components/UI/Badge';
 
+const parseSafeDate = (dateStr: any) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
+  try {
+    let formatted = String(dateStr).trim();
+    if (formatted.includes(' ') && !formatted.includes('T')) {
+      formatted = formatted.replace(' ', 'T');
+    }
+    if (!formatted.includes('+') && !formatted.includes('Z') && formatted.length >= 19) {
+      formatted = formatted + 'Z';
+    }
+    const d = new Date(formatted);
+    if (!isNaN(d.getTime())) {
+      return d;
+    }
+  } catch (e) {}
+  
+  try {
+    const parts = String(dateStr).match(/\d+/g);
+    if (parts && parts.length >= 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+      const minute = parts[4] ? parseInt(parts[4], 10) : 0;
+      const second = parts[5] ? parseInt(parts[5], 10) : 0;
+      return new Date(Date.UTC(year, month, day, hour, minute, second));
+    }
+  } catch (e) {}
+  return null;
+};
+
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 160;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.85;
@@ -38,9 +70,9 @@ export default function JobTrackingScreen() {
 
   // Native Formatter for Date
   const formatTimestamp = (dateStr: string) => {
-    if (!dateStr) return '';
+    const date = parseSafeDate(dateStr);
+    if (!date) return '';
     try {
-      const date = new Date(dateStr);
       return new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: 'numeric',
@@ -82,11 +114,16 @@ export default function JobTrackingScreen() {
           onPress: async () => {
             setIsSubmitting(true);
             try {
-              await api.put(`/api/requests/${id}/status`, { 
+              await api.put(`/requests/${id}/status`, { 
                 status,
                 remark: `Manually ${status} by Admin via Mobile`
               });
-              showToast(`Job #${String(id).slice(-6).toUpperCase()} marked as ${status}`, 'success');
+              showToast(
+                status === 'failed'
+                  ? 'Transaction marked as failed by the admin.'
+                  : 'Transaction marked as complete by the admin.',
+                'success'
+              );
               router.back();
             } catch (err) {
               console.error('Status update failed:', err);
@@ -111,7 +148,7 @@ export default function JobTrackingScreen() {
     setIsSubmitting(true);
     try {
       const endpoint = managementAction === 'return' ? 'return' : 'cancel';
-      await api.put(`/api/requests/${id}/${endpoint}`, { 
+      await api.put(`/requests/${id}/${endpoint}`, { 
         admin_remark: adminRemark 
       });
       
@@ -162,7 +199,7 @@ export default function JobTrackingScreen() {
   useEffect(() => {
     const fetchTracking = async () => {
       try {
-        const response = await api.get(`/api/requests/${id}/tracking`);
+        const response = await api.get(`/requests/${id}/tracking`);
         setTrackingData(response.data);
       } catch (error) {
         console.error('Error fetching tracking data:', error);
@@ -175,6 +212,14 @@ export default function JobTrackingScreen() {
   }, [id]);
 
   const job = trackingData?.request;
+  const isTerminal = useMemo(() => {
+    if (!job) return false;
+    const dStatus = job.delivery_status || '';
+    const status = job.status || '';
+    return ['completed', 'failed', 'disapproved', 'cancelled'].includes(dStatus) ||
+           ['disapproved', 'cancelled'].includes(status);
+  }, [job]);
+
   const assignedRiderId = job?.assigned_rider_id;
   const liveRiderLocation = assignedRiderId ? riderLocations.get(assignedRiderId) : null;
 
@@ -200,7 +245,7 @@ export default function JobTrackingScreen() {
         heading: 0
       };
     }
-    return undefined;
+    return null;
   }, [liveRiderLocation, trackingData, job]);
 
   const mapHistory = useMemo(() => {
@@ -273,8 +318,14 @@ export default function JobTrackingScreen() {
           <MaterialIcons name="arrow-back" size={24} color={COLORS.primary} />
         </TouchableOpacity>
         <View style={styles.headerBadge}>
-          <View style={[styles.pulseDot, { backgroundColor: job.delivery_status === 'completed' ? COLORS.accentBlue : (job.delivery_status === 'in_progress' ? '#0EA5E9' : '#10B981') }]} />
-          <Text style={styles.liveText}>{job.delivery_status === 'completed' ? 'DELIVERY SUMMARY' : 'LIVE TRACKING'}</Text>
+          <View style={[styles.pulseDot, { 
+            backgroundColor: job.delivery_status === 'completed' 
+              ? '#10B981' 
+              : (['failed', 'cancelled', 'disapproved'].includes(job.delivery_status || job.status)
+                ? '#EF4444' 
+                : (job.delivery_status === 'in_progress' ? '#0EA5E9' : '#F59E0B')) 
+          }]} />
+          <Text style={styles.liveText}>{isTerminal ? 'DELIVERY SUMMARY' : 'LIVE TRACKING'}</Text>
         </View>
       </SafeAreaView>
 
@@ -298,8 +349,12 @@ export default function JobTrackingScreen() {
               <Text style={styles.customerName} numberOfLines={1}>{job.recipient_name}</Text>
             </View>
             <Badge 
-              label={(job.delivery_status === 'in_progress' ? 'ON ROUTE' : (job.delivery_status || 'PENDING')).toUpperCase()} 
-              variant={job.delivery_status === 'completed' ? 'success' : 'info'} 
+              label={(job.delivery_status === 'in_progress' ? 'ON ROUTE' : (job.delivery_status || job.status || 'PENDING')).toUpperCase()} 
+              status={
+                job.delivery_status === 'completed' ? 'success' :
+                ['failed', 'cancelled', 'disapproved'].includes(job.delivery_status || job.status) ? 'danger' :
+                job.delivery_status === 'in_progress' ? 'info' : 'warning'
+              } 
             />
           </View>
         </TouchableOpacity>
@@ -377,20 +432,77 @@ export default function JobTrackingScreen() {
               <Text style={styles.adminNoteText}>{job.admin_remark || 'No specific admin instructions provided.'}</Text>
             </View>
 
-            <View style={styles.riderCard}>
-              <View style={styles.riderAvatar}>
-                <Ionicons name="bicycle" size={20} color="#FFFFFF" />
+            {job.assigned_rider_id ? (
+              <View style={styles.riderCard}>
+                <View style={styles.riderAvatar}>
+                  <Ionicons name="bicycle" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.riderLabel}>ASSIGNED RIDER</Text>
+                  <Text style={styles.riderName}>{job.assigned_rider_name}</Text>
+                </View>
+                <Text style={styles.timestamp}>
+                  {formatTimestamp(job.updated_at)}
+                </Text>
               </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.riderLabel}>ASSIGNED RIDER</Text>
-                <Text style={styles.riderName}>{job.assigned_rider_name || 'Assigning...'}</Text>
+            ) : !isTerminal ? (
+              <View style={styles.riderCard}>
+                <View style={styles.riderAvatar}>
+                  <Ionicons name="bicycle" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.riderLabel}>ASSIGNED RIDER</Text>
+                  <Text style={styles.riderName}>Assigning...</Text>
+                </View>
+                <Text style={styles.timestamp}>
+                  {formatTimestamp(job.updated_at)}
+                </Text>
               </View>
-              <Text style={styles.timestamp}>
-                {formatTimestamp(job.updated_at)}
-              </Text>
-            </View>
+            ) : null}
 
-            {job.delivery_status !== 'completed' && job.delivery_status !== 'failed' && (
+            {isTerminal && (
+              <View style={styles.deliveryDetailsCard}>
+                <View style={styles.deliveryDetailsHeader}>
+                  <MaterialIcons 
+                    name={job.delivery_status === 'completed' ? 'check-circle' : 'error'} 
+                    size={20} 
+                    color={job.delivery_status === 'completed' ? '#10B981' : '#EF4444'} 
+                  />
+                  <Text style={[
+                    styles.deliveryDetailsTitle, 
+                    { color: job.delivery_status === 'completed' ? '#10B981' : '#EF4444' }
+                  ]}>
+                    DELIVERY {job.delivery_status?.toUpperCase() || job.status?.toUpperCase()}
+                  </Text>
+                </View>
+
+                <View style={styles.deliveryInfoRow}>
+                  <MaterialIcons name="access-time" size={16} color={COLORS.muted} />
+                  <Text style={styles.deliveryTimeText}>
+                    Finished at: <Text style={{ fontWeight: '700', color: COLORS.primary }}>{formatTimestamp(job.completed_at || job.updated_at)}</Text>
+                  </Text>
+                </View>
+
+                <View style={styles.remarkSeparator} />
+
+                <Text style={styles.remarkLabel}>RIDER REMARKS / FEEDBACK</Text>
+                <Text style={[styles.remarkText, !job.rider_remark && { fontStyle: 'italic', color: COLORS.muted }]}>
+                  {job.rider_remark || 'No delivery remarks provided by the rider.'}
+                </Text>
+
+                {job.admin_remark && (
+                  <>
+                    <View style={styles.remarkSeparator} />
+                    <Text style={styles.remarkLabel}>ADMIN REMARKS / REASON</Text>
+                    <Text style={styles.remarkText}>
+                      {job.admin_remark}
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+
+            {!isTerminal && (
               <View style={styles.actionBar}>
                 {(job.delivery_status === 'pending' || job.delivery_status === 'submitted_waiting') && (
                   <>
@@ -544,5 +656,54 @@ const styles = StyleSheet.create({
   modalButton: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   cancelButton: { backgroundColor: '#E2E8F0' },
   confirmButton: { backgroundColor: COLORS.primary },
-  modalButtonText: { fontSize: 13, fontWeight: '900', color: COLORS.primary, letterSpacing: 0.5 }
+  modalButtonText: { fontSize: 13, fontWeight: '900', color: COLORS.primary, letterSpacing: 0.5 },
+  
+  deliveryDetailsCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+  },
+  deliveryDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  deliveryDetailsTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  deliveryInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  deliveryTimeText: {
+    fontSize: 13,
+    color: COLORS.secondary,
+    fontWeight: '500',
+  },
+  remarkSeparator: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 14,
+  },
+  remarkLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.muted,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  remarkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+    lineHeight: 20,
+  }
 });

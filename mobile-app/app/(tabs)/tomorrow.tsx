@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
 import { getLocalDateStr, formatDisplayDate } from '@/utils/dateUtils';
+import { getRiderTaskTab } from '@/utils/taskFilters';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -31,11 +32,7 @@ export default function TomorrowScreen() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = getLocalDateStr(tomorrow);
-  const tasks = allTasks.filter(req => {
-    const isTomorrow = getLocalDateStr(req.delivery_date) === tomorrowStr;
-    const isActive = !['completed', 'delivered', 'failed', 'cancelled'].includes(req.delivery_status);
-    return isTomorrow && isActive;
-  });
+  const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'tomorrow');
 
   const tomorrowDateLabel = formatDisplayDate(tomorrowStr);
 

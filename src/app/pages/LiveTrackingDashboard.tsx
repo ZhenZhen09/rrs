@@ -88,7 +88,7 @@ export function LiveTrackingDashboard() {
     const interval = setInterval(() => {
       fetchTrackingPayload();
       fetchRequestById(id);
-    }, 15000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [id, fetchRequestById]);

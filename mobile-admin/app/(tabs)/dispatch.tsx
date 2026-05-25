@@ -1,12 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, RADIUS, TYPOGRAPHY } from '../../constants/Theme';
 import { moderateScale, verticalScale } from '../../utils/responsive';
 import { PremiumJobCard } from '../../components/Dispatch/PremiumJobCard';
+import { LiveActivityCard } from '../../components/Dispatch/LiveActivityCard';
 import { useRealTime } from '../../context/RealTimeContext';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { getGroupedStatus } from '../../utils/statusMapping';
+
+const parseSafeDate = (dateStr: any) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
+  try {
+    let formatted = String(dateStr).trim();
+    if (formatted.includes(' ') && !formatted.includes('T')) {
+      formatted = formatted.replace(' ', 'T');
+    }
+    if (!formatted.includes('+') && !formatted.includes('Z') && formatted.length >= 19) {
+      formatted = formatted + 'Z';
+    }
+    const d = new Date(formatted);
+    if (!isNaN(d.getTime())) {
+      return d;
+    }
+  } catch (e) {}
+  
+  try {
+    const parts = String(dateStr).match(/\d+/g);
+    if (parts && parts.length >= 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+      const minute = parts[4] ? parseInt(parts[4], 10) : 0;
+      const second = parts[5] ? parseInt(parts[5], 10) : 0;
+      return new Date(Date.UTC(year, month, day, hour, minute, second));
+    }
+  } catch (e) {}
+  return null;
+};
 
 const TABS = ['Pending', 'Active', 'Done'];
 
@@ -18,39 +54,72 @@ const PREVIOUS_EXAMPLES = [
 ];
 
 export default function DispatchCenter() {
+  const router = useRouter();
   const { lastRequestUpdate } = useRealTime();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Pending');
   const [search, setSearch] = useState('');
   const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [adminInstructions, setAdminInstructions] = useState('');
+
+  useEffect(() => {
+    if (selectedJob) {
+      setAdminInstructions(selectedJob.admin_remark || '');
+    } else {
+      setAdminInstructions('');
+    }
+  }, [selectedJob]);
+
+  // Live Riders State
+  const [riders, setRiders] = useState<any[]>([]);
+  const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const fetchJobs = async () => {
+    if (authLoading || !isAuthenticated || !user) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.get('/requests?limit=100');
-      const backendJobs = response.data.delivery_requests || [];
+      const backendJobs = response.data.data || [];
       
-      const mappedJobs = backendJobs.map((bj: any) => {
-        let status = 'Pending';
-        if (bj.status === 'pending' || bj.status === 'submitted_waiting') {
-          status = 'Pending';
-        } else if (bj.status === 'approved' && !['completed', 'failed', 'cancelled'].includes(bj.delivery_status)) {
-          status = 'Active';
-        } else if (['completed', 'failed'].includes(bj.delivery_status)) {
-          status = 'Done';
-        }
+      const mappedJobs = backendJobs
+        .filter((bj: any) => bj.status !== 'submitted_waiting')
+        .map((bj: any) => {
+          const uiGroup = getGroupedStatus(bj.status, bj.delivery_status);
+          let status = 'Pending';
+          if (bj.status === 'pending') {
+            status = 'Pending';
+          } else if (bj.status === 'approved' && !['completed', 'failed', 'disapproved'].includes(bj.delivery_status || '')) {
+            status = 'Active';
+          } else if (['completed', 'failed', 'disapproved'].includes(bj.delivery_status || '') || bj.status === 'disapproved' || bj.status === 'cancelled') {
+            status = 'Done';
+          } else {
+            status = 'Done';
+          }
 
-        return {
-          id: bj.request_id,
-          customer: bj.requester_name,
-          location: bj.dropoff_location?.address || bj.dropoff_address || 'Unknown',
-          time: bj.time_window || 'ASAP',
-          status: status,
-          type: bj.request_type || 'Delivery',
-          priority: bj.urgency_level,
-          rider: bj.assigned_rider_name,
-        };
-      });
+          return {
+            id: bj.request_id,
+            customer: bj.requester_name,
+            location: bj.dropoff_location?.address || bj.dropoff_address || 'Unknown',
+            time: bj.time_window || 'ASAP',
+            status: status,
+            uiGroup,
+            type: bj.request_type || 'Delivery',
+            priority: bj.urgency_level,
+            rider: bj.assigned_rider_name,
+            delivery_status: bj.delivery_status,
+            created_at: bj.created_at,
+            completed_at: bj.completed_at,
+            updated_at: bj.updated_at,
+            admin_remark: bj.admin_remark,
+            personnel_instructions: bj.personnel_instructions,
+          };
+        });
       
       setJobs(mappedJobs);
     } catch (error) {
@@ -60,14 +129,119 @@ export default function DispatchCenter() {
     }
   };
 
-  useEffect(() => {
-    fetchJobs();
-  }, [lastRequestUpdate]);
+  const fetchRiders = async () => {
+    // SECURITY GUARD: Only fetch if authorized
+    if (user?.role !== 'admin' && user?.role !== 'personnel') return;
+    
+    try {
+      const response = await api.get('/users/riders');
+      const allUsers = Array.isArray(response.data) ? response.data : response.data.data || [];
+      setRiders(allUsers);
+    } catch (error) {
+      console.error('Failed to fetch riders:', error);
+    }
+  };
 
-  const filteredJobs = jobs.filter(job => 
-    job.status === activeTab &&
-    (job.customer?.toLowerCase().includes(search.toLowerCase()) || job.id.includes(search))
-  );
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user) {
+      fetchJobs();
+      fetchRiders();
+    }
+  }, [lastRequestUpdate, authLoading, isAuthenticated, user]);
+
+  const handleAssignRider = async () => {
+    if (!selectedRiderId || !selectedJob) return;
+    try {
+      setIsAssigning(true);
+      await api.put(`/requests/${selectedJob.id}/approve`, {
+        rider_id: selectedRiderId,
+        admin_remark: adminInstructions || 'Dispatched via Admin Mobile'
+      });
+      setSelectedJob(null);
+      setSelectedRiderId(null);
+      fetchJobs();
+    } catch (error) {
+      console.error('Failed to assign rider:', error);
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleReturnForRevision = async () => {
+    if (!selectedJob) return;
+    Alert.alert(
+      'Return for Revision?',
+      'Are you sure you want to return this request to the personnel for revision?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Return',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setIsAssigning(true);
+              await api.put(`/requests/${selectedJob.id}/return`, {
+                admin_remark: adminInstructions || 'Returned for revision by Admin'
+              });
+              setSelectedJob(null);
+              fetchJobs();
+            } catch (error) {
+              console.error('Failed to return request:', error);
+              Alert.alert('Error', 'Failed to return request. Please try again.');
+            } finally {
+              setIsAssigning(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCancelRequest = async () => {
+    if (!selectedJob) return;
+    Alert.alert(
+      'Cancel Request?',
+      'Are you sure you want to permanently cancel this request? This action is permanent.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel Request',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsAssigning(true);
+              await api.put(`/requests/${selectedJob.id}/cancel`, {
+                admin_remark: adminInstructions || 'Cancelled by Admin'
+              });
+              setSelectedJob(null);
+              fetchJobs();
+            } catch (error) {
+              console.error('Failed to cancel request:', error);
+              Alert.alert('Error', 'Failed to cancel request. Please try again.');
+            } finally {
+              setIsAssigning(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const filteredJobs = jobs
+    .filter(job => 
+      job.status === activeTab &&
+      (job.customer?.toLowerCase().includes(search.toLowerCase()) || String(job.id).includes(search))
+    )
+    .sort((a, b) => {
+      const dateA = parseSafeDate(activeTab === 'Pending' ? a.created_at : a.updated_at);
+      const dateB = parseSafeDate(activeTab === 'Pending' ? b.created_at : b.updated_at);
+      
+      const timeA = dateA ? dateA.getTime() : 0;
+      const timeB = dateB ? dateB.getTime() : 0;
+      
+      if (timeB !== timeA) return timeB - timeA;
+      return Number(b.id) - Number(a.id);
+    });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -124,15 +298,34 @@ export default function DispatchCenter() {
         )}
 
         <Text style={styles.sectionHeader}>{activeTab} Requests</Text>
-        {filteredJobs.length > 0 ? (
-          filteredJobs.map(job => (
-            <PremiumJobCard 
-              key={job.id} 
-              job={job} 
-              onPress={setSelectedJob} 
-              activeTab={activeTab} 
-            />
-          ))
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.accentBlue} />
+          </View>
+        ) : filteredJobs.length > 0 ? (
+          <>
+            {activeTab === 'Active' && <LiveActivityCard job={filteredJobs[0]} />}
+            {filteredJobs.map((job, index) => {
+              // For Active tab, the first/newest request is pinned in LiveActivityCard, 
+              // so we don't render it again as a standard PremiumJobCard below
+              if (activeTab === 'Active' && index === 0) return null;
+              
+              return (
+                <PremiumJobCard 
+                  key={job.id} 
+                  job={job} 
+                  onPress={(selectedJob) => {
+                    if (activeTab === 'Pending') {
+                      setSelectedJob(selectedJob);
+                    } else {
+                      router.push({ pathname: '/job/[id]', params: { id: selectedJob.id } });
+                    }
+                  }} 
+                  activeTab={activeTab} 
+                />
+              );
+            })}
+          </>
         ) : (
           <View style={styles.emptyContainer}>
             <FontAwesome5 name="clipboard-list" size={50} color={COLORS.border} />
@@ -163,31 +356,91 @@ export default function DispatchCenter() {
                   <Text style={styles.modalCustomer}>{selectedJob.customer}</Text>
                 </View>
 
+                {selectedJob.personnel_instructions && (
+                  <View style={styles.personnelInstructionSection}>
+                    <Text style={styles.modalSectionTitle}>Personnel Instructions</Text>
+                    <View style={styles.personnelInstructionCard}>
+                      <Text style={styles.personnelInstructionText}>
+                        {selectedJob.personnel_instructions}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.instructionSection}>
                   <Text style={styles.modalSectionTitle}>Admin Instructions</Text>
-                  <View style={styles.instructionCard}>
-                    <Text style={styles.instructionText}>
-                      Ensure rider confirms pickup with customer via call. High priority items require photos.
-                    </Text>
+                  <View style={styles.instructionInputContainer}>
+                    <TextInput
+                      style={styles.instructionInput}
+                      placeholder="Write instructions/remarks for the rider..."
+                      placeholderTextColor={COLORS.muted}
+                      value={adminInstructions}
+                      onChangeText={setAdminInstructions}
+                      multiline={true}
+                      numberOfLines={3}
+                    />
                   </View>
+                </View>
+
+                <Text style={styles.modalSectionTitle}>Management Actions</Text>
+                <View style={styles.actionButtonsRow}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.returnButton, isAssigning && styles.disabledButton]}
+                    onPress={handleReturnForRevision}
+                    disabled={isAssigning}
+                  >
+                    <MaterialIcons name="assignment-return" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Return for Revision</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton, isAssigning && styles.disabledButton]}
+                    onPress={handleCancelRequest}
+                    disabled={isAssigning}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Cancel Request</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.spacer} />
 
                 <Text style={styles.modalSectionTitle}>Select Available Rider</Text>
-                {['Rider #01 (Near)', 'Rider #15 (Available)', 'Rider #22 (Busy)'].map((rider) => (
-                  <TouchableOpacity key={rider} style={styles.riderOption}>
-                    <FontAwesome5 name="biking" size={16} color={COLORS.primary} />
-                    <Text style={styles.riderOptionText}>{rider}</Text>
-                    <MaterialIcons name="add-circle-outline" size={24} color={COLORS.accentBlue} />
-                  </TouchableOpacity>
-                ))}
+                {riders.length > 0 ? (
+                  riders.map((rider) => {
+                    const isSelected = selectedRiderId === rider.id;
+                    return (
+                      <TouchableOpacity 
+                        key={rider.id} 
+                        style={[styles.riderOption, isSelected && styles.riderOptionSelected]}
+                        onPress={() => setSelectedRiderId(rider.id)}
+                      >
+                        <FontAwesome5 name="biking" size={16} color={isSelected ? COLORS.accentBlue : COLORS.primary} />
+                        <Text style={[styles.riderOptionText, isSelected && styles.riderOptionTextSelected]}>
+                          {rider.name || rider.email}
+                        </Text>
+                        <MaterialIcons 
+                          name={isSelected ? "check-circle" : "add-circle-outline"} 
+                          size={24} 
+                          color={isSelected ? COLORS.accentBlue : COLORS.muted} 
+                        />
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.emptyText}>No available riders found</Text>
+                )}
 
                 <TouchableOpacity 
-                  style={styles.confirmDispatchButton}
-                  onPress={() => setSelectedJob(null)}
+                  style={[styles.confirmDispatchButton, (!selectedRiderId || isAssigning) && styles.disabledButton]}
+                  onPress={handleAssignRider}
+                  disabled={!selectedRiderId || isAssigning}
                 >
-                  <Text style={styles.confirmDispatchText}>Confirm Assignment</Text>
+                  {isAssigning ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.confirmDispatchText}>Confirm Assignment</Text>
+                  )}
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -286,6 +539,48 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(16), 
     textTransform: 'uppercase' 
   },
+  personnelInstructionSection: {
+    marginBottom: verticalScale(16),
+  },
+  personnelInstructionCard: {
+    backgroundColor: '#EFF6FF',
+    padding: moderateScale(16),
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.accentBlue,
+  },
+  personnelInstructionText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.primary,
+    fontWeight: '600' as any,
+    lineHeight: 20,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(16),
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: verticalScale(12),
+    borderRadius: 12,
+    marginHorizontal: moderateScale(4),
+  },
+  returnButton: {
+    backgroundColor: COLORS.warning,
+  },
+  cancelButton: {
+    backgroundColor: COLORS.danger,
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: '700' as any,
+    marginLeft: moderateScale(6),
+  },
   instructionSection: {
     marginBottom: verticalScale(12),
   },
@@ -295,6 +590,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
+  },
+  instructionInputContainer: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: verticalScale(6),
+  },
+  instructionInput: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.primary,
+    fontWeight: '650' as any,
+    lineHeight: 20,
+    minHeight: verticalScale(60),
+    textAlignVertical: 'top',
   },
   instructionText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -315,13 +626,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  riderOptionSelected: {
+    borderColor: COLORS.accentBlue,
+    backgroundColor: '#EFF6FF',
+  },
   riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontWeight: '700' as any, color: COLORS.primary, marginLeft: moderateScale(12) },
+  riderOptionTextSelected: {
+    color: COLORS.accentBlue,
+    fontWeight: '800' as any,
+  },
   confirmDispatchButton: {
     backgroundColor: COLORS.primary,
     padding: moderateScale(18),
     borderRadius: RADIUS.button,
     alignItems: 'center',
     marginTop: verticalScale(12),
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  loadingContainer: {
+    marginVertical: verticalScale(20),
+    alignItems: 'center',
   },
   confirmDispatchText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.base, fontWeight: '800' as any },
   exampleSection: { marginBottom: verticalScale(24) },

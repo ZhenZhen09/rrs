@@ -25,6 +25,10 @@ describe('dateUtils', () => {
     it('should return the same string if already YYYY-MM-DD', () => {
       expect(getLocalDateStr('2024-03-30')).toBe('2024-03-30');
     });
+
+    it('should preserve the delivery calendar date from ISO-like API values', () => {
+      expect(getLocalDateStr('2024-03-30T00:00:00.000Z')).toBe('2024-03-30');
+    });
   });
 
   describe('formatDisplayDate', () => {

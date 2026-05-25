@@ -1,27 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Modal, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { useLocation } from '@/context/LocationContext';
 import { api } from '@/utils/api';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { Colors } from '@/constants/Colors';
+import PasswordResetOverlay from '@/components/ui/PasswordResetOverlay';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
   withSpring, 
-  withTiming,
   interpolate,
   Extrapolate
 } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
+const statusConfig = {
+  checking: { color: '#EAB308', label: 'Checking Server' },
+  ready: { color: '#22C55E', label: 'System Ready' },
+  offline: { color: '#EF4444', label: 'Server Offline' },
+} as const;
+
 export default function LoginScreen() {
   const { login } = useAuth();
-  const { isSocketConnected } = useLocation();
   
   // State
   const [step, setStep] = useState<'email' | 'pin'>('email');
@@ -29,15 +31,14 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [serverStatus, setServerStatus] = useState<'checking' | 'ready' | 'offline'>('checking');
 
   // Animation shared value (0 = email, 1 = pin)
   const transition = useSharedValue(0);
 
   // Password Reset Modal State
   const [resetModalVisible, setResetModalVisible] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
   const [resetUserId, setResetUserId] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
 
   // PIN Translation Mapping
   const translatePinToPassword = (pin: string) => {
@@ -84,11 +85,11 @@ export default function LoginScreen() {
     setLoading(true);
 
     const finalPassword = translatePinToPassword(password);
-    const result: any = await login(email, finalPassword);
+    const result = await login(email, finalPassword);
     
     if (result.requirePasswordReset) {
       setLoading(false);
-      setResetUserId(result.userId);
+      setResetUserId(result.userId || '');
       setResetModalVisible(true);
       return;
     }
@@ -118,6 +119,28 @@ export default function LoginScreen() {
     }
   }, [password]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkServerHealth = async () => {
+      try {
+        setServerStatus('checking');
+        await api.get('/api/ping', { timeout: 45000 });
+        if (isMounted) setServerStatus('ready');
+      } catch {
+        if (isMounted) setServerStatus('offline');
+      }
+    };
+
+    checkServerHealth();
+    const interval = setInterval(checkServerHealth, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Animated Styles
   const emailStepStyle = useAnimatedStyle(() => {
     return {
@@ -140,28 +163,6 @@ export default function LoginScreen() {
     };
   });
 
-  const handlePasswordUpdate = async () => {
-    if (!newPassword) {
-      Alert.alert('Error', 'Password cannot be empty');
-      return;
-    }
-    try {
-      setResetLoading(true);
-      await api.post('/api/auth/update-password', {
-        userId: resetUserId,
-        newPassword: newPassword
-      });
-      setResetLoading(false);
-      setResetModalVisible(false);
-      setNewPassword('');
-      Alert.alert('Success', 'Password updated! Please login with your new credentials.');
-      handleBack(); // Go back to start
-    } catch (err: any) {
-      setResetLoading(false);
-      Alert.alert('Error', 'Failed to update password. Please try again.');
-    }
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} scrollEnabled={step === 'email'}>
@@ -172,9 +173,9 @@ export default function LoginScreen() {
           <View style={styles.content}>
             {/* Connection Status Indicator */}
             <View style={styles.connectionStatus}>
-              <View style={[styles.statusDot, { backgroundColor: isSocketConnected ? '#22C55E' : '#EAB308' }]} />
+              <View style={[styles.statusDot, { backgroundColor: statusConfig[serverStatus].color }]} />
               <Text style={styles.statusText}>
-                {isSocketConnected ? 'System Ready' : 'Connecting...'}
+                {statusConfig[serverStatus].label}
               </Text>
             </View>
 
@@ -299,35 +300,17 @@ export default function LoginScreen() {
         </KeyboardAvoidingView>
       </ScrollView>
 
-      {/* Reset Modal (Unchanged functionality) */}
-      <Modal animationType="fade" transparent visible={resetModalVisible}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <MaterialIcons name="security" size={moderateScale(32)} color="#0F172A" />
-              <Text style={styles.modalTitle}>Security Update</Text>
-              <Text style={styles.modalSubtitle}>Please set a new secure password.</Text>
-            </View>
-            <View style={styles.inputGroup}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="New password"
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry
-                />
-              </View>
-            </View>
-            <TouchableOpacity style={styles.primaryButton} onPress={handlePasswordUpdate} disabled={resetLoading}>
-              {resetLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Update Account</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCancelButton} onPress={() => setResetModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Premium Password Reset Overlay */}
+      <PasswordResetOverlay 
+        visible={resetModalVisible}
+        userId={resetUserId}
+        onClose={() => setResetModalVisible(false)}
+        onSuccess={() => {
+          setResetModalVisible(false);
+          Alert.alert('Success', 'Password updated! Please login with your new credentials.');
+          handleBack();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -563,41 +546,6 @@ const styles = StyleSheet.create({
     fontSize: normalizeFontSize(13),
     fontWeight: '700',
     textDecorationLine: 'underline',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: scale(24),
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: moderateScale(28),
-    padding: moderateScale(24),
-  },
-  modalHeader: {
-    alignItems: 'center',
-    marginBottom: verticalScale(24),
-  },
-  modalTitle: {
-    fontSize: normalizeFontSize(20),
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: verticalScale(12),
-  },
-  modalSubtitle: {
-    fontSize: normalizeFontSize(14),
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: verticalScale(4),
-  },
-  modalCancelButton: {
-    marginTop: verticalScale(16),
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#94A3B8',
-    fontWeight: '600',
   },
   warmingUpHint: {
     textAlign: 'center',

@@ -1,15 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 
 export default function AdminLoginScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, biometricEnabled, setBiometricEnabled } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      setIsBiometricSupported(compatible);
+      
+      // Auto-trigger biometric if enabled and we have a saved user
+      if (biometricEnabled && compatible) {
+        handleBiometricLogin();
+      }
+    })();
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to access Admin Control',
+        fallbackLabel: 'Use Password',
+      });
+
+      if (result.success) {
+        // In a real enterprise app, we'd use expo-secure-store to retrieve 
+        // a refresh token or similar. For this slice, we verify the biometric 
+        // and if success, we assume the session is valid or prompt for PW once.
+        // For now, let's assume we redirect to tabs if they were already authenticated.
+        const storedToken = await AsyncStorage.getItem('authToken');
+        if (storedToken) {
+           router.replace('/(tabs)');
+        } else {
+           Alert.alert('Notice', 'Please login with your password once to enable biometric access.');
+        }
+      }
+    } catch (error) {
+      console.error('Biometric auth failed:', error);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,6 +59,17 @@ export default function AdminLoginScreen() {
     try {
       const result = await login(email, password);
       if (result.success) {
+        // Suggest enabling biometric after successful login if supported
+        if (isBiometricSupported && !biometricEnabled) {
+          Alert.alert(
+            'Enable Biometric?',
+            'Would you like to use FaceID/Fingerprint for future logins?',
+            [
+              { text: 'No', style: 'cancel' },
+              { text: 'Yes', onPress: () => setBiometricEnabled(true) }
+            ]
+          );
+        }
         router.replace('/(tabs)');
       } else {
         Alert.alert('Login Failed', result.error || 'Invalid email or password. Please try again.');
@@ -92,6 +142,18 @@ export default function AdminLoginScreen() {
                   </>
                 )}
               </TouchableOpacity>
+
+              {isBiometricSupported && biometricEnabled && (
+                <TouchableOpacity 
+                  style={styles.biometricButton} 
+                  onPress={handleBiometricLogin}
+                  activeOpacity={0.7}
+                  disabled={isLoading}
+                >
+                  <MaterialIcons name="fingerprint" size={32} color="#1E293B" />
+                  <Text style={styles.biometricText}>Quick Login</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -137,4 +199,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   disabledButton: { opacity: 0.7 },
+  biometricButton: {
+    marginTop: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  biometricText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
 });

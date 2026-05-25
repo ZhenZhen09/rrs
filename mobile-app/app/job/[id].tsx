@@ -31,6 +31,7 @@ export default function JobDetailsScreen() {
     handleSubmitStatus,
     router,
     isStartingDelivery,
+    isSelfUpdated,
   } = useJobDetails();
 
   const { backgroundPermissionGranted, isSocketConnected, lastLocation, simulateLocation } = useLocation();
@@ -40,6 +41,40 @@ export default function JobDetailsScreen() {
   const [roadPath, setRoadPath] = useState<{latitude: number, longitude: number}[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const simulationInterval = useRef<NodeJS.Timeout | null>(null);
+  const remoteTerminalAlertedRef = useRef<string | null>(null);
+
+  // --- REMOTE SYNC & AUTO-NAVIGATION ---
+  useEffect(() => {
+    const status = job?.delivery_status?.toLowerCase();
+    const terminalStatuses = ['completed', 'failed', 'cancelled', 'disapproved'];
+    
+    if (status && terminalStatuses.includes(status)) {
+      if (!isSelfUpdated) {
+        if (remoteTerminalAlertedRef.current !== status) {
+          remoteTerminalAlertedRef.current = status;
+          const message = status === 'failed'
+            ? 'Transaction marked as failed by the admin.'
+            : status === 'completed'
+              ? 'Transaction marked as complete by the admin.'
+              : `This job has been marked as ${status.toUpperCase()} by the administrator.`;
+
+          Alert.alert("Job Updated", message, [{ text: "OK" }]);
+        }
+      } else {
+        // Updated by the Rider themselves
+        // We'll give them a short moment to see the completion status
+        // or just let them stay on the page until they click 'Back to Today'
+        // Given the user's feedback, they want it to go back.
+        const timer = setTimeout(() => {
+          // Only auto-navigate if the modal is closed (success submitted)
+          if (!statusModalVisible) {
+            router.replace('/(tabs)');
+          }
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [job?.delivery_status, isSelfUpdated, statusModalVisible]);
 
   const startSimulation = () => {
     if (roadPath.length === 0) {
@@ -61,7 +96,8 @@ export default function JobDetailsScreen() {
       const point = roadPath[step];
       
       // 1. Update system (Socket.io) so Admin/Personnel see it
-      simulateLocation(point.latitude, point.longitude, null);
+      // If we are an admin, we override the riderId with the job's assigned rider
+      simulateLocation(point.latitude, point.longitude, null, job?.assigned_rider_id);
 
       // 2. Update local WebView map
       const payload = JSON.stringify({ 
@@ -591,7 +627,7 @@ export default function JobDetailsScreen() {
                 )}
 
                 {(['completed', 'failed', 'cancelled'].includes(job.delivery_status?.toLowerCase())) && (
-                  <TouchableOpacity testID="job_back_to_today_button" style={[styles.primaryBtn, { backgroundColor: '#64748B' }]} onPress={() => router.back()}><Text style={styles.primaryBtnText}>BACK TO TODAY</Text></TouchableOpacity>
+                  <TouchableOpacity testID="job_back_to_today_button" style={[styles.primaryBtn, { backgroundColor: '#64748B' }]} onPress={() => router.replace('/(tabs)')}><Text style={styles.primaryBtnText}>BACK TO TODAY</Text></TouchableOpacity>
                 )}
               </View>
             </View>

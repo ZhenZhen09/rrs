@@ -3,18 +3,11 @@
  */
 export const parseLocalDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
-  
-  // If it's a full ISO string (from DB), use the Date constructor 
-  // which handles UTC to local conversion automatically.
-  if (dateStr.includes('T')) {
-    const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) return date;
-  }
 
-  // Handle YYYY-MM-DD as local midnight
+  // Delivery dates are calendar dates, not instants. Preserve the date portion
+  // even when the API/database returns an ISO timestamp at midnight UTC.
   const cleanDateStr = dateStr.substring(0, 10);
   const [year, month, day] = cleanDateStr.split('-').map(Number);
-  // Using new Date(y, m, d) creates a local date
   return new Date(year, month - 1, day);
 };
 
@@ -22,10 +15,11 @@ export const parseLocalDate = (dateStr: string): Date => {
  * Returns the current date as a YYYY-MM-DD string in local time.
  */
 export const getLocalDateStr = (d: Date | string = new Date()): string => {
-  // If it's strictly a YYYY-MM-DD string (10 chars) and NOT an ISO string, 
-  // assume it's already local format.
-  if (typeof d === 'string' && d.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    return d;
+  // Delivery dates are persisted as YYYY-MM-DD calendar values. If a backend
+  // serializes one as an ISO timestamp, keep the calendar date stable instead
+  // of shifting it through the device timezone.
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+    return d.substring(0, 10);
   }
   
   // Parse input to Date object. 

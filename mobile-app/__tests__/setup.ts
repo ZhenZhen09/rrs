@@ -5,6 +5,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+// Mock @expo/vector-icons
+jest.mock('@expo/vector-icons', () => ({
+  MaterialIcons: 'MaterialIcons',
+  Ionicons: 'Ionicons',
+}));
+
 // Mock Expo Secure Store
 jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(),

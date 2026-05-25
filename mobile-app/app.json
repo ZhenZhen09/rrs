@@ -65,7 +65,8 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -73,7 +74,7 @@
     },
     "extra": {
       "bugsnag": {
-        "apiKey": "3bc33b119b18b3fd27e265b339b425d8"
+        "apiKey": "f186e0505f78cc13537a0c788f408201"
       },
       "router": {},
       "eas": {

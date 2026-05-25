@@ -15,8 +15,10 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  biometricEnabled: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  setBiometricEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,8 +49,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
 
   const isAuthenticated = useMemo(() => !!user && !!token, [user, token]);
+
+  const setBiometricEnabled = async (enabled: boolean) => {
+    try {
+      await AsyncStorage.setItem('biometricEnabled', JSON.stringify(enabled));
+      setBiometricEnabledState(enabled);
+    } catch (error) {
+      console.error('Failed to save biometric setting:', error);
+    }
+  };
 
   const logout = useCallback(async () => {
     try {
@@ -66,6 +78,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const storedToken = await AsyncStorage.getItem('authToken');
       const userData = await AsyncStorage.getItem('user');
+      const bioSetting = await AsyncStorage.getItem('biometricEnabled');
+
+      if (bioSetting !== null) {
+        setBiometricEnabledState(JSON.parse(bioSetting));
+      }
 
       if (storedToken && userData) {
         if (isTokenExpired(storedToken)) {
@@ -78,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Try to verify session with server if possible
             try {
-              const response = await api.get('/api/auth/me');
+              const response = await api.get('/auth/me');
               const remoteUser = response.data.user || response.data;
               if (remoteUser && remoteUser.role) {
                 parsedUser = remoteUser;
@@ -117,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const response = await api.post('/api/auth/login', { email, password });
+       const response = await api.post('/auth/login', { email, password });
       
       // Requirement: inspect response.data.user.role
       // Handle both { user: { role } } and { role } structures
@@ -157,9 +174,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     token,
     isAuthenticated,
     isLoading,
+    biometricEnabled,
     login,
-    logout
-  }), [user, token, isAuthenticated, isLoading, login, logout]);
+    logout,
+    setBiometricEnabled
+  }), [user, token, isAuthenticated, isLoading, biometricEnabled, login, logout, setBiometricEnabled]);
 
   return (
     <AuthContext.Provider value={value}>

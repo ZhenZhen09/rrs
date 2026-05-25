@@ -7,23 +7,21 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/utils/api';
+import { getTasks } from '@/services/apiService';
+import { getRiderTaskCounts } from '@/utils/taskFilters';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user } = useAuth();
 
-  const fetchCounts = async () => {
-    const response = await api.get('/api/requests/counts');
-    return response.data || { today: 0, overdue: 0 };
-  };
-
-  const { data: counts = { today: 0, overdue: 0 } } = useQuery({
-    queryKey: ['requestCounts', user?.id],
-    queryFn: fetchCounts,
+  const { data: tasks = [] } = useQuery({
+    queryKey: ['tasks', user?.id],
+    queryFn: getTasks,
     enabled: !!user?.id,
     refetchInterval: 30000,
   });
+
+  const counts = getRiderTaskCounts(tasks);
 
   return (
     <Tabs

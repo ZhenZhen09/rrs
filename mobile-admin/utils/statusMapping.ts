@@ -20,7 +20,7 @@ export const getGroupedStatus = (
   }
 
   // 2. Terminal Negative - Failed/Cancelled
-  if (['failed', 'cancelled'].includes(s) || 
+  if (['failed', 'cancelled', 'returned_for_revision'].includes(s) || 
       ['failed', 'cancelled'].includes(ds)) {
     return 'failed';
   }
@@ -41,10 +41,10 @@ export const getGroupedStatus = (
 
 export const getStatusColor = (group: UIGroupStatus) => {
   switch (group) {
-    case 'active': return 'bg-sky-500';
-    case 'done': return 'bg-emerald-500';
-    case 'failed': return 'bg-rose-500';
-    case 'declined': return 'bg-red-600';
-    default: return 'bg-amber-500';
+    case 'active': return '#10B981';
+    case 'done': return '#94A3B8';
+    case 'failed': return '#F43F5E';
+    case 'declined': return '#DC2626';
+    default: return '#F59E0B';
   }
 };

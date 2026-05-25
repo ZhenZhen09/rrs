@@ -161,7 +161,13 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             type = 'error';
           }
 
-          showToast(`Delivery #${id}: ${status}`, type);
+          if (data.actor_role === 'admin' && data.status === 'completed') {
+            showToast('Transaction marked as complete by the admin.', 'success');
+          } else if (data.actor_role === 'admin' && data.status === 'failed') {
+            showToast('Transaction marked as failed by the admin.', 'error');
+          } else {
+            showToast(`Delivery #${id}: ${status}`, type);
+          }
           setLastRequestUpdate(Date.now());
         });
 

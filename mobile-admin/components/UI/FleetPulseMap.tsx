@@ -75,7 +75,10 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
         <style>
           body { margin: 0; padding: 0; overflow: hidden; }
           #map { height: 100vh; width: 100vw; background: #f8fafc; }
@@ -97,7 +100,15 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
             maxZoom: 18
           }).setView([0, 0], 2);
           
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+          }).addTo(map);
+
+          const markerCluster = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            maxClusterRadius: 40
+          }).addTo(map);
 
           const riderMarkers = {};
           let jobMarkers = [];
@@ -136,7 +147,7 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
             // Cleanup missing riders
             Object.keys(riderMarkers).forEach(id => {
               if (!currentRiderIds.has(id)) {
-                map.removeLayer(riderMarkers[id]);
+                markerCluster.removeLayer(riderMarkers[id]);
                 delete riderMarkers[id];
               }
             });
@@ -155,7 +166,8 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
                 const marker = L.marker(pos, { 
                   icon: createRiderIcon(r.name),
                   zIndexOffset: 1000 
-                }).addTo(map);
+                });
+                markerCluster.addLayer(marker);
                 
                 // Allow DOM to render before applying rotation
                 setTimeout(() => {
@@ -170,17 +182,19 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
               }
             });
 
-            // Refresh Jobs (clear and redraw for simplicity as they lack IDs)
-            jobMarkers.forEach(m => map.removeLayer(m));
+            // Refresh Jobs
+            jobMarkers.forEach(m => markerCluster.removeLayer(m));
             jobMarkers = [];
 
             jobs.forEach(j => {
               if (j.pickup_location && j.pickup_location.lat) {
-                const pm = L.marker([j.pickup_location.lat, j.pickup_location.lng], { icon: pickupIcon }).addTo(map);
+                const pm = L.marker([j.pickup_location.lat, j.pickup_location.lng], { icon: pickupIcon });
+                markerCluster.addLayer(pm);
                 jobMarkers.push(pm);
               }
               if (j.dropoff_location && j.dropoff_location.lat) {
-                const dm = L.marker([j.dropoff_location.lat, j.dropoff_location.lng], { icon: dropoffIcon }).addTo(map);
+                const dm = L.marker([j.dropoff_location.lat, j.dropoff_location.lng], { icon: dropoffIcon });
+                markerCluster.addLayer(dm);
                 jobMarkers.push(dm);
               }
             });

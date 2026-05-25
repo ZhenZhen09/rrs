@@ -7,6 +7,7 @@ interface AuthContextType {
     success: boolean; 
     requirePasswordReset?: boolean; 
     userId?: string; 
+    role?: string;
     error?: string;
     mfa_required?: boolean;
     mfa_setup_required?: boolean;
@@ -45,7 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         if (data.require_password_reset) {
-          return { success: false, requirePasswordReset: true, userId: data.userId };
+          return { 
+            success: false, 
+            requirePasswordReset: true, 
+            userId: data.userId,
+            role: data.role
+          };
         }
         if (data.mfa_required) {
           return { success: false, mfa_required: true, userId: data.userId };

@@ -37,6 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { cn } from '../../components/ui/utils';
 import { RequestDetailsPanel } from '../../components/Admin/Dispatch/RequestDetailsPanel';
 import { toast } from 'sonner';
+import { getGroupedStatus, getStatusColor } from '../../utils/statusMapping';
 
 import { 
   Dialog, 
@@ -57,45 +58,6 @@ interface CalendarFilters {
 }
 
 type ViewMode = 'month' | 'week';
-
-// Global Grouping Logic: Ensure consistency across all views
-const getGroupedStatus = (req: any): 'pending' | 'active' | 'done' | 'failed' | 'declined' => {
-  const status = String(req.status || "").toLowerCase().trim();
-  const deliveryStatus = String(req.delivery_status || "").toLowerCase().trim();
-
-  // 1. Terminal Negative - Declined/Rejected
-  if (['disapproved', 'declined', 'rejected'].includes(status) || 
-      ['disapproved'].includes(deliveryStatus)) {
-    return 'declined';
-  }
-
-  // 2. Terminal Negative - Failed/Cancelled
-  if (['failed', 'cancelled', 'returned_for_revision'].includes(status) || 
-      ['failed', 'cancelled'].includes(deliveryStatus)) {
-    return 'failed';
-  }
-
-  // 3. Terminal Success
-  if (['completed', 'delivered'].includes(deliveryStatus)) {
-    return 'done';
-  }
-
-  // 4. Active Operations (Approved but not terminal)
-  if (status === 'approved' || ['assigned', 'in_progress', 'arrived'].includes(deliveryStatus)) {
-    return 'active';
-  }
-
-  // 5. Awaiting Review
-  return 'pending';
-};
-
-const getStatusColor = (group: 'pending' | 'active' | 'done' | 'failed' | 'declined') => {
-  if (group === 'active') return 'bg-emerald-500';
-  if (group === 'done') return 'bg-slate-400';
-  if (group === 'failed') return 'bg-rose-500';
-  if (group === 'declined') return 'bg-red-600';
-  return 'bg-amber-500';
-};
 
 // Helper: Technical Status Legend
 function StatusIndicator({ color, label }: { color: string, label: string }) {
@@ -175,7 +137,7 @@ export function CalendarView() {
       r.delivery_date,
       r.time_window,
       `"${r.dropoff_location?.address?.replace(/"/g, '""') || 'N/A'}"`,
-      getGroupedStatus(r.delivery_status || r.status).toUpperCase()
+      getGroupedStatus(r.status, r.delivery_status).toUpperCase()
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -199,7 +161,7 @@ export function CalendarView() {
         (req.requester_name || "").toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
-      const groupStatus = getGroupedStatus(req.delivery_status || req.status);
+      const groupStatus = getGroupedStatus(req.status, req.delivery_status);
       if (!activeFilters.status.includes(groupStatus)) return false;
       if (activeFilters.rider !== 'all' && req.assigned_rider_id !== activeFilters.rider) return false;
       if (activeFilters.department !== 'all' && req.requester_department !== activeFilters.department) return false;
@@ -510,7 +472,7 @@ export function CalendarView() {
 
 // SUB-COMPONENTS
 function CalendarTaskRow({ request, onClick }: { request: any, onClick: () => void }) {
-  const group = getGroupedStatus(request.delivery_status || request.status);
+  const group = getGroupedStatus(request.status, request.delivery_status);
   return (
     <button onClick={onClick} className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 text-left transition-all">
       <div className={cn("w-1 h-1 rounded-full", getStatusColor(group))}></div>
@@ -552,7 +514,7 @@ function IndustrialListView({
           
           <div className="space-y-1">
             {requests.map((req: any) => {
-              const group = getGroupedStatus(req.delivery_status || req.status);
+              const group = getGroupedStatus(req.status, req.delivery_status);
               return (
                 <motion.div 
                   key={req.request_id} 

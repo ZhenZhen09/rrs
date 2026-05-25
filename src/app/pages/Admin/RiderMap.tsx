@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { useAuth } from '../../context/AuthContext';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import { useRealTime } from '../../context/RealTimeContext';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -57,7 +58,7 @@ function MapController({ center, zoom }: { center: [number, number] | null, zoom
 }
 
 export function RiderMap() {
-  const { user } = useAuth();
+  const { socket } = useRealTime();
   const [riders, setRiders] = useState<RiderLive[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +67,7 @@ export function RiderMap() {
   const [autoUpdate, setAutoUpdate] = useState(true);
   const mapRef = useRef<L.Map | null>(null);
 
-  const fetchRiders = async () => {
+  const fetchRiders = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/users/riders/live`, {
         credentials: 'include'
@@ -85,7 +86,7 @@ export function RiderMap() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedRider?.id]);
 
   useEffect(() => {
     fetchRiders();
@@ -93,7 +94,25 @@ export function RiderMap() {
       if (autoUpdate) fetchRiders();
     }, 10000);
     return () => clearInterval(interval);
-  }, [autoUpdate, selectedRider?.id]);
+  }, [autoUpdate, fetchRiders]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const syncFleet = () => {
+      fetchRiders();
+    };
+
+    socket.on('connect', syncFleet);
+    socket.on('rider-presence-changed', syncFleet);
+    socket.on('rider-location-updated', syncFleet);
+
+    return () => {
+      socket.off('connect', syncFleet);
+      socket.off('rider-presence-changed', syncFleet);
+      socket.off('rider-location-updated', syncFleet);
+    };
+  }, [socket, fetchRiders]);
 
   const filteredRiders = useMemo(() => {
     return riders.filter(r => {
@@ -210,32 +229,39 @@ export function RiderMap() {
           ref={(map) => { if (map) mapRef.current = map; }}
         >
           <TileLayer 
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           />
           
-          {riders.map((rider) => (
-            rider.current_lat && rider.current_lng && (
-              <Marker 
-                key={rider.id} 
-                position={[Number(rider.current_lat), Number(rider.current_lng)]}
-                icon={createCustomIcon(rider)}
-                eventHandlers={{ click: () => setSelectedRider(rider) }}
-              >
-                <Popup className="rider-mini-popup">
-                  <div className="p-1 min-w-[120px]">
-                    <div className="flex items-center gap-2">
-                       <div className="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center font-black text-[10px]">{(rider.name || 'R').substring(0, 1)}</div>
-                       <div>
-                          <p className="font-black text-slate-900 text-[10px] leading-none">{rider.name}</p>
-                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{rider.is_online ? 'Online' : 'Offline'}</p>
-                       </div>
+          <MarkerClusterGroup
+            chunkedLoading
+            maxClusterRadius={40}
+            spiderfyOnMaxZoom={false}
+            showCoverageOnHover={false}
+          >
+            {riders.map((rider) => (
+              rider.current_lat && rider.current_lng && (
+                <Marker 
+                  key={rider.id} 
+                  position={[Number(rider.current_lat), Number(rider.current_lng)]}
+                  icon={createCustomIcon(rider)}
+                  eventHandlers={{ click: () => setSelectedRider(rider) }}
+                >
+                  <Popup className="rider-mini-popup">
+                    <div className="p-1 min-w-[120px]">
+                      <div className="flex items-center gap-2">
+                         <div className="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center font-black text-[10px]">{(rider.name || 'R').substring(0, 1)}</div>
+                         <div>
+                            <p className="font-black text-slate-900 text-[10px] leading-none">{rider.name}</p>
+                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{rider.is_online ? 'Online' : 'Offline'}</p>
+                         </div>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Marker>
-            )
-          ))}
+                  </Popup>
+                </Marker>
+              )
+            ))}
+          </MarkerClusterGroup>
           {selectedRider?.current_lat && selectedRider?.current_lng && (
             <MapController center={[Number(selectedRider.current_lat), Number(selectedRider.current_lng)]} zoom={15} />
           )}

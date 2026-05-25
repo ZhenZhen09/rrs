@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import BugsnagPerformance from '@bugsnag/expo-performance';
 
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { AnimatedSplashScreen } from '@/components/ui/AnimatedSplashScreen';
@@ -17,6 +18,7 @@ import { BugsnagFallback } from '@/components/ui/BugsnagFallback';
 import { queryClient } from '@/utils/queryClient';
 import { BugsnagErrorBoundary } from '@/utils/bugsnag';
 import { wakeUpServer } from '@/utils/api';
+import { initSyncManager, stopSyncManager } from '@/services/SyncManager';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -37,6 +39,12 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
     }
   }, [animationFinished, isLoading, onLoaded]);
 
+  useEffect(() => {
+    // Start the sync manager to handle any pending offline tasks
+    initSyncManager();
+    return () => stopSyncManager();
+  }, []);
+
   if (isLoading || !animationFinished) {
     return (
       <AnimatedSplashScreen onAnimationComplete={() => setAnimationFinished(true)} />
@@ -53,7 +61,7 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
 
   // Wake up the Render server as soon as the app boots
@@ -85,3 +93,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default BugsnagPerformance.withInstrumentedAppStarts(RootLayout);

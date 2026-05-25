@@ -25,6 +25,7 @@ export const useJobDetails = () => {
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [customRemark, setCustomRemark] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<JobSyncStatus>('synced');
+  const [isSelfUpdated, setIsSelfUpdated] = useState(false);
   
   // Use TanStack Query for Job Details
   const {
@@ -61,6 +62,7 @@ export const useJobDetails = () => {
     // When mutate is called:
     onMutate: async (newStatusData) => {
       setSyncStatus('pending');
+      setIsSelfUpdated(true);
       
       // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
       await queryClient.cancelQueries({ queryKey: ['job', id] });
@@ -96,6 +98,7 @@ export const useJobDetails = () => {
       }
 
       setSyncStatus('sync_pending');
+      setIsSelfUpdated(false);
       // No blocking alert here - the UI will handle the sync_pending state
     },
     // Always refetch after error or success to ensure we have the correct server state
@@ -239,5 +242,6 @@ export const useJobDetails = () => {
     isTracking,
     isStartingDelivery,
     fetchJobDetails,
+    isSelfUpdated,
   };
 };

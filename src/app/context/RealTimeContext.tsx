@@ -9,6 +9,7 @@ interface RealTimeContextType {
     { lat: number; lng: number; name: string; lastUpdate: Date }
   >;
   socket: Socket | null;
+  lastSync: number;
 }
 
 const RealTimeContext = createContext<RealTimeContextType | undefined>(undefined);
@@ -17,6 +18,7 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [riderPresence, setRiderPresence] = useState<Record<string, "online" | "offline">>({});
   const [riderLocations, setRiderLocations] = useState<Record<string, { lat: number; lng: number; name: string; lastUpdate: Date }>>({});
+  const [lastSync, setLastSync] = useState<number>(Date.now());
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -33,9 +35,13 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
       const socket = socketRef.current;
 
       socket.on("connect", () => {
+        console.log('🌐 RealTime: Connected to server');
         socket.emit("join", user.id);
         socket.emit("join-room", user.id);
-        socket.emit("join-room", "admin-room");
+        if (user.role === 'admin') {
+          socket.emit("join-room", "admin-room");
+        }
+        setLastSync(Date.now());
       });
 
       socket.on("presence-sync", (data: { onlineRiders: string[] }) => {
@@ -59,12 +65,13 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
         riderId: string;
         riderName: string;
       }) => {
+        console.log('📡 RealTime: Location update received', data);
         if (data.riderId) {
           setRiderLocations((prev) => ({
             ...prev,
             [data.riderId]: {
-              lat: data.lat,
-              lng: data.lng,
+              lat: Number(data.lat),
+              lng: Number(data.lng),
               name: data.riderName || "Rider",
               lastUpdate: new Date(),
             },
@@ -80,7 +87,7 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   return (
-    <RealTimeContext.Provider value={{ riderPresence, riderLocations, socket: socketRef.current }}>
+    <RealTimeContext.Provider value={{ riderPresence, riderLocations, socket: socketRef.current, lastSync }}>
       {children}
     </RealTimeContext.Provider>
   );

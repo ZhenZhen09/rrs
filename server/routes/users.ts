@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { pool } from '../db';
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
-import { updateRiderPresence, onlineRiders } from '../presence';
+import { onlineRiders } from '../presence';
 import { AuthRequest, authorize } from '../middleware/auth';
 import fs from 'fs';
 import { handleRiderLocationUpdate } from '../locationTracking';
@@ -96,7 +96,7 @@ router.patch('/:id', authorize(['admin']), async (req: AuthRequest, res: Respons
 // Location Update (Rider only)
 router.post('/location', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, requestId } = req.body || {};
+    const { lat, lng, requestId, heading, accuracy, timestamp } = req.body || {};
     const user = req.user!;
     const io = req.app.get('io');
     
@@ -104,21 +104,25 @@ router.post('/location', async (req: AuthRequest, res: Response) => {
     if (user.role !== 'rider') return res.status(403).json({ error: 'Forbidden' });
     if (lat === undefined || lng === undefined) return res.status(400).json({ error: 'Missing coordinates' });
 
-    const riderId = user.id;
-    updateRiderPresence(riderId, 'rest-api', null);
-
     const result = await handleRiderLocationUpdate({
-      riderId,
+      riderId: user.id,
       requestId,
       lat,
       lng,
+      heading,
+      accuracy,
+      timestamp,
       riderName: (user as any).name || 'Rider',
       verifyAssignment: true,
       io,
     });
 
+    if (result.reason === 'invalid_location' || result.reason === 'low_accuracy' || result.reason === 'stale_location') {
+      return res.status(400).json({ error: result.reason, ...result });
+    }
+
     if (result.reason === 'not_assigned') {
-      console.warn(`⚠️ [SECURITY] Rider ${riderId} attempted to log location for unassigned task ${requestId}`);
+      console.warn(`⚠️ [SECURITY] Rider ${user.id} attempted to log location for unassigned task ${requestId}`);
     }
 
     res.json({ success: true, ...result });

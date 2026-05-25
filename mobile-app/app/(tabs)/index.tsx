@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { getLocalDateStr } from '@/utils/dateUtils';
+import { getRiderTaskTab } from '@/utils/taskFilters';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -29,34 +29,7 @@ export default function TodayScreen() {
   } = useDashboard();
 
   // Filter for today's active tasks
-  const todayStr = getLocalDateStr(new Date());
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-
-  const tasks = allTasks.filter(req => {
-    const deliveryDate = getLocalDateStr(req.delivery_date);
-    const isToday = deliveryDate === todayStr;
-    const isApproved = req.status === 'approved';
-    const isActive = !['completed', 'delivered', 'failed', 'cancelled'].includes(req.delivery_status);
-    
-    if (!isToday || !isApproved || !isActive) return false;
-
-    // EXCLUDE if past time window (these move to Overdue tab)
-    const window = req.time_window || '';
-    const parts = window.split('-');
-    if (parts.length === 2) {
-      const endTimePart = parts[1].trim();
-      const [endHour, endMinute] = endTimePart.split(':').map(Number);
-      if (!isNaN(endHour) && !isNaN(endMinute)) {
-        if (currentHour > endHour || (currentHour === endHour && currentMinute > endMinute)) {
-          return false; // Move to Overdue
-        }
-      }
-    }
-
-    return true;
-  });
+  const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'today');
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

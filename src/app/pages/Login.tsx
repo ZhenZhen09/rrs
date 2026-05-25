@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { Truck, AlertCircle, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LightTrails } from '../components/LightTrails';
+import { PasswordResetOverlay } from '../components/PasswordResetOverlay';
 
 export function Login() {
   const navigate = useNavigate();
@@ -19,6 +20,11 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Password Reset States
+  const [resetOverlayVisible, setResetOverlayVisible] = useState(false);
+  const [resetUserId, setResetUserId] = useState('');
+  const [resetUserRole, setResetUserRole] = useState('');
 
   // MFA States
   const [mfaStep, setMfaStep] = useState<'credentials' | 'setup' | 'verify'>('credentials');
@@ -43,22 +49,9 @@ export function Login() {
       if (result.success) {
         // Success: useEffect will handle redirection
       } else if (result.requirePasswordReset) {
-        const newPassword = prompt("A password reset is required. Please enter a new password:");
-        if (newPassword) {
-          const updateResponse = await fetch('/api/auth/update-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: result.userId, newPassword }),
-            credentials: 'include'
-          });
-          
-          if (updateResponse.ok) {
-            alert("Password updated! Please login again with your new password.");
-            window.location.reload();
-          } else {
-            setError("Failed to update password. Please try again.");
-          }
-        }
+        setResetUserId(result.userId || '');
+        setResetUserRole(result.role || '');
+        setResetOverlayVisible(true);
       } else if (result.mfa_required) {
         setMfaData({ userId: result.userId! });
         setMfaStep('verify');
@@ -383,6 +376,18 @@ export function Login() {
           </motion.div>
         </div>
       </div>
+
+      <PasswordResetOverlay 
+        visible={resetOverlayVisible}
+        userId={resetUserId}
+        userRole={resetUserRole}
+        onClose={() => setResetOverlayVisible(false)}
+        onSuccess={() => {
+          setResetOverlayVisible(false);
+          alert("Password updated! Please login again with your new password.");
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }

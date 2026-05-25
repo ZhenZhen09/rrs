@@ -60,7 +60,7 @@ export function DispatchConsole() {
     refreshData,
   } = useGlobalData();
 
-  const { riderLocations, riderPresence } = useRealTime();
+  const { riderLocations, riderPresence, lastSync } = useRealTime();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
@@ -144,7 +144,9 @@ export function DispatchConsole() {
         return (
           ["completed", "failed", "disapproved"].includes(
             r.delivery_status || "",
-          ) || r.status === "disapproved"
+          ) ||
+          r.status === "disapproved" ||
+          r.status === "cancelled"
         );
       return true;
     });
@@ -203,7 +205,9 @@ export function DispatchConsole() {
         (r) =>
           ["completed", "failed", "disapproved"].includes(
             r.delivery_status || "",
-          ) || r.status === "disapproved",
+          ) ||
+          r.status === "disapproved" ||
+          r.status === "cancelled",
       ).length,
     };
   }, [requests]);
@@ -214,6 +218,14 @@ export function DispatchConsole() {
     setIsRefreshing(false);
     toast.success("Dashboard data synchronized");
   };
+
+  // State Reconciliation (Phase 2.2): Trigger refresh on socket reconnect
+  useEffect(() => {
+    if (lastSync) {
+      console.log('🔄 DispatchConsole: Socket re-sync detected, refreshing data...');
+      handleRefresh();
+    }
+  }, [lastSync]);
 
   const handleBatchApprove = async () => {
     if (!batchRiderId) {

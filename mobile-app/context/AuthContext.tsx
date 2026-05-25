@@ -7,8 +7,14 @@ import { AuthManager } from '@/utils/AuthManager';
 
 type AuthContextType = {
   user: any;
+  token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean, error?: string }>;
+  login: (email: string, password: string) => Promise<{ 
+    success: boolean; 
+    requirePasswordReset?: boolean; 
+    userId?: string; 
+    error?: string; 
+  }>;
   logout: () => Promise<void>;
 };
 
@@ -24,6 +30,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const segments = useSegments();
   const router = useRouter();
@@ -39,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for global auth failures (401s)
     setAuthFailureListener(() => {
       console.warn('[AUTH] Global interceptor triggered logout');
+      setToken(null);
       setUser(null);
     });
 
@@ -49,9 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (token && userData) {
           resetAuthStatus();
+          setToken(token);
           setUser(userData);
         } else {
           await AuthManager.clearSession();
+          setToken(null);
           setUser(null);
         }
       } finally {
@@ -65,9 +75,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.post('/api/auth/login', { email, password });
       const data = res.data;
+
+      // Handle password reset requirement
+      if (data.require_password_reset) {
+        return { 
+          success: false, 
+          requirePasswordReset: true, 
+          userId: data.id || data.userId 
+        };
+      }
+
       if (data.token && data.refreshToken) {
         await AuthManager.saveSession(data.token, data.refreshToken, data);
         resetAuthStatus();
+        setToken(data.token);
         setUser(data);
         return { success: true };
       }
@@ -84,9 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AuthManager.clearSession();
     await AsyncStorage.multiRemove(['@rider_id', '@active_request_id']);
     resetAuthStatus();
+    setToken(null);
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, isLoading, login, logout }), [user, isLoading]);
+  const value = useMemo(() => ({ user, token, isLoading, login, logout }), [user, token, isLoading]);
   return <AuthContext.Provider value={value as any}>{children}</AuthContext.Provider>;
 }

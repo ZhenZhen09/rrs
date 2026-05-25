@@ -1,4 +1,6 @@
 import './db'; // Force environment variables to load first
+import Bugsnag from '@bugsnag/js';
+import BugsnagPluginExpress from '@bugsnag/plugin-express';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -12,16 +14,30 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth';
 import requestRoutes from './routes/requests';
+import riderTaskRoutes from './routes/riderTasks';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import analyticsRoutes from './routes/analytics';
 import { pool } from './db';
 import { authenticate } from './middleware/auth';
+import { idempotency } from './middleware/idempotency';
 import { onlineRiders, updateRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate } from './locationTracking';
 
+Bugsnag.start({
+  apiKey: process.env.BUGSNAG_API_KEY || '37b188b8dd7ad62347e11722b1b9036f',
+  plugins: [BugsnagPluginExpress],
+  releaseStage: process.env.NODE_ENV || 'development',
+  enabledReleaseStages: ['production', 'staging', 'development'],
+});
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+const bugsnagMiddleware = Bugsnag.getPlugin('express');
+
+if (bugsnagMiddleware) {
+  app.use(bugsnagMiddleware.requestHandler);
+}
 
 // Standard Security Practice: Use Helmet to set secure HTTP headers (CSP, HSTS, etc.)
 app.use(helmet({
@@ -49,6 +65,16 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
+
+// GLOBAL RATE LIMITER (Slice 3.1 Hardening)
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each IP to 1000 requests per 15 minutes
+  message: { error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', globalApiLimiter);
 
 // Standard Security Practice: Rate limiting for Authentication routes
 const authRateLimiter = rateLimit({
@@ -228,13 +254,57 @@ class RequestWatchdog {
 io.on('connection', (socket: any) => {
   let sessionRiderId: string | null = null;
 
-  socket.on('join-room', (room: string) => { 
+  socket.on('join-room', async (room: string) => { 
     // Standard Security Practice: Enforce room authorization
-    if (room === 'admin-room' && socket.user.role !== 'admin') {
+    const isJobRoom = room.startsWith('job_');
+    const isUserRoom = room === socket.user.id;
+    const isAdminRoom = room === 'admin-room';
+
+    if (socket.user.role === 'admin') {
+      socket.join(room);
+      return;
+    }
+
+    if (isAdminRoom) {
       console.warn(`🛑 Unauthorized room join attempt by ${socket.user.id} to ${room}`);
       return;
     }
-    socket.join(room); 
+
+    if (isUserRoom) {
+      socket.join(room);
+      return;
+    }
+
+    if (isJobRoom) {
+      const requestId = room.replace('job_', '');
+      try {
+        const [rows]: any = await pool.execute(
+          'SELECT assigned_rider_id, requester_id FROM delivery_requests WHERE request_id = ?',
+          [requestId]
+        );
+        const request = rows[0];
+        
+        if (!request) return;
+
+        // Verify if the user is the assigned rider or the original requester
+        const isAssignedRider = request.assigned_rider_id === socket.user.id;
+        const isRequester = request.requester_id === socket.user.id;
+
+        if (isAssignedRider || isRequester || socket.user.role === 'personnel') {
+          // Note: In a large system, personnel might be restricted by department,
+          // but for now we allow all personnel to track jobs they can see on dashboard.
+          socket.join(room);
+        } else {
+          console.warn(`🛑 Unauthorized job room join attempt by ${socket.user.id} to ${room}`);
+        }
+      } catch (err) {
+        console.error('Error verifying room permission:', err);
+      }
+      return;
+    }
+
+    // Default: block unknown rooms for non-admins
+    console.warn(`🛑 Blocked unknown room join attempt by ${socket.user.id} to ${room}`);
   });
 
   socket.on('join', (userID: string) => {
@@ -253,24 +323,32 @@ io.on('connection', (socket: any) => {
   });
 
   socket.on('update-location', async (data: any) => {
-    const { requestId, lat, lng, riderId, heading } = data;
+    const { requestId, lat, lng, riderId, heading, accuracy, timestamp } = data;
     if (lat === undefined || lng === undefined || !riderId) return;
 
-    // Standard Security Practice: Prevent rider from spoofing location for another rider
-    if (riderId !== socket.user.id) {
+    // Security Practice: Prevent rider from spoofing location for another rider.
+    // EXCEPTION: Admins are allowed to simulate/update locations for any rider.
+    if (riderId !== socket.user.id && socket.user.role !== 'admin') {
       console.warn(`🛑 Location spoofing attempt detected from ${socket.user.id} for rider ${riderId}`);
       return;
     }
-
     try {
+      if (socket.user.role === 'rider' && riderId === socket.user.id) {
+        sessionRiderId = riderId;
+      }
+
       await handleRiderLocationUpdate({
         riderId,
         requestId,
         lat,
         lng,
         heading,
+        accuracy,
+        timestamp,
         riderName: data.riderName || 'Rider',
         verifyAssignment: true,
+        presenceSocketId: socket.id,
+        refreshPresence: socket.user.role === 'rider' && riderId === socket.user.id,
         io,
         requestPingState,
       });
@@ -295,10 +373,11 @@ io.on('connection', (socket: any) => {
 
 app.set('io', io);
 app.use('/api/auth', authRoutes);
-app.use('/api/users', authenticate, userRoutes);
-app.use('/api/requests', authenticate, requestRoutes);
-app.use('/api/notifications', authenticate, notificationRoutes);
-app.use('/api/analytics', authenticate, analyticsRoutes);
+app.use('/api/users', authenticate, idempotency, userRoutes);
+app.use('/api/requests', authenticate, idempotency, requestRoutes);
+app.use('/api/rider/tasks', authenticate, idempotency, riderTaskRoutes);
+app.use('/api/notifications', authenticate, idempotency, notificationRoutes);
+app.use('/api/analytics', authenticate, idempotency, analyticsRoutes);
 
 const clientDistPath = path.resolve(__dirname, '..', '..', 'dist');
 const clientIndexPath = path.join(clientDistPath, 'index.html');
@@ -314,6 +393,10 @@ if (fs.existsSync(clientIndexPath)) {
 
 const watchdog = new RequestWatchdog(io);
 watchdog.start();
+
+if (bugsnagMiddleware) {
+  app.use(bugsnagMiddleware.errorHandler);
+}
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend server LIVE on port ${PORT}`);

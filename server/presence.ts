@@ -22,13 +22,19 @@ export const cleanupOfflineRiders = (io?: Server | null) => {
 
 export const updateRiderPresence = (riderId: string, socketId: string = 'rest-api', io: Server | null = null) => {
   const now = Date.now();
+  const wasOnline = onlineRiders.has(riderId);
+
   onlineRiders.set(riderId, { socketId, lastSeen: now });
   
-  if (io) {
+  if (io && !wasOnline) {
     io.to('admin-room').emit('rider-presence-changed', {
       riderId,
       status: 'online',
       lastSeen: now
     });
   }
+};
+
+export const touchRiderPresence = (riderId: string, socketId: string = 'rest-api', io: Server | null = null) => {
+  updateRiderPresence(riderId, socketId, io);
 };

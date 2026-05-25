@@ -1,4 +1,4 @@
-import { getTasks, updateJobStatus } from '../apiService';
+import { getHistoryTasks, getTasks, updateJobStatus } from '../apiService';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({
@@ -20,7 +20,7 @@ describe('apiService', () => {
       (api.get as jest.Mock).mockResolvedValue({ data: mockData });
 
       const result = await getTasks();
-      expect(api.get).toHaveBeenCalledWith('/api/requests', { params: { limit: 100 } });
+      expect(api.get).toHaveBeenCalledWith('/api/rider/tasks/active');
       expect(result).toEqual(mockData);
     });
 
@@ -29,6 +29,17 @@ describe('apiService', () => {
       (api.get as jest.Mock).mockResolvedValue({ data: { data: mockData } });
 
       const result = await getTasks();
+      expect(result).toEqual(mockData);
+    });
+  });
+
+  describe('getHistoryTasks', () => {
+    it('should fetch paginated rider history', async () => {
+      const mockData = [{ id: '1', request_id: 'req_1' }];
+      (api.get as jest.Mock).mockResolvedValue({ data: { data: mockData } });
+
+      const result = await getHistoryTasks();
+      expect(api.get).toHaveBeenCalledWith('/api/rider/tasks/history', { params: { page: 1, limit: 50 } });
       expect(result).toEqual(mockData);
     });
   });

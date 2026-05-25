@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTasks, getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '@/services/apiService';
+import { getTasks, getHistoryTasks, getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
 import { Job } from '@/types';
 import { getLocalDateStr } from '@/utils/dateUtils';
@@ -28,6 +28,17 @@ export const useDashboard = () => {
     enabled: !!user?.id,
   });
 
+  const {
+    data: historyTasks = [],
+    isLoading: historyLoading,
+    refetch: refetchHistoryTasks,
+    isRefetching: historyRefreshing,
+  } = useQuery({
+    queryKey: ['historyTasks', user?.id],
+    queryFn: getHistoryTasks,
+    enabled: !!user?.id,
+  });
+
   // Use TanStack Query for Notifications
   const {
     data: notifications = [],
@@ -39,7 +50,7 @@ export const useDashboard = () => {
     enabled: !!user?.id,
   });
 
-  const loading = tasksLoading || notifsLoading;
+  const loading = tasksLoading || historyLoading || notifsLoading;
 
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
@@ -83,22 +94,25 @@ export const useDashboard = () => {
   useEffect(() => {
     if (currentPushNotification) {
       refetchTasks();
+      refetchHistoryTasks();
       refetchNotifs();
     }
-  }, [currentPushNotification, refetchTasks, refetchNotifs]);
+  }, [currentPushNotification, refetchTasks, refetchHistoryTasks, refetchNotifs]);
 
   // --- SENIOR NOTE: Socket logic has been moved to LocationContext (Global Scope) ---
   // This hook now relies on global query invalidation for reactivity.
 
   const onRefresh = useCallback(() => {
     refetchTasks();
+    refetchHistoryTasks();
     refetchNotifs();
-  }, [refetchTasks, refetchNotifs]);
+  }, [refetchTasks, refetchHistoryTasks, refetchNotifs]);
 
   return {
     user,
     loading,
     tasks,
+    historyTasks,
     error: null,
     isMenuOpen,
     setIsMenuOpen,
@@ -110,7 +124,7 @@ export const useDashboard = () => {
     handleNotificationClick,
     handleMarkAllRead,
     onRefresh,
-    refreshing,
+    refreshing: refreshing || historyRefreshing,
     router,
   };
 };

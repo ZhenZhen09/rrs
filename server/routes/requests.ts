@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { pool } from '../db';
+import { logAction } from '../services/auditLogger';
 import { validate } from '../middleware/validate';
 import { 
   createRequestSchema, 
@@ -95,12 +96,11 @@ router.get('/counts', authorize(['rider', 'admin']), async (req: AuthRequest, re
       SELECT 
         COUNT(CASE 
           WHEN delivery_date = CURRENT_DATE 
-          AND (STR_TO_DATE(SUBSTRING_INDEX(time_window, ' - ', -1), '%H:%i') >= CURTIME())
           AND status = 'approved' 
           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
           THEN 1 END) as today,
         COUNT(CASE 
-          WHEN (delivery_date < CURRENT_DATE OR (delivery_date = CURRENT_DATE AND STR_TO_DATE(SUBSTRING_INDEX(time_window, ' - ', -1), '%H:%i') < CURTIME()))
+          WHEN delivery_date < CURRENT_DATE 
           AND status = 'approved' 
           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
           THEN 1 END) as overdue
@@ -164,7 +164,29 @@ router.get('/', async (req, res) => {
     }
 
     const countParams = [...params];
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    const activeFirstOrder = `
+      ORDER BY
+        CASE
+          WHEN status = 'approved'
+           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          THEN 0
+          ELSE 1
+        END ASC,
+        CASE
+          WHEN status = 'approved'
+           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          THEN delivery_date
+          ELSE NULL
+        END ASC,
+        CASE
+          WHEN status = 'approved'
+           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          THEN time_window
+          ELSE NULL
+        END ASC,
+        created_at DESC
+    `;
+    query += `${activeFirstOrder} LIMIT ? OFFSET ?`;
     params.push(Number(limit), offset);
 
     const [rows] = await pool.query(query, params);
@@ -392,9 +414,11 @@ router.put('/:id/cancel', async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to cancel this request.' });
     }
 
-    if (['completed', 'failed'].includes(request.delivery_status)) {
+    // TERMINAL LOCK: Block cancellation for terminal jobs
+    const terminalStatuses = ['completed', 'delivered', 'failed', 'cancelled', 'disapproved'];
+    if (terminalStatuses.includes(request.delivery_status) || terminalStatuses.includes(request.status)) {
       await conn.rollback();
-      return res.status(400).json({ error: 'Cannot cancel a request that is already terminal.' });
+      return res.status(400).json({ error: 'Cannot cancel a request that is already in a terminal state.' });
     }
 
     await conn.query(`
@@ -424,6 +448,18 @@ router.put('/:id/cancel', async (req, res) => {
     }
 
     await conn.commit();
+
+    // AUDIT LOG (Slice 3.2 Hardening)
+    logAction({
+      actor_id: user.id,
+      actor_role: user.role,
+      action: 'cancel_request',
+      resource_type: 'delivery_requests',
+      resource_id: id,
+      new_values: { status: 'cancelled', delivery_status: 'cancelled', admin_remark },
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent']
+    });
 
     // REAL-TIME BROADCAST
     const io = req.app.get('io');
@@ -495,12 +531,21 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
     }
 
     const currentStatus = rows[0].status;
+    const currentDeliveryStatus = rows[0].delivery_status;
+
     if (currentStatus === 'approved') {
       await conn.rollback();
       return res.status(409).json({ 
         error: 'Conflict: This request has already been approved by another admin.',
         code: 'ALREADY_APPROVED'
       });
+    }
+
+    // TERMINAL LOCK: Block approval for terminal jobs
+    const terminalStatuses = ['completed', 'delivered', 'failed', 'cancelled', 'disapproved'];
+    if (terminalStatuses.includes(currentStatus) || terminalStatuses.includes(currentDeliveryStatus)) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Cannot approve or reassign a request in a terminal state.' });
     }
 
     // 2. Proceed with assignment
@@ -534,6 +579,18 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
     }
 
     await conn.commit();
+
+    // 3. AUDIT LOG (Phase 3.2 Hardening)
+    logAction({
+      actor_id: (req as AuthRequest).user!.id,
+      actor_role: (req as AuthRequest).user!.role,
+      action: 'approve_request',
+      resource_type: 'delivery_requests',
+      resource_id: id,
+      new_values: { rider_id, rider_name: riderName, admin_remark, status: 'approved', delivery_status: 'assigned' },
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent']
+    });
 
     // REAL-TIME BROADCAST: Notify the specific rider and all admins
     const io = req.app.get('io');
@@ -858,11 +915,29 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
 
     await connection.query(query, params);
 
-    // 1. Audit Log Entry (Inside Transaction)
+    const isAdminUpdate = user.role === 'admin';
+    const auditRemark = isAdminUpdate
+      ? `[Admin update by ${user.email || user.id}] ${remark || `Status updated to ${status}`}`
+      : remark || `Status updated to ${status}`;
+
+    // 1. Status Log Entry (Internal logic)
     await connection.query(
       'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
-      [id, user.id, status, remark || `Status updated to ${status}`]
+      [id, current.assigned_rider_id || user.id, status, auditRemark]
     );
+
+    // 2. AUDIT LOG (Phase 3.2 Hardening)
+    logAction({
+      actor_id: user.id,
+      actor_role: user.role,
+      action: 'update_status',
+      resource_type: 'delivery_requests',
+      resource_id: id,
+      old_values: { status: current.status, delivery_status: current.delivery_status },
+      new_values: { delivery_status: status, remark, timestamp },
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent']
+    });
 
     await connection.commit();
 
@@ -870,22 +945,23 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       // 2. Broadcast UI refresh signals (Global and Specific)
-      io.emit('delivery-status-updated', { request_id: id, status, remark });
-      io.emit('request-updated', { request_id: id, status: 'approved', delivery_status: status });
-      io.to(`job_${id}`).emit('job-status-changed', { request_id: id, status, message: remark });
+      io.emit('delivery-status-updated', { request_id: id, status, remark, actor_role: user.role });
+      io.emit('request-updated', { request_id: id, status: 'approved', delivery_status: status, actor_role: user.role });
+      io.to(`job_${id}`).emit('job-status-changed', { request_id: id, status, message: remark, actor_role: user.role });
 
       // 3. Create Formal Notifications for Terminal States (Completed/Failed)
       if (['completed', 'failed', 'delivered'].includes(status)) {
         try {
           const [details]: any = await pool.query(
-            'SELECT requester_id, requester_name, assigned_rider_name FROM delivery_requests WHERE request_id = ?',
+            'SELECT requester_id, requester_name, assigned_rider_id, assigned_rider_name FROM delivery_requests WHERE request_id = ?',
             [id]
           );
           
           if (details.length > 0) {
-            const { requester_id, assigned_rider_name } = details[0];
+            const { requester_id, assigned_rider_id, assigned_rider_name } = details[0];
             const type = status === 'failed' ? 'delivery_failed' : 'delivery_completed';
-            const msg = `Delivery #${String(id).slice(-6).toUpperCase()} has been marked as ${status.toUpperCase()} by ${assigned_rider_name}${remark ? `: ${remark}` : '.'}`;
+            const actorName = isAdminUpdate ? 'the admin' : (assigned_rider_name || 'the rider');
+            const msg = `Delivery #${String(id).slice(-6).toUpperCase()} has been marked as ${status.toUpperCase()} by ${actorName}${remark ? `: ${remark}` : '.'}`;
 
             // A. Notify Requester (Personnel)
             const notifIdP = `notif_${Date.now()}_p_${Math.random().toString(36).substring(7)}`;
@@ -895,7 +971,26 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
             );
             io.to(requester_id).emit('notification-added', { id: notifIdP, message: msg, type, request_id: id });
 
-            // B. Notify All Admins
+            // B. Notify the assigned rider when an admin closes the transaction remotely.
+            if (isAdminUpdate && assigned_rider_id) {
+              const riderMsg = status === 'failed'
+                ? 'Transaction marked as failed by the admin.'
+                : 'Transaction marked as complete by the admin.';
+              const riderNotifId = `notif_${Date.now()}_r_${Math.random().toString(36).substring(7)}`;
+              await pool.query(
+                'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+                [riderNotifId, assigned_rider_id, riderMsg, type, id]
+              );
+              io.to(assigned_rider_id).emit('notification-added', {
+                id: riderNotifId,
+                message: riderMsg,
+                type,
+                request_id: id,
+                actor_role: user.role
+              });
+            }
+
+            // C. Notify All Admins
             const [admins]: any = await pool.query('SELECT id FROM users WHERE role = ?', ['admin']);
             for (const admin of admins) {
               const notifIdA = `notif_${Date.now()}_a_${Math.random().toString(36).substring(7)}`;
