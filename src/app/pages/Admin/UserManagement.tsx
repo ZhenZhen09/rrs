@@ -66,6 +66,7 @@ import {
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { cn } from "../../components/ui/utils";
+import { DEPARTMENTS } from "../../types";
 
 export function UserManagement() {
   const { logout } = useAuth();
@@ -591,12 +592,11 @@ export function UserManagement() {
                     <SelectValue placeholder="Dept" />
                   </SelectTrigger>
                   <SelectContent className="rounded">
-                    <SelectItem value="Logistics" className="text-[10px]">
-                      Logistics
-                    </SelectItem>
-                    <SelectItem value="Finance" className="text-[10px]">
-                      Finance
-                    </SelectItem>
+                    {DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept} className="text-[10px]">
+                        {dept}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -662,15 +662,11 @@ export function UserManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded">
-                  <SelectItem value="Logistics" className="text-[10px]">
-                    Logistics
-                  </SelectItem>
-                  <SelectItem value="Finance" className="text-[10px]">
-                    Finance
-                  </SelectItem>
-                  <SelectItem value="Operations" className="text-[10px]">
-                    Operations
-                  </SelectItem>
+                  {DEPARTMENTS.map((dept) => (
+                    <SelectItem key={dept} value={dept} className="text-[10px]">
+                      {dept}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

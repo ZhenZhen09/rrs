@@ -212,18 +212,21 @@ export function DispatchConsole() {
     };
   }, [requests]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (showToast = true) => {
     setIsRefreshing(true);
     await refreshData();
     setIsRefreshing(false);
-    toast.success("Dashboard data synchronized");
+    if (showToast) {
+      toast.success("Dashboard data synchronized");
+    }
   };
 
   // State Reconciliation (Phase 2.2): Trigger refresh on socket reconnect
   useEffect(() => {
     if (lastSync) {
       console.log('🔄 DispatchConsole: Socket re-sync detected, refreshing data...');
-      handleRefresh();
+      // Use silent refresh for background sync to avoid toast spam
+      handleRefresh(false);
     }
   }, [lastSync]);
 

@@ -10,7 +10,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BugsnagPerformance from '@bugsnag/expo-performance';
 
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
-import { AnimatedSplashScreen } from '@/components/ui/AnimatedSplashScreen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { LocationProvider } from '@/context/LocationContext';
@@ -31,13 +30,12 @@ export const unstable_settings = {
 
 function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
   const { isLoading } = useAuth();
-  const [animationFinished, setAnimationFinished] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && animationFinished) {
+    if (!isLoading) {
       onLoaded();
     }
-  }, [animationFinished, isLoading, onLoaded]);
+  }, [isLoading, onLoaded]);
 
   useEffect(() => {
     // Start the sync manager to handle any pending offline tasks
@@ -45,10 +43,8 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
     return () => stopSyncManager();
   }, []);
 
-  if (isLoading || !animationFinished) {
-    return (
-      <AnimatedSplashScreen onAnimationComplete={() => setAnimationFinished(true)} />
-    );
+  if (isLoading) {
+    return null;
   }
 
   return (

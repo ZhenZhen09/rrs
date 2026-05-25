@@ -223,12 +223,12 @@ export const TIME_SLOTS = [
 
 // Departments
 export const DEPARTMENTS = [
-  'Human Resources',
   'Finance',
-  'IT',
-  'Marketing',
+  'HR',
   'Operations',
+  'Marketing',
+  'QA',
+  'Regulatory',
   'Sales',
-  'Legal',
-  'Administration',
+  'Sales Support',
 ];

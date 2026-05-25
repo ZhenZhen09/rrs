@@ -11,6 +11,6 @@ export const Config = {
 
      API_URL: IS_PRODUCTION
        ? 'https://rrs-vhgr.onrender.com'
-       : 'http://10.5.20.169:3001', // Note: Both use port 3001 now   
+       : 'http://10.254.54.154:3001', // Note: Both use port 3001 now   
    GEOAPIFY_KEY: 'e981beca841349698124675a91674f3a',
 };

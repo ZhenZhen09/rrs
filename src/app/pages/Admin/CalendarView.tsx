@@ -38,6 +38,7 @@ import { cn } from '../../components/ui/utils';
 import { RequestDetailsPanel } from '../../components/Admin/Dispatch/RequestDetailsPanel';
 import { toast } from 'sonner';
 import { getGroupedStatus, getStatusColor } from '../../utils/statusMapping';
+import { DEPARTMENTS } from '../../types';
 
 import { 
   Dialog, 
@@ -417,6 +418,24 @@ export function CalendarView() {
                             }} />
                         ))}
                     </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-slate-50">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</h4>
+                    <Select 
+                      value={localFilters.department} 
+                      onValueChange={(val) => setLocalFilters(prev => ({ ...prev, department: val }))}
+                    >
+                        <SelectTrigger className="h-9 rounded-xl border-slate-100 text-[10px] font-bold uppercase tracking-widest">
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                            <SelectItem value="all" className="text-[10px]">All Departments</SelectItem>
+                            {DEPARTMENTS.map(dept => (
+                                <SelectItem key={dept} value={dept} className="text-[10px]">{dept}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
             <div className="p-6 border-t border-slate-50 bg-slate-50/30">
