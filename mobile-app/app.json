@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rider",
-    "slug": "cfa-rss",
+    "slug": "rider",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -78,8 +78,9 @@
       },
       "router": {},
       "eas": {
-        "projectId": "a6ded1a3-1ca5-4185-b913-9250fb18ce7e"
+        "projectId": "4d83c756-c551-4da9-aca2-1ead526e5361"
       }
-    }
+    },
+    "owner": "palomado09s-organization"
   }
 }
