@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from "react-router";
 import { useData } from "../context/DataContext";
 import { LiveTrackingMap } from "../components/LiveTrackingMap";
@@ -9,6 +9,9 @@ import { Clock, User as UserIcon, Bike, ChevronLeft, MapPin, XCircle, CheckCircl
 import { formatLocalDate } from "../utils/dateUtils";
 import { DeliveryRequest } from "../types";
 import { useRealTime } from "../context/RealTimeContext";
+import { cn } from "../components/ui/utils";
+
+export type TrackingStatus = 'OFFLINE' | 'SIGNAL_LOST' | 'DELAYED' | 'LIVE';
 
 interface TrackingLocation {
   lat: number;
@@ -29,6 +32,7 @@ interface TrackingPayload {
     is_request_specific: boolean;
     is_fallback: boolean;
     rider_status: string | null;
+    rider_is_online?: boolean; // New field for clearer fallback
   };
 }
 
@@ -36,15 +40,42 @@ export function LiveTrackingDashboard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { requests, fetchRequestById, refreshData } = useData();
-  const { riderLocations, socket } = useRealTime();
+  const { riderLocations, riderPresence, socket } = useRealTime();
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isPresenceSyncing, setIsPresenceSyncing] = useState(true);
   const [trackingPayload, setTrackingPayload] = useState<TrackingPayload | null>(null);
   const [trackingError, setTrackingError] = useState<string | null>(null);
 
   const trackingRequest = trackingPayload?.request || requests.find((r) => r.request_id === id);
-  const liveRiderLocation = trackingRequest?.assigned_rider_id
-    ? riderLocations[trackingRequest.assigned_rider_id]
-    : null;
+  const assignedRiderId = trackingPayload?.request?.assigned_rider_id || trackingRequest?.assigned_rider_id;
+
+  const liveRiderLocation = useMemo(() => {
+    return assignedRiderId ? riderLocations[assignedRiderId] : null;
+  }, [riderLocations, assignedRiderId]);
+
+  // Wait-for-Truth: Ensure presence is synced before showing "Offline"
+  useEffect(() => {
+    if (isInitialLoading) return;
+
+    if (!assignedRiderId) {
+      setIsPresenceSyncing(false);
+      return;
+    }
+
+    // If presence is already known (from global sync or previous update), stop syncing
+    if (riderPresence[assignedRiderId] !== undefined) {
+      setIsPresenceSyncing(false);
+      return;
+    }
+
+    // Safety timeout: 3 seconds
+    const timeout = setTimeout(() => {
+      console.log("⏳ Presence sync timeout - showing fallback state");
+      setIsPresenceSyncing(false);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [isInitialLoading, assignedRiderId, riderPresence]);
 
   const fetchTrackingPayload = async () => {
     if (!id) return;
@@ -97,26 +128,39 @@ export function LiveTrackingDashboard() {
     if (!id || !socket) return;
 
     socket.emit("join-room", `job_${id}`);
-  }, [id, socket]);
 
-  if (isInitialLoading) {
+    // TARGETED HANDSHAKE: Ask server for this specific rider's status immediately
+    if (assignedRiderId) {
+      console.log('🤝 Targeted Handshake: Checking status for', assignedRiderId);
+      socket.emit('check-rider-presence', assignedRiderId);
+    }
+  }, [id, socket, assignedRiderId]);
+
+  if (isInitialLoading || (assignedRiderId && isPresenceSyncing)) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-slate-500 font-bold">Initializing tracking...</p>
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
+        <div className="relative mb-8">
+           <div className="w-20 h-20 border-4 border-slate-100 rounded-full" />
+           <div className="w-20 h-20 border-4 border-[#00B14F] border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+           <div className="absolute inset-0 flex items-center justify-center">
+             <Bike className="text-[#00B14F]" size={24} />
+           </div>
+        </div>
+        <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight uppercase">Connecting to Rider</h2>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Syncing real-time presence...</p>
       </div>
     );
   }
 
   if (!trackingRequest || trackingError) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 text-slate-200">
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
+        <div className="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-6 text-slate-200">
           <Bike size={40} />
         </div>
         <h2 className="text-2xl font-black text-slate-900 mb-2">Tracking not found</h2>
         <p className="text-slate-500 mb-8 max-w-xs">{trackingError || "This request might be completed or the link has expired."}</p>
-        <Button onClick={() => navigate(-1)} variant="outline" className="rounded-xl">
+        <Button onClick={() => navigate(-1)} variant="outline" className="rounded-xl h-12 px-8 font-bold border-slate-200">
           Go Back
         </Button>
       </div>
@@ -139,13 +183,49 @@ export function LiveTrackingDashboard() {
   const isCompleted = trackingRequest.delivery_status === 'completed';
   const isFailed = trackingRequest.delivery_status === 'failed';
   const isFinished = isCompleted || isFailed;
+
+  // Hybrid Online Check: Use real-time socket first, fall back to API snapshot
+  // SENIOR SYNC FIX: Explicitly check API state if socket map is empty for this rider
+  const isOnline = assignedRiderId 
+    ? (riderPresence[assignedRiderId] === 'online' || 
+       (riderPresence[assignedRiderId] === undefined && trackingPayload?.tracking_state?.rider_is_online))
+    : false;
+  
   const currentLocation = liveRiderLocation
-    ? { lat: Number(liveRiderLocation.lat), lng: Number(liveRiderLocation.lng) }
+    ? { 
+        lat: Number(liveRiderLocation.lat), 
+        lng: Number(liveRiderLocation.lng),
+        heading: liveRiderLocation.heading 
+      }
     : trackingPayload?.current_location
     ? { lat: Number(trackingPayload.current_location.lat), lng: Number(trackingPayload.current_location.lng) }
     : ((trackingRequest.current_lat !== null && trackingRequest.current_lat !== undefined && trackingRequest.current_lng !== null && trackingRequest.current_lng !== undefined)
       ? { lat: Number(trackingRequest.current_lat), lng: Number(trackingRequest.current_lng) }
       : null);
+
+  // DATA AGE AUDIT (User Request)
+  const lastUpdateTs = liveRiderLocation?.timestamp 
+    ? Number(liveRiderLocation.timestamp)
+    : (trackingPayload?.current_location?.updated_at 
+        ? new Date(trackingPayload.current_location.updated_at).getTime() 
+        : (trackingRequest.updated_at ? new Date(trackingRequest.updated_at).getTime() : 0));
+  
+  const dataAgeSeconds = lastUpdateTs ? (Date.now() - lastUpdateTs) / 1000 : 9999;
+
+  // FINAL STATUS RESOLVER (Single Source)
+  // Priority: 1. Connection (Offline) > 2. GPS Age (Signal Lost) > 3. Data Delay > 4. Live
+  // Thresholds calibrated for 1-minute heartbeat interval
+  let trackingStatus: TrackingStatus = 'LIVE';
+  if (!isOnline) {
+    trackingStatus = 'OFFLINE';
+  } else if (dataAgeSeconds > 130) {
+    // Online but no GPS pulse for > 2 heartbeats
+    trackingStatus = 'SIGNAL_LOST';
+  } else if (dataAgeSeconds > 65) {
+    // Online but missed exactly one heartbeat window
+    trackingStatus = 'DELAYED';
+  }
+
   const trackingLabel = trackingPayload?.tracking_state?.is_request_specific
     ? "Live delivery tracking"
     : trackingPayload?.tracking_state?.is_fallback
@@ -153,7 +233,7 @@ export function LiveTrackingDashboard() {
       : "Waiting for rider location";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col animate-in fade-in duration-1000">
       {/* Dynamic Floating Header */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -169,8 +249,18 @@ export function LiveTrackingDashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black text-slate-900 tracking-tight">Track Delivery</h1>
-                <Badge variant="outline" className={`${isFinished ? 'bg-slate-100 text-slate-500' : 'bg-[#00B14F]/10 text-[#009e46]'} border-none font-bold text-[10px] uppercase px-2 py-0`}>
-                  {isFinished ? 'Offline' : currentLocation ? 'Live' : 'Waiting'}
+                <Badge variant="outline" className={cn(
+                  "border-none font-bold text-[10px] uppercase px-2 py-0 transition-colors duration-500",
+                  isFinished ? "bg-slate-100 text-slate-500" : 
+                  trackingStatus === 'OFFLINE' ? "bg-rose-50 text-rose-500" :
+                  trackingStatus === 'SIGNAL_LOST' ? "bg-amber-50 text-amber-600 animate-pulse" :
+                  trackingStatus === 'DELAYED' ? "bg-amber-50 text-amber-500" :
+                  "bg-[#00B14F]/10 text-[#009e46]"
+                )}>
+                  {isFinished ? 'Offline' : 
+                   trackingStatus === 'OFFLINE' ? 'Offline' :
+                   trackingStatus === 'SIGNAL_LOST' ? 'Signal Lost' :
+                   trackingStatus === 'DELAYED' ? 'Delayed' : 'Live'}
                 </Badge>
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
@@ -213,6 +303,8 @@ export function LiveTrackingDashboard() {
              remark={trackingRequest.rider_remark}
              hideSearch={true}
              containerClassName="h-full w-full"
+             trackingStatus={trackingStatus}
+             lastUpdateTs={lastUpdateTs}
            />
            
            {isFinished && (

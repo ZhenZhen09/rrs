@@ -16,9 +16,9 @@ const STORAGE_REQUEST_ID = '@active_request_id';
 
 // HARDENING CONSTANTS (Slice 1)
 const FG_MAX_AGE_MS = 30000;      // 30 seconds
-const FG_MAX_ACCURACY_M = 100;    // 100 meters
+const FG_MAX_ACCURACY_M = 500;    // 500 meters (Relaxed for indoor/urban stability)
 const BG_MAX_AGE_MS = 120000;     // 120 seconds
-const BG_MAX_ACCURACY_M = 300;    // 300 meters
+const BG_MAX_ACCURACY_M = 1000;   // 1000 meters (Relaxed for background stability)
 
 let isStoppingBackgroundTask = false;
 let hasStoppedBackgroundTask = false;
@@ -44,6 +44,22 @@ const isValidCoordinate = (lat: number, lng: number) => {
     lng >= -180 &&
     lng <= 180 &&
     !(lat === 0 && lng === 0);
+};
+
+const isValidLocation = (location: Location.LocationObject) => {
+  const { latitude, longitude, accuracy } = location.coords;
+  const timestamp = Number(location.timestamp || 0);
+  const age = Date.now() - timestamp;
+
+  if (!isValidCoordinate(latitude, longitude)) return false;
+  
+  // Rule: Accuracy threshold (Calibrated to 500m)
+  if (accuracy !== null && accuracy !== undefined && accuracy > FG_MAX_ACCURACY_M) return false;
+  
+  // Rule: Freshness check (30 seconds)
+  if (!timestamp || age < 0 || age > FG_MAX_AGE_MS) return false;
+
+  return true;
 };
 
 const normalizeLocation = (location: Location.LocationObject, mode: 'foreground' | 'background' = 'foreground') => {
@@ -169,6 +185,58 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const activeRequestId = useRef<string | null>(null);
   const foregroundSubscription = useRef<Location.LocationSubscription | null>(null);
   const socketAuthRefreshInFlight = useRef(false);
+  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+
+  // --- HEARTBEAT MECHANISM ---
+  const sendHeartbeat = async () => {
+    if (!socketRef.current?.connected || !user?.id) return;
+    if (user.role !== 'rider') return;
+
+    let lat = lastLocation?.lat || null;
+    let lng = lastLocation?.lng || null;
+    let heading = lastLocation?.heading || null;
+
+    // Proactively fetch location if currently missing (Initial lock or idle recovery)
+    if (!lat || !lng) {
+      try {
+        const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (fresh && isValidLocation(fresh)) {
+          lat = fresh.coords.latitude;
+          lng = fresh.coords.longitude;
+          heading = fresh.coords.heading;
+          setLastLocation({ lat, lng, heading });
+        }
+      } catch (err) {
+        console.warn('[Heartbeat] Could not fetch fresh fix for heartbeat');
+      }
+    }
+
+    console.log('[Heartbeat] Sending presence keep-alive...', lat ? `with fix (${lat}, ${lng})` : 'presence-only');
+    socketRef.current.emit('update-location', {
+      riderId: user.id,
+      lat,
+      lng,
+      heading,
+      timestamp: Date.now(),
+      requestId: activeRequestId.current || 'idle',
+      isHeartbeat: true
+    });
+  };
+
+  useEffect(() => {
+    if (isSocketConnected && user?.id) {
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+      // Reduce interval to 1 minute for better stability
+      heartbeatInterval.current = setInterval(sendHeartbeat, 60000);
+      sendHeartbeat();
+    }
+    return () => {
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+        heartbeatInterval.current = null;
+      }
+    };
+  }, [isSocketConnected, user?.id]);
 
   // --- TRACKING CONTROL FUNCTIONS ---
   const startTracking = async (requestId: string) => {
@@ -198,7 +266,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         lng,
         heading,
         timestamp: Date.now(),
-        requestId: activeRequestId.current || 'idle'
+        requestId: activeRequestId.current || 'idle',
+        isSimulation: true
       });
     }
   };
@@ -309,12 +378,26 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         recoverSocketAuth(message);
       }
     });
+
+    const handleLocationUpdate = (data: any) => {
+      // ENFORCE SSOT: Only process updates for the current user/rider
+      if (data.riderId === user?.id && data.lat && data.lng) {
+        setLastLocation({
+          lat: data.lat,
+          lng: data.lng,
+          heading: data.heading || null,
+        });
+      }
+    };
+
+    socket.on('rider-location-updated', handleLocationUpdate);
     socket.on('new_assignment', refreshRiderData);
     socket.on('request-updated', refreshRiderData);
     socket.on('delivery-status-updated', refreshRiderData);
     socket.on('notification-added', refreshRiderData);
 
     return () => {
+      socket.off('rider-location-updated', handleLocationUpdate);
       socket.off('new_assignment', refreshRiderData);
       socket.off('request-updated', refreshRiderData);
       socket.off('delivery-status-updated', refreshRiderData);

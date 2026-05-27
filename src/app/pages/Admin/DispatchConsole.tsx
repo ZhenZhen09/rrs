@@ -49,6 +49,12 @@ import { LiveTrackingMap } from "../../components/LiveTrackingMap";
 import { NotificationBell } from "../../components/Admin/NotificationBell";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { 
+  isTerminalRequest, 
+  isActiveRequest, 
+  isPendingRequest 
+} from "../../utils/statusMapping";
+
 export function DispatchConsole() {
   const { logout } = useAuth();
   const {
@@ -79,24 +85,34 @@ export function DispatchConsole() {
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
 
   const onlineRiderCount = useMemo(() => {
-    return Object.values(riderPresence || {}).filter(
-      (status) => status === "online",
-    ).length;
-  }, [riderPresence]);
+    const onlineIds = new Set<string>();
+    
+    // 1. Check socket-based presence
+    Object.entries(riderPresence || {}).forEach(([id, status]) => {
+      if (status === "online") onlineIds.add(id);
+    });
+
+    // 2. Check database-based status from the riders list (fetched on mount)
+    riders.forEach(r => {
+      if ((r as any).is_online) onlineIds.add(r.id);
+    });
+
+    return onlineIds.size;
+  }, [riderPresence, riders]);
 
   // Fetch riders on mount
   useEffect(() => {
     const fetchRiders = async () => {
       try {
-        const res = await fetch("/api/users", { credentials: 'include' });
+        const res = await fetch("/api/users/riders/live", { credentials: 'include' });
         if (res.status === 401) {
           logout();
           return;
         }
         if (res.ok) {
           const data = await res.json();
-          const allUsers = Array.isArray(data) ? data : data.data || [];
-          setRiders(allUsers.filter((u: any) => u.role === "rider"));
+          // The live endpoint returns only riders with online status
+          setRiders(data);
         }
       } catch (err) {
         console.error("Failed to load riders", err);
@@ -131,23 +147,9 @@ export function DispatchConsole() {
     let filtered = requests.filter((r) => {
       // Logic: Strictly exclude 'submitted_waiting' from Admin Console
       // to respect the 60s personnel cancellation window.
-      if (filterTab === "pending") return r.status === "pending";
-      
-      if (filterTab === "active")
-        return (
-          r.status === "approved" &&
-          !["completed", "failed", "disapproved"].includes(
-            r.delivery_status || "",
-          )
-        );
-      if (filterTab === "completed")
-        return (
-          ["completed", "failed", "disapproved"].includes(
-            r.delivery_status || "",
-          ) ||
-          r.status === "disapproved" ||
-          r.status === "cancelled"
-        );
+      if (filterTab === "pending") return isPendingRequest(r);
+      if (filterTab === "active") return isActiveRequest(r);
+      if (filterTab === "completed") return isTerminalRequest(r);
       return true;
     });
 
@@ -193,22 +195,9 @@ export function DispatchConsole() {
   const stats = useMemo(() => {
     if (!requests) return { pending: 0, active: 0, done: 0 };
     return {
-      pending: requests.filter((r) => r.status === "pending").length,
-      active: requests.filter(
-        (r) =>
-          r.status === "approved" &&
-          !["completed", "failed", "disapproved"].includes(
-            r.delivery_status || "",
-          ),
-      ).length,
-      done: requests.filter(
-        (r) =>
-          ["completed", "failed", "disapproved"].includes(
-            r.delivery_status || "",
-          ) ||
-          r.status === "disapproved" ||
-          r.status === "cancelled",
-      ).length,
+      pending: requests.filter(isPendingRequest).length,
+      active: requests.filter(isActiveRequest).length,
+      done: requests.filter(isTerminalRequest).length,
     };
   }, [requests]);
 
@@ -228,6 +217,18 @@ export function DispatchConsole() {
       // Use silent refresh for background sync to avoid toast spam
       handleRefresh(false);
     }
+  }, [lastSync]);
+
+  // Enterprise Fix: Instant Status Synchronization
+  // We already have a global socket listener in DataContext.tsx that calls fetchRequests(),
+  // but we want the UI to feel "Instant".
+  useEffect(() => {
+    if (!lastSync) return;
+    
+    // The DataContext handles the toast and background fetch.
+    // Here we ensure the DispatchConsole's local derived state is fresh.
+    // Actually, DispatchConsole uses 'requests' from useGlobalData(),
+    // so it will update as soon as DataContext updates its state.
   }, [lastSync]);
 
   const handleBatchApprove = async () => {

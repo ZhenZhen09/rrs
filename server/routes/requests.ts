@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { pool } from '../db';
+import { onlineRiders } from '../presence';
 import { logAction } from '../services/auditLogger';
 import { validate } from '../middleware/validate';
 import { 
@@ -251,9 +252,26 @@ router.get('/:id/tracking', async (req, res) => {
       [id]
     );
 
+    // Calculate real-time presence for the assigned rider
+    const riderIsOnline = row.assigned_rider_id ? onlineRiders.has(row.assigned_rider_id) : false;
+
+    // --- SENIOR FALLBACK LOGIC: Guarantee valid data even if live is rejected ---
+    const lastKnownGood = historyRows.length > 0 ? historyRows[historyRows.length - 1] : null;
+    let finalLocation = requestCurrentLocation || riderCurrentLocation;
+    
+    let isFallbackToHistory = false;
+    if (!finalLocation && lastKnownGood) {
+      finalLocation = { 
+        lat: Number(lastKnownGood.lat), 
+        lng: Number(lastKnownGood.lng), 
+        source: 'history_fallback' 
+      };
+      isFallbackToHistory = true;
+    }
+
     res.json({
       request,
-      current_location: requestCurrentLocation || riderCurrentLocation,
+      current_location: finalLocation,
       request_current_location: requestCurrentLocation,
       rider_current_location: riderCurrentLocation,
       history: (historyRows || []).map((log: any) => ({
@@ -265,8 +283,9 @@ router.get('/:id/tracking', async (req, res) => {
         has_request_location: Boolean(requestCurrentLocation),
         has_rider_location: Boolean(riderCurrentLocation),
         is_request_specific: Boolean(requestCurrentLocation),
-        is_fallback: !requestCurrentLocation && Boolean(riderCurrentLocation),
-        rider_status: row.rider_user_status || null
+        is_fallback: isFallbackToHistory || (!requestCurrentLocation && Boolean(riderCurrentLocation)),
+        rider_status: row.rider_user_status || null,
+        rider_is_online: riderIsOnline
       }
     });
   } catch (error) {
@@ -343,6 +362,11 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
       personnel_instructions, admin_remark
     } = req.body || {};
 
+    const user = (req as AuthRequest).user!;
+    
+    // SECURITY FIX (Final Audit): Enforce department from JWT for Personnel
+    const finalDepartment = user.role === 'admin' ? requester_department : user.department;
+
     const request_id = `req_${Date.now()}`;
 
     await pool.query(`
@@ -357,7 +381,7 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
         status, delivery_status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted_waiting', 'pending')
     `, [
-      request_id, requester_id, requester_name, requester_department,
+      request_id, requester_id, requester_name, finalDepartment,
       delivery_date, time_window, 
       pickup_location.lat, pickup_location.lng, pickup_location.address, pickup_location.businessName || null, pickup_location.landmarks || null,
       dropoff_location.lat, dropoff_location.lng, dropoff_location.address, dropoff_location.businessName || null, dropoff_location.landmarks || null,
@@ -379,7 +403,18 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
     };
     res.json(request);
 
-    // Delayed admin notification logic remains the same...
+    // ENTERPRISE BROADCAST: Ensure Admins see the new request instantly
+    const io = req.app.get('io');
+    if (io) {
+      // TARGETED WHISPERING: Only notify Admins and the specific requester.
+      io.to('admin-room').to(row.requester_id).emit('request-updated', { 
+        request_id: request_id, 
+        status: row.status, 
+        delivery_status: row.delivery_status,
+        updated_at: new Date().toISOString()
+      });
+      console.log(`📡 Broadcast: New request ${request_id} from ${requester_name}`);
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
@@ -482,19 +517,25 @@ router.put('/:id/cancel', async (req, res) => {
         });
       }
 
-      // 3. Global update for dashboards
-      io.emit('request-updated', { 
-        request_id: id, 
-        status: 'cancelled', 
-        delivery_status: 'cancelled',
-        updated_at: new Date().toISOString()
-      });
+      // 3. TARGETED WHISPERING: Notify admin, requester, and rider (if assigned)
+      io.to('admin-room')
+        .to(requesterId)
+        .to(`job_${id}`)
+        .emit('request-updated', { 
+          request_id: id, 
+          status: 'cancelled', 
+          delivery_status: 'cancelled',
+          updated_at: new Date().toISOString()
+        });
 
       // 4. Delivery status specific update
-      io.emit('delivery-status-updated', { 
-        request_id: id, 
-        status: 'cancelled' 
-      });
+      io.to('admin-room')
+        .to(requesterId)
+        .to(`job_${id}`)
+        .emit('delivery-status-updated', { 
+          request_id: id, 
+          status: 'cancelled' 
+        });
 
       console.log(`📡 Broadcast: Request ${id} cancelled. Notified requester ${requesterId}${riderId ? ` and rider ${riderId}` : ''}`);
     }
@@ -554,7 +595,7 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
 
     await conn.query(`
       UPDATE delivery_requests 
-      SET status = 'approved', assigned_rider_id = ?, assigned_rider_name = ?, admin_remark = ?, delivery_status = 'assigned'
+      SET status = 'approved', assigned_rider_id = ?, assigned_rider_name = ?, admin_remark = ?, delivery_status = 'assigned', approved_at = CURRENT_TIMESTAMP
       WHERE request_id = ?
     `, [rider_id, riderName, admin_remark, id]);
 
@@ -609,17 +650,20 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
         });
       }
 
-      // 3. Refresh lists for everyone (admin dashboards)
-      // ENRICHED PAYLOAD (FIX 08): Include delivery_status and rider info for instant sync
-      io.emit('request-updated', { 
-        request_id: id, 
-        status: 'approved',
-        delivery_status: 'assigned',
-        assigned_rider_id: rider_id,
-        assigned_rider_name: riderName,
-        admin_remark: admin_remark,
-        updated_at: new Date().toISOString()
-      });
+      // 3. TARGETED WHISPERING: Notify admin, requester, and the newly assigned rider
+      io.to('admin-room')
+        .to(requesterId)
+        .to(rider_id)
+        .to(`job_${id}`)
+        .emit('request-updated', { 
+          request_id: id, 
+          status: 'approved',
+          delivery_status: 'assigned',
+          assigned_rider_id: rider_id,
+          assigned_rider_name: riderName,
+          admin_remark: admin_remark,
+          updated_at: new Date().toISOString()
+        });
       
       console.log(`📡 Broadcast: Task ${id} assigned to ${rider_id}`);
     }
@@ -680,7 +724,8 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('request-updated', { request_id: id, status: 'disapproved' });
+      // TARGETED WHISPERING: Only notify Admins and the specific requester.
+      io.to('admin-room').to(requester_id).emit('request-updated', { request_id: id, status: 'disapproved' });
       io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_disapproved', request_id: id });
     }
 
@@ -739,7 +784,8 @@ router.put('/:id/return', authorize(['admin']), validate(returnRequestSchema), a
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('request-updated', { request_id: id, status: 'returned_for_revision' });
+      // TARGETED WHISPERING: Only notify Admins and the specific requester.
+      io.to('admin-room').to(requester_id).emit('request-updated', { request_id: id, status: 'returned_for_revision' });
       io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_revision', request_id: id });
     }
 
@@ -824,7 +870,8 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('request-updated', { request_id: id, status: 'pending' });
+      // TARGETED WHISPERING: Only notify Admins and the specific requester.
+      io.to('admin-room').to(user.id).emit('request-updated', { request_id: id, status: 'pending' });
 
       // Notify admins
       const [admins]: any = await pool.query('SELECT id FROM users WHERE role = "admin"');
@@ -868,7 +915,7 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
 
     // SECURITY & INTEGRITY: Fetch current state with lock
     const [currentRows] = await connection.query(
-      'SELECT status, delivery_status, assigned_rider_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      'SELECT status, delivery_status, assigned_rider_id, requester_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
       [id]
     ) as any[];
 
@@ -944,9 +991,19 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     // --- SENIOR FIX: REAL-TIME BROADCAST & NOTIFICATIONS ---
     const io = req.app.get('io');
     if (io) {
-      // 2. Broadcast UI refresh signals (Global and Specific)
-      io.emit('delivery-status-updated', { request_id: id, status, remark, actor_role: user.role });
-      io.emit('request-updated', { request_id: id, status: 'approved', delivery_status: status, actor_role: user.role });
+      // 2. TARGETED WHISPERING: Notify admin, requester, and assigned rider
+      io.to('admin-room')
+        .to(current.requester_id)
+        .to(current.assigned_rider_id)
+        .to(`job_${id}`)
+        .emit('delivery-status-updated', { request_id: id, status, remark, actor_role: user.role });
+
+      io.to('admin-room')
+        .to(current.requester_id)
+        .to(current.assigned_rider_id)
+        .to(`job_${id}`)
+        .emit('request-updated', { request_id: id, status: 'approved', delivery_status: status, actor_role: user.role });
+
       io.to(`job_${id}`).emit('job-status-changed', { request_id: id, status, message: remark, actor_role: user.role });
 
       // 3. Create Formal Notifications for Terminal States (Completed/Failed)

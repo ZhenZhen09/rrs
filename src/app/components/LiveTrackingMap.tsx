@@ -21,13 +21,17 @@ import {
   Search,
   X,
   Loader2,
+  WifiOff,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import carTopViewIconUrl from "../assets/car-top-view-marker.svg";
+import { cn } from "./ui/utils";
+
+export type TrackingStatus = 'OFFLINE' | 'SIGNAL_LOST' | 'DELAYED' | 'LIVE';
 
 const calculateBearing = (
   from: [number, number],
@@ -131,18 +135,19 @@ const routeBearingAtPoint = (
 };
 
 // Custom icons using Leaflet's divIcon with raw HTML strings for reliability
-const createRiderIcon = (rotation = 0) => {
+const createRiderIcon = (rotation = 0, isOffline = false, status: TrackingStatus = 'LIVE') => {
   return L.divIcon({
     html: `
-      <div class="relative car-marker-shell" style="width: 64px; height: 64px;">
+      <div class="relative car-marker-shell ${isOffline ? 'grayscale opacity-60' : ''}" style="width: 64px; height: 64px;">
         <div class="car-marker-body" style="transform: rotate(${rotation}deg);">
           <img
             src="${carTopViewIconUrl}"
             alt=""
             style="width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 10px 12px rgba(15,23,42,0.32));"
           />
+          ${status === 'LIVE' ? '<div class="absolute inset-0 bg-blue-500 rounded-full recovery-pulse -z-10"></div>' : ''}
         </div>
-        <div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-20 -z-10"></div>
+        ${!isOffline ? '<div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-20 -z-10"></div>' : ''}
       </div>
     `,
     className: "custom-map-icon smooth-marker-move",
@@ -191,6 +196,8 @@ interface LiveTrackingMapProps {
   remark?: string;
   hideSearch?: boolean;
   containerClassName?: string;
+  trackingStatus?: TrackingStatus;
+  lastUpdateTs?: number;
 }
 
 interface SearchResult {
@@ -269,6 +276,8 @@ export function LiveTrackingMap({
   remark,
   hideSearch = false,
   containerClassName = "h-[600px]",
+  trackingStatus = 'LIVE',
+  lastUpdateTs = 0,
 }: LiveTrackingMapProps) {
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [historyCoords, setHistoryCoords] = useState<[number, number][]>([]);
@@ -278,6 +287,83 @@ export function LiveTrackingMap({
   // Smooth position state to prevent jumping
   const [smoothPos, setSmoothPos] = useState<[number, number] | null>(null);
   const [headingAngle, setHeadingAngle] = useState(0);
+
+  // Target states for animation loop
+  const targetPosRef = useRef<[number, number] | null>(null);
+  const targetHeadingRef = useRef<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const previousTimeRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(Date.now());
+  const velocityRef = useRef<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
+  const posHistoryRef = useRef<[number, number][]>([]);
+
+  // Animation Loop: Enterprise Frame-Based Movement
+  useEffect(() => {
+    const animate = (time: number) => {
+      const now = Date.now();
+      const timeSinceUpdate = now - lastUpdateRef.current;
+
+      setSmoothPos((prev) => {
+        if (!prev) return targetPosRef.current;
+
+        const [currLat, currLng] = prev;
+        
+        // DEAD RECKONING: If data is stale (> 2s), continue moving with last known velocity
+        if (timeSinceUpdate > 2000 && timeSinceUpdate < 15000 && (velocityRef.current.lat !== 0 || velocityRef.current.lng !== 0)) {
+          const friction = Math.max(0, 1 - (timeSinceUpdate - 2000) / 13000);
+          const nextLat = currLat + velocityRef.current.lat * friction;
+          const nextLng = currLng + velocityRef.current.lng * friction;
+          return [nextLat, nextLng];
+        }
+
+        if (!targetPosRef.current) return prev;
+        const [targetLat, targetLng] = targetPosRef.current;
+
+        // INTERPOLATION: Move 5% towards target per frame
+        const nextLat = currLat + (targetLat - currLat) * 0.05;
+        const nextLng = currLng + (targetLng - currLng) * 0.05;
+
+        const latDone = Math.abs(nextLat - targetLat) < 0.0000001;
+        const lngDone = Math.abs(nextLng - targetLng) < 0.0000001;
+
+        if (latDone && lngDone) return targetPosRef.current;
+        return [nextLat, nextLng];
+      });
+
+      setHeadingAngle((prev) => {
+        const target = targetHeadingRef.current;
+        const delta = ((target - prev + 540) % 360) - 180;
+        
+        // TURN ANTICIPATION: Slightly faster rotation when the delta is large (preparing for turn)
+        const rotationSpeed = Math.abs(delta) > 45 ? 0.15 : 0.1;
+        const next = prev + delta * rotationSpeed;
+        
+        if (Math.abs(delta) < 0.1) return target;
+        return (next + 360) % 360;
+      });
+
+      // SMART ZOOM: Adjust zoom based on velocity (speed)
+      if (followMode && mapRef.current) {
+        const speed = Math.sqrt(Math.pow(velocityRef.current.lat, 2) + Math.pow(velocityRef.current.lng, 2)) * 1000000;
+        const currentZoom = mapRef.current.getZoom();
+        
+        // Target Zoom: Fast speed -> Zoom 14-15, Slow speed -> Zoom 16-17
+        const targetZoom = speed > 50 ? 14 : speed > 20 ? 15 : 16;
+        
+        if (Math.abs(currentZoom - targetZoom) > 0.5) {
+          // mapRef.current.setZoom(targetZoom, { animate: true });
+          // Note: Frequent setZoom can be jarring, better to just log or use a smoother mechanism if Leaflet allowed fractional zoom easing easily
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [followMode]);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -314,68 +400,60 @@ export function LiveTrackingMap({
         [Number(dropoff.lat), Number(dropoff.lng)],
       ];
 
-  // Effect to smooth out incoming GPS data
+  // Effect to handle incoming GPS data
   useEffect(() => {
     if (current) {
       const newLat = Number(current.lat);
       const newLng = Number(current.lng);
 
-      console.log("🛰️ Map received current location:", { newLat, newLng });
+      if (isNaN(newLat) || isNaN(newLng)) return;
 
-      if (isNaN(newLat) || isNaN(newLng)) {
-        console.error("❌ Invalid coordinates received:", current);
-        return;
-      }
-
-      if (!smoothPos) {
-        console.log("✅ Initializing smoothPos to:", [newLat, newLng]);
-        setSmoothPos([newLat, newLng]);
-        setLastUpdate(new Date());
-      } else {
-        const latDiff = Math.abs(smoothPos[0] - newLat);
-        const lngDiff = Math.abs(smoothPos[1] - newLng);
-
-        if (latDiff > 0.00001 || lngDiff > 0.00001) {
-          console.log("📍 Updating smoothPos (movement detected)");
-          setSmoothPos([newLat, newLng]);
-          setLastUpdate(new Date());
+      const now = Date.now();
+      const nextPosition: [number, number] = [newLat, newLng];
+      
+      // Calculate Velocity for Dead Reckoning (lat/lng per ms)
+      if (targetPosRef.current) {
+        const timeDelta = now - lastUpdateRef.current;
+        if (timeDelta > 0) {
+          const latVel = (newLat - targetPosRef.current[0]) / timeDelta;
+          const lngVel = (newLng - targetPosRef.current[1]) / timeDelta;
+          
+          // Noise Filter: Only update velocity if it's within realistic bounds (prevent teleportation jitter)
+          if (Math.abs(latVel) < 0.00001 && Math.abs(lngVel) < 0.00001) {
+            velocityRef.current = { lat: latVel, lng: lngVel };
+          }
         }
       }
-    } else {
-      console.log("❓ Map received null/undefined current location");
-    }
-  }, [current]);
 
-  useEffect(() => {
-    if (!current) {
-      return;
-    }
+      targetPosRef.current = nextPosition;
+      lastUpdateRef.current = now;
 
-    const newLat = Number(current.lat);
-    const newLng = Number(current.lng);
-
-    if (isNaN(newLat) || isNaN(newLng)) {
-      return;
-    }
-
-    const nextPosition: [number, number] = [newLat, newLng];
-
-    if (previousPositionRef.current) {
-      const previousPosition = previousPositionRef.current;
-      const latDiff = Math.abs(previousPosition[0] - nextPosition[0]);
-      const lngDiff = Math.abs(previousPosition[1] - nextPosition[1]);
-
-      if (latDiff > 0.00001 || lngDiff > 0.00001) {
-        setHeadingAngle(calculateBearing(previousPosition, nextPosition));
+      if (!smoothPos) {
+        setSmoothPos(nextPosition);
       }
-    }
 
-    previousPositionRef.current = nextPosition;
-  }, [current]);
+      // Calculate bearing from previous raw point to new raw point
+      if (previousPositionRef.current) {
+        const prev = previousPositionRef.current;
+        const latDiff = Math.abs(prev[0] - nextPosition[0]);
+        const lngDiff = Math.abs(prev[1] - nextPosition[1]);
+
+        // Only update heading if movement is significant enough to determine direction
+        if (latDiff > 0.00001 || lngDiff > 0.00001) {
+          targetHeadingRef.current = calculateBearing(prev, nextPosition);
+        }
+      }
+
+      previousPositionRef.current = nextPosition;
+      setLastUpdate(new Date());
+    }
+  }, [current, smoothPos]);
 
   const displayCurrent = smoothPos
     ? snapToRoute(smoothPos, activeRouteCoords)
     : snappedCurrent;
+  
+  // Dynamic Bearing: If snapped to route, use route's heading, otherwise use movement heading
   const displayHeading =
     routeBearingAtPoint(displayCurrent, activeRouteCoords) ?? headingAngle;
 
@@ -516,7 +594,8 @@ export function LiveTrackingMap({
         dangerouslySetInnerHTML={{
           __html: `
         .smooth-marker-move {
-          transition: transform 2s linear !important;
+          /* Transition managed by requestAnimationFrame */
+          transition: none !important;
         }
         @keyframes ping-custom {
           75%, 100% {
@@ -527,8 +606,12 @@ export function LiveTrackingMap({
         .animate-ping-custom {
           animation: ping-custom 1s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
+        .recovery-pulse {
+          animation: sonar-ripple 1.5s ease-out forwards;
+        }
         .car-marker-shell {
           animation: car-road-glide 1.4s ease-in-out infinite;
+          transition: filter 0.5s ease, opacity 0.5s ease;
         }
         .car-marker-body {
           transition: transform 0.45s ease;
@@ -568,13 +651,41 @@ export function LiveTrackingMap({
         }}
       />
 
+      {/* Enterprise Connectivity Banner */}
+      {(trackingStatus === 'OFFLINE' || trackingStatus === 'SIGNAL_LOST') && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[9999] w-auto max-w-[90%]">
+          <div className={cn(
+            "bg-white/90 backdrop-blur shadow-2xl border px-6 py-3 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-500",
+            trackingStatus === 'SIGNAL_LOST' ? "border-amber-100" : "border-rose-100"
+          )}>
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-colors",
+              trackingStatus === 'SIGNAL_LOST' ? "bg-amber-500 shadow-amber-500/20" : "bg-rose-500 shadow-rose-500/20"
+            )}>
+              <WifiOff size={20} className="text-white animate-pulse" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-black text-slate-900 tracking-tight leading-none uppercase">
+                {trackingStatus === 'SIGNAL_LOST' ? "Signal Strength Critical" : "Connection Interrupted"}
+              </p>
+              <p className={cn(
+                "text-[10px] font-bold mt-1 uppercase tracking-widest leading-none",
+                trackingStatus === 'SIGNAL_LOST' ? "text-amber-600" : "text-rose-500"
+              )}>
+                {trackingStatus === 'SIGNAL_LOST' ? `Signal lost for ${riderName || "Rider"}` : `Rider ${riderName || "Assigned"} is offline`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Driver Locator Button */}
       <div className="absolute bottom-8 right-8 z-[1000] flex flex-col items-end gap-3">
         <div className="group relative">
           <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap shadow-xl">
             {followMode ? "Following Driver" : "Recenter Driver"}
           </div>
-          <div className="mb-2 rounded-full bg-white/95 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100">
+          <div className="mb-2 rounded-full bg-white/95 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100 text-right ml-auto">
             Follow {followMode ? "On" : "Off"}
           </div>
           <Button
@@ -676,15 +787,23 @@ export function LiveTrackingMap({
           <>
             <Marker
               position={displayCurrent}
-              icon={createRiderIcon(displayHeading)}
+              icon={createRiderIcon(displayHeading, trackingStatus === 'OFFLINE' || trackingStatus === 'SIGNAL_LOST', trackingStatus)}
             >
               <Tooltip
                 permanent
                 direction="top"
                 offset={[0, -40]}
-                className="bg-white border-none shadow-none text-[10px] font-bold"
+                className={cn(
+                  "bg-white border-none shadow-xl text-[10px] font-black px-2 py-1 rounded-md",
+                  trackingStatus === 'OFFLINE' ? "text-rose-500" : 
+                  trackingStatus === 'SIGNAL_LOST' ? "text-amber-600" : 
+                  trackingStatus === 'DELAYED' ? "text-amber-500" : "text-emerald-600"
+                )}
               >
-                {riderName || "Rider"}
+                {riderName || "Rider"} 
+                {trackingStatus === 'OFFLINE' && " (Offline)"}
+                {trackingStatus === 'SIGNAL_LOST' && " (Signal Lost)"}
+                {trackingStatus === 'DELAYED' && " (Delayed)"}
               </Tooltip>
             </Marker>
           </>
@@ -775,7 +894,7 @@ export function LiveTrackingMap({
       )}
 
       <div className="absolute top-20 left-4 z-[9999] max-w-[280px]">
-        <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-100 p-3 rounded-2xl flex items-start gap-3">
+        <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-100 p-3 rounded-2xl flex items-start gap-3 text-left">
           <div className="p-2 bg-red-50 text-red-500 rounded-lg shrink-0">
             <MapPinned size={20} />
           </div>
@@ -793,29 +912,45 @@ export function LiveTrackingMap({
       <div className="absolute bottom-4 left-4 z-[9999] max-w-[320px]">
         <div className="bg-white/95 backdrop-blur shadow-2xl border border-slate-100 p-4 rounded-3xl">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-base shadow-lg shadow-primary/20 shrink-0">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base shadow-lg shrink-0 transition-colors",
+              trackingStatus === 'OFFLINE' ? "bg-rose-100 text-rose-500" : 
+              trackingStatus === 'SIGNAL_LOST' ? "bg-amber-100 text-amber-600" : 
+              "bg-primary text-white shadow-primary/20"
+            )}>
               {riderName?.substring(0, 1)}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 text-left">
               <h3 className="font-bold text-slate-900 leading-none truncate mb-1">
                 {riderName || "Rider"}
               </h3>
               <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className={cn(
+                  "flex h-2 w-2 rounded-full",
+                  trackingStatus === 'OFFLINE' ? "bg-rose-500" : 
+                  trackingStatus === 'SIGNAL_LOST' ? "bg-amber-500 animate-pulse" : 
+                  trackingStatus === 'DELAYED' ? "bg-amber-300" : 
+                  "bg-[#00B14F] animate-pulse"
+                )} />
                 <p className="text-[10px] font-medium text-slate-500 truncate">
-                  Live Tracking Active
+                  {trackingStatus === 'OFFLINE' ? "Offline" : 
+                   trackingStatus === 'SIGNAL_LOST' ? "Signal Lost" : 
+                   trackingStatus === 'DELAYED' ? "Delayed" : "Live Tracking Active"}
                 </p>
               </div>
             </div>
             <Badge
               variant="outline"
-              className="bg-blue-50/50 text-blue-600 border-blue-100 text-[10px] py-0 px-2 h-5 shrink-0"
+              className={cn(
+                "text-[10px] py-0 px-2 h-5 shrink-0 transition-colors",
+                trackingStatus === 'LIVE' ? "bg-emerald-50/50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"
+              )}
             >
-              History Enabled
+              {trackingStatus === 'LIVE' ? "Real-time" : "Stale Data"}
             </Badge>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-left">
             <div className="flex items-center gap-2">
               <Clock className="text-slate-400" size={12} />
               <div className="truncate">
@@ -823,17 +958,20 @@ export function LiveTrackingMap({
                   Last Update
                 </p>
                 <p className="text-[10px] font-bold text-slate-700">
-                  {format(lastUpdate, "HH:mm:ss")}
+                   {lastUpdateTs ? formatDistanceToNow(lastUpdateTs, { addSuffix: true }) : format(lastUpdate, "HH:mm:ss")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-left">
               <Activity className="text-slate-400" size={12} />
               <div className="truncate">
                 <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">
                   Status
                 </p>
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">
+                <p className={cn(
+                  "text-[10px] font-bold uppercase tracking-tight",
+                  trackingStatus === 'LIVE' ? "text-blue-600" : "text-slate-400"
+                )}>
                   {status || "In Progress"}
                 </p>
               </div>

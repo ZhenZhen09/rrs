@@ -15,28 +15,34 @@ export const parseLocalDate = (dateStr: string): Date => {
  * Returns the current date as a YYYY-MM-DD string in local time.
  */
 export const getLocalDateStr = (d: Date | string = new Date()): string => {
-  // 1. If it's already an ISO string with a T, extract the date portion directly.
-  // This is the CRITICAL fix for the "Midnight Date Shift" bug.
-  // It ensures 2026-05-25T23:59:59Z stays 2026-05-25, never shifting.
-  if (typeof d === 'string' && d.includes('T')) {
-    return d.split('T')[0];
-  }
+  // Defensive: Handle null or empty input (Enterprise Hardening)
+  if (!d) return '';
 
-  // 2. If it's a simple date string already, just return the first 10 chars.
-  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
-    return d.substring(0, 10);
+  if (typeof d === 'string') {
+    // 1. Check for YYYY-MM-DD format FIRST (Strict check)
+    const dateMatch = d.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch) {
+      return dateMatch[1];
+    }
+
+    // 2. If it's an ISO string (contains T but didn't match regex exactly), 
+    // we only split if it actually looks like an ISO string (starts with digit)
+    if (d.includes('T') && /^\d/.test(d)) {
+      return d.split('T')[0];
+    }
+
+    // If it reached here, it's a malformed string (like "NOT-A-DATE")
+    return ''; 
   }
   
-  // 3. For Date objects (like new Date()), extract local parts to stay in local context.
-  const date = typeof d === 'string' ? new Date(d) : d;
-  
-  if (isNaN(date.getTime())) {
-    return typeof d === 'string' ? d.substring(0, 10) : '';
+  // 3. For Date objects, extract local parts to stay in local context.
+  if (!(d instanceof Date) || isNaN(d.getTime())) {
+    return '';
   }
 
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
 

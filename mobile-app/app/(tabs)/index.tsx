@@ -30,6 +30,8 @@ export default function TodayScreen() {
 
   // Filter for today's active tasks
   const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'today');
+  const tomorrowCount = allTasks.filter(req => getRiderTaskTab(req) === 'tomorrow').length;
+  const futureCount = allTasks.filter(req => getRiderTaskTab(req) === 'future').length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -45,7 +47,14 @@ export default function TodayScreen() {
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            colors={['#3B82F6']} // Brand Primary
+            tintColor={'#3B82F6'}
+          />
+        }
       >
         {loading && !refreshing ? (
           <>
@@ -55,9 +64,25 @@ export default function TodayScreen() {
           </>
         ) : tasks.length === 0 ? (
           <View style={styles.empty}>
-            <MaterialIcons name="fact-check" size={64} color="#E2E8F0" />
-            <Text style={styles.emptyTitle}>No tasks for today</Text>
-            <Text style={styles.emptyText}>Enjoy your day or check other tabs for pending items.</Text>
+            <View style={styles.emptyIconContainer}>
+              <MaterialIcons name="fact-check" size={48} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>All caught up for today!</Text>
+            <Text style={styles.emptyText}>
+              {tomorrowCount > 0 
+                ? `You have ${tomorrowCount} job(s) scheduled for Tomorrow. Check the 'Tomorrow' tab to see them.`
+                : futureCount > 0
+                ? `You have ${futureCount} upcoming jobs in the 'Future' tab.`
+                : "No tasks are assigned to you right now."}
+            </Text>
+            
+            {/* INTUITIVE PULL GUIDE */}
+            <View style={styles.pullGuide}>
+              <MaterialIcons name="arrow-downward" size={16} color="#CBD5E1" />
+              <Text style={styles.pullGuideText}>
+                Swipe down to sync
+              </Text>
+            </View>
           </View>
         ) : (
           tasks.map((task, index) => (
@@ -222,14 +247,40 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: normalizeFontSize(18),
     fontWeight: '700',
-    color: '#64748B',
+    color: '#0F172A',
     marginTop: verticalScale(16),
   },
   emptyText: {
     fontSize: normalizeFontSize(14),
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: verticalScale(4),
     textAlign: 'center',
     paddingHorizontal: scale(40),
+    marginBottom: verticalScale(24),
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: verticalScale(8),
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(10),
+    borderRadius: 12,
+    gap: 8,
+  },
+  syncButtonText: {
+    fontSize: normalizeFontSize(12),
+    fontWeight: '800',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   }
 });

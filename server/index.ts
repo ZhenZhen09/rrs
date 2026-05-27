@@ -189,14 +189,14 @@ class RequestWatchdog {
             });
           }
           
-          // Emit update to everyone
-          this.io.emit('request-updated', { request_id: req.request_id, status: 'pending' });
+          // TARGETED WHISPERING: Only notify Admins and the specific requester.
+          this.io.to('admin-room').to(req.requester_id).emit('request-updated', { request_id: req.request_id, status: 'pending' });
         }
       }
 
       // --- TASK 2: MONITOR ACTIVE SHIPMENTS ---
       const [rows] = await pool.execute(
-        `SELECT request_id, assigned_rider_id, delivery_status, current_lat, current_lng, updated_at
+        `SELECT request_id, assigned_rider_id, requester_id, delivery_status, current_lat, current_lng, updated_at
          FROM delivery_requests
          WHERE status = 'approved' AND delivery_status NOT IN ('completed', 'failed', 'disapproved')`
       );
@@ -242,7 +242,12 @@ class RequestWatchdog {
           await pool.execute('UPDATE delivery_requests SET exceptions = ? WHERE request_id = ?', [JSON.stringify(newExceptionsList), req.request_id]);
           
           const event = newExceptionsList.length > 0 ? 'exception-detected' : 'exception-cleared';
-          this.io.emit(event, { requestId: req.request_id, exceptions: newExceptionsList });
+          
+          // TARGETED WHISPERING: Only notify Admins, the job room, and the specific requester.
+          this.io.to('admin-room')
+                 .to(`job_${req.request_id}`)
+                 .to(req.requester_id)
+                 .emit(event, { requestId: req.request_id, exceptions: newExceptionsList });
         }
       }
     } catch (err) {
@@ -254,14 +259,25 @@ class RequestWatchdog {
 io.on('connection', (socket: any) => {
   let sessionRiderId: string | null = null;
 
+  // Auto-presence for riders
+  if (socket.user?.role === 'rider' && socket.user.id) {
+    sessionRiderId = socket.user.id;
+    updateRiderPresence(sessionRiderId as string, socket.id, io as any);
+  }
+
   socket.on('join-room', async (room: string) => { 
     // Standard Security Practice: Enforce room authorization
     const isJobRoom = room.startsWith('job_');
     const isUserRoom = room === socket.user.id;
     const isAdminRoom = room === 'admin-room';
 
-    if (socket.user.role === 'admin') {
+    if (socket.user.role === 'admin' || (isAdminRoom && socket.user.role === 'personnel')) {
       socket.join(room);
+      if (room === 'admin-room') {
+        const currentlyOnline = Array.from(onlineRiders.keys());
+        console.log(`[Presence] Syncing ${currentlyOnline.length} riders to new room member: ${socket.user.id}`);
+        socket.emit('presence-sync', { onlineRiders: currentlyOnline });
+      }
       return;
     }
 
@@ -322,6 +338,16 @@ io.on('connection', (socket: any) => {
     }
   });
 
+  socket.on('check-rider-presence', (riderId: string) => {
+    if (!riderId) return;
+    const isOnline = onlineRiders.has(riderId);
+    socket.emit('rider-presence-changed', {
+      riderId,
+      status: isOnline ? 'online' : 'offline',
+      lastSeen: isOnline ? onlineRiders.get(riderId)?.lastSeen : null
+    });
+  });
+
   socket.on('update-location', async (data: any) => {
     const { requestId, lat, lng, riderId, heading, accuracy, timestamp } = data;
     if (lat === undefined || lng === undefined || !riderId) return;
@@ -360,11 +386,11 @@ io.on('connection', (socket: any) => {
   socket.on('disconnect', () => {
     if (sessionRiderId) {
       const rid = sessionRiderId;
-      setTimeout(() => {
+      setTimeout(async () => {
         const currentData = onlineRiders.get(rid);
         if (currentData && currentData.socketId === socket.id) {
-          onlineRiders.delete(rid);
-          io.to('admin-room').emit('rider-presence-changed', { riderId: rid, status: 'offline' });
+          // Use unified async cleanup logic
+          await cleanupOfflineRiders(io);
         }
       }, DISCONNECT_GRACE_PERIOD);
     }

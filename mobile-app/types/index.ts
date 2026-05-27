@@ -26,4 +26,10 @@ export interface Job {
   personnel_instructions?: string;
   admin_remark?: string;
   rider_remark?: string;
+  current_location?: {
+    lat: number;
+    lng: number;
+    source?: string;
+    updated_at?: string;
+  } | null;
 }

@@ -75,10 +75,29 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   const [adminNote, setAdminNote] = useState('');
   const [riderSortBy, setRiderSortBy] = useState('nearest');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [closureReason, setClosureReason] = useState('');
+  const [selectedCommonReasons, setSelectedCommonReasons] = useState<string[]>([]);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean, status: string | null }>({
     open: false,
     status: null
   });
+
+  const COMMON_REASONS = [
+    "Rider forgot to click complete",
+    "Rider phone battery died",
+    "Completed via manual verification",
+    "Rider has no internet signal",
+    "Incorrect status update by rider"
+  ];
+
+  const handleToggleCommonReason = (reason: string) => {
+    setSelectedCommonReasons(prev => {
+      const next = prev.includes(reason) ? prev.filter(r => r !== reason) : [...prev, reason];
+      // Update text area automatically
+      setClosureReason(next.join(", "));
+      return next;
+    });
+  };
 
   if (!request) {
     return (
@@ -92,7 +111,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     );
   }
 
-  const isPending = request.status === 'pending' || request.status === 'submitted_waiting';
+  const isPending = request.status === 'pending';
   const isApproved = request.status === 'approved';
   const isDisapproved = request.status === 'disapproved';
   const isReturned = request.status === 'returned_for_revision';
@@ -141,10 +160,15 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (closureReason.length < 10) {
+      toast.error("Please provide a more detailed reason (min 10 chars).");
+      return;
+    }
     setUpdatingStatus(true);
     try {
-      await updateDeliveryStatus(request.request_id, newStatus as any);
+      await updateDeliveryStatus(request.request_id, newStatus as any, closureReason);
       setConfirmModal({ open: false, status: null });
+      setClosureReason('');
     } finally {
       setUpdatingStatus(false);
     }
@@ -522,21 +546,76 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
         </div>
       </div>
 
-      <AlertDialog open={confirmModal.open} onOpenChange={(open) => !open && setConfirmModal({ open: false, status: null })}>
-        <AlertDialogContent className="rounded-xl border-none shadow-2xl max-w-sm">
+      <AlertDialog 
+        open={confirmModal.open} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmModal({ open: false, status: null });
+            setClosureReason('');
+            setSelectedCommonReasons([]);
+          }
+        }}
+      >
+        <AlertDialogContent className="rounded-xl border-none shadow-2xl max-w-sm w-[95vw] max-h-[90vh] overflow-y-auto z-[9999] scale-95 md:scale-100 transition-transform">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-[900] text-slate-900">Confirm Update</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-500 text-xs font-bold">
-              Mark this delivery as <span className={cn("uppercase", confirmModal.status === 'completed' ? "text-emerald-600" : "text-rose-600")}>{confirmModal.status}</span>?
+            <AlertDialogDescription className="text-slate-500 text-xs font-bold space-y-4">
+              <p>Mark this delivery as <span className={cn("uppercase", confirmModal.status === 'completed' ? "text-emerald-600" : "text-rose-600")}>{confirmModal.status}</span>?</p>
+              
+              <div className="space-y-3 text-left bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Common Reasons</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {COMMON_REASONS.map(reason => (
+                    <div 
+                      key={reason} 
+                      onClick={() => handleToggleCommonReason(reason)}
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-all",
+                        selectedCommonReasons.includes(reason) 
+                          ? "bg-slate-900 border-slate-900 text-white shadow-sm" 
+                          : "bg-white border-slate-100 hover:border-slate-200 text-slate-600"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-3 h-3 rounded border flex items-center justify-center shrink-0",
+                        selectedCommonReasons.includes(reason) ? "bg-white border-white" : "border-slate-300"
+                      )}>
+                        {selectedCommonReasons.includes(reason) && <Check size={8} className="text-slate-900" strokeWidth={5} />}
+                      </div>
+                      <span className="text-[9px] font-bold leading-none">{reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2 text-left">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                  Custom Reason / Adjust Text
+                </label>
+                <Textarea 
+                  placeholder="Explain why this transaction is being closed..."
+                  value={closureReason}
+                  onChange={(e) => setClosureReason(e.target.value)}
+                  className="min-h-[70px] rounded-lg border-slate-100 bg-slate-50 font-bold text-xs resize-none p-3 shadow-none focus-visible:ring-1 focus-visible:ring-slate-200 text-slate-900"
+                />
+                <p className={cn(
+                  "text-[8px] font-black uppercase tracking-tighter px-1 transition-colors",
+                  closureReason.length >= 10 ? "text-emerald-500" : "text-slate-400"
+                )}>
+                  {closureReason.length}/10 characters minimum
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4 gap-2">
+          <AlertDialogFooter className="mt-2 gap-2 pb-2">
             <AlertDialogCancel className="rounded-lg font-black text-[9px] uppercase tracking-widest border-slate-100 h-9">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => confirmModal.status && handleStatusChange(confirmModal.status)}
+              disabled={updatingStatus || closureReason.length < 10}
               className={cn(
                 "rounded-lg font-black text-[9px] uppercase tracking-widest h-9 text-white border-none shadow-md",
-                confirmModal.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600" : "bg-rose-500 hover:bg-rose-600"
+                confirmModal.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600" : "bg-rose-500 hover:bg-rose-600",
+                (updatingStatus || closureReason.length < 10) && "opacity-50 cursor-not-allowed"
               )}
             >
               {updatingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}

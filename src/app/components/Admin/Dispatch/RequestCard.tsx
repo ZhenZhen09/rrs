@@ -239,7 +239,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                   Approved:
                 </span>
                 <span className="text-[10px] font-black text-slate-900 truncate tracking-tight leading-none">
-                  {formatDateTime(request.updated_at, "MMM d, h:mm a")}
+                  {formatDateTime(request.approved_at || request.updated_at, "MMM d, h:mm a")}
                 </span>
               </div>
             </div>

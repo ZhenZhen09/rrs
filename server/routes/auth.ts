@@ -6,6 +6,7 @@ import argon2 from 'argon2';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import jwt from 'jsonwebtoken';
+import { onlineRiders } from '../presence';
 
 const router = Router();
 
@@ -24,7 +25,7 @@ const generateTokens = async (user: any) => {
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role, department: user.department },
     getJwtSecret(),
-    { expiresIn: '15m' }
+    { expiresIn: '1h' }
   );
 
   const refreshToken = jwt.sign(
@@ -148,6 +149,18 @@ router.post('/logout', async (req: Request, res: Response) => {
     const { userId } = req.body || {};
     if (userId) {
       await pool.query('UPDATE users SET refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = ?', [userId]);
+
+      if (onlineRiders.has(userId)) {
+        onlineRiders.delete(userId);
+        const io = req.app.get('io');
+        if (io) {
+          io.to('admin-room').emit('rider-presence-changed', { 
+            riderId: userId, 
+            status: 'offline',
+            reason: 'logout'
+          });
+        }
+      }
     }
     res.clearCookie('authToken');
     res.json({ success: true });

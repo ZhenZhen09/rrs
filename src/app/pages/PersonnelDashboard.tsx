@@ -386,6 +386,17 @@ export function PersonnelDashboard() {
       toast.error("Please fill in all required fields");
       return;
     }
+
+    // Logic Fix: Prevent submission of past dates even if typed manually
+    const selectedDate = new Date(deliveryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      toast.error("Please select a current or future date");
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -708,6 +719,7 @@ export function PersonnelDashboard() {
                         <Input
                           type="date"
                           min={new Date().toISOString().split("T")[0]}
+                          onKeyDown={(e) => e.preventDefault()}
                           className="h-14 pl-12 rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none border-2 focus:border-blue-500/20 focus:ring-0 font-bold"
                           value={deliveryDate}
                           onChange={(e) => setDeliveryDate(e.target.value)}

@@ -1,14 +1,16 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
+import React, { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  useCallback, 
+  useRef 
 } from "react";
 import { DeliveryRequest, Notification, DeliveryStatus } from "../types";
 import { useAuth } from "./AuthContext";
 import { useRealTime } from "./RealTimeContext";
 import { toast } from "sonner";
+import { WifiOff, Bike } from "lucide-react";
 
 interface DataContextType {
   requests: DeliveryRequest[];
@@ -60,7 +62,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useRealTime();
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const pendingOptimisticIds = React.useRef<Set<string>>(new Set());
+  const pendingOptimisticIds = useRef<Set<string>>(new Set());
+  
+  // Enterprise Pattern: Keep a ref of the latest requests for socket event access
+  const requestsRef = useRef<DeliveryRequest[]>([]);
+  useEffect(() => {
+    requestsRef.current = requests;
+  }, [requests]);
 
   const fetchWithAuth = useCallback(
     async (url: string, options: RequestInit = {}) => {
@@ -231,6 +239,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (data.status === 'completed') toast.success(msg);
       else if (data.status === 'failed') toast.error(msg);
       else toast.info(msg);
+      
+      // Enterprise Fix: Instant UI update for status changes
+      setRequests((prev) => 
+        prev.map((req) => 
+          req.request_id === data.request_id 
+            ? { ...req, delivery_status: data.status as any, rider_remark: data.remark || req.rider_remark } 
+            : req
+        )
+      );
+
       fetchRequests();
     });
 
@@ -241,9 +259,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         exceptions: string[];
         severity: "warning" | "critical";
       }) => {
-        toast.error(`System Exception: ${data.exceptions.join(", ")} on Request #${data.requestId.slice(-6).toUpperCase()}`, {
-          duration: 5000,
+        const reqDetails = requestsRef.current.find(r => r.request_id === data.requestId);
+        const requesterPart = reqDetails ? ` by ${reqDetails.on_behalf_of || reqDetails.requester_name}` : "";
+
+        const friendlyExceptions = data.exceptions.map(ex => {
+          if (ex === 'signal_lost') return 'Signal Lost';
+          return ex.replace('_', ' ').toUpperCase();
         });
+
+        toast.error(`${friendlyExceptions.join(", ")} | Request #${data.requestId.slice(-6).toUpperCase()}${requesterPart}`, {
+          duration: 8000,
+          icon: (
+            <div className="flex items-center gap-2 text-rose-500 mr-2">
+              <Bike size={16} strokeWidth={2.5} />
+              <WifiOff size={16} strokeWidth={2.5} />
+            </div>
+          ),
+          description: "Rider has stopped transmitting GPS data.",
+        });
+        
         setRequests((prev) =>
           (prev || []).map((req) =>
             req.request_id === data.requestId
@@ -259,6 +293,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     );
 
     socket.on("exception-cleared", (data: { requestId: string }) => {
+      const id = data.requestId.slice(-6).toUpperCase();
+      const reqDetails = requestsRef.current.find(r => r.request_id === data.requestId);
+      const requesterPart = reqDetails ? ` by ${reqDetails.on_behalf_of || reqDetails.requester_name}` : "";
+
+      toast.success(`Signal Recovered | Request #${id}${requesterPart}`, {
+        duration: 5000,
+        icon: (
+          <div className="text-emerald-500 mr-2">
+            <Bike size={16} strokeWidth={2.5} />
+          </div>
+        ),
+        description: "Rider is transmitting GPS data again.",
+      });
+
       setRequests((prev) =>
         (prev || []).map((req) =>
           req.request_id === data.requestId
@@ -355,9 +403,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           requester_department: user.department,
         }),
       });
+      
       if (response && response.ok) {
+        const realRequest = await response.json();
         pendingOptimisticIds.current.delete(tempId);
-        await fetchRequests();
+        
+        // ENTERPRISE FIX: Direct Injection (No disappearances)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === tempId ? realRequest : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(tempId);
         setRequests((prev) => prev.filter((r) => r.request_id !== tempId));
@@ -403,7 +457,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -447,7 +504,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -483,7 +543,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -519,7 +582,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -566,7 +632,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -591,7 +660,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       if (response && response.ok) {
         pendingOptimisticIds.current.delete(requestId);
-        await fetchRequests();
+        // ENTERPRISE FIX: Direct State Confirmation (No re-fetch flicker)
+        setRequests((prev) => 
+          prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
+        );
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);

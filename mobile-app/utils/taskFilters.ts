@@ -22,6 +22,11 @@ const isPastTimeWindow = (timeWindow: string | undefined, now: Date): boolean =>
 };
 
 export const getRiderTaskTab = (task: Job, today: Date = new Date()): RiderTaskTab => {
+  // Defensive: Fail-Hidden logic for missing critical fields (Enterprise Hardening)
+  if (!task?.request_id || !task?.status || !task?.delivery_status) {
+    return 'hidden';
+  }
+
   if (!isActiveApprovedTask(task)) return 'hidden';
 
   const todayStr = getLocalDateStr(today);

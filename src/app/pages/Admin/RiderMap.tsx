@@ -4,29 +4,19 @@ import L from 'leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { useRealTime } from '../../context/RealTimeContext';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { Card } from '../../components/ui/card';
-import { 
-  Search, 
-  RefreshCw, 
-  ChevronRight,
-  AlertCircle,
-  Navigation2,
-  Signal,
-  MapPin
-} from 'lucide-react';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
+import { Search, MapPin, Bike, Navigation, Info, Clock, AlertTriangle } from 'lucide-react';
+import { cn } from '../../components/ui/utils';
 import 'leaflet/dist/leaflet.css';
 
-// Fix Leaflet marker icon issue
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
+// Fix for default marker icons in React Leaflet
+const DefaultIcon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
@@ -58,7 +48,7 @@ function MapController({ center, zoom }: { center: [number, number] | null, zoom
 }
 
 export function RiderMap() {
-  const { socket } = useRealTime();
+  const { socket, riderPresence, riderLocations } = useRealTime();
   const [riders, setRiders] = useState<RiderLive[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,6 +56,44 @@ export function RiderMap() {
   const [selectedRider, setSelectedRider] = useState<RiderLive | null>(null);
   const [autoUpdate, setAutoUpdate] = useState(true);
   const mapRef = useRef<L.Map | null>(null);
+
+  const getRiderLocation = useCallback((rider: RiderLive) => {
+    // Priority 1: Real-time socket location
+    const live = riderLocations[rider.id];
+    if (live) return { lat: live.lat, lng: live.lng };
+    // Priority 2: Database fallback
+    if (rider.current_lat && rider.current_lng) {
+      return { lat: Number(rider.current_lat), lng: Number(rider.current_lng) };
+    }
+    return null;
+  }, [riderLocations]);
+
+  const isRiderOnline = useCallback((rider: RiderLive) => {
+    // Priority 1: Real-time socket check
+    const presence = riderPresence[rider.id];
+    if (presence === 'online') return true;
+    if (presence === 'offline') return false;
+
+    // Priority 2: Database fallback
+    return !!rider.is_online;
+  }, [riderPresence]);
+
+  const getRiderStatusLabel = useCallback((rider: RiderLive) => {
+    const isOnline = isRiderOnline(rider);
+    const live = riderLocations[rider.id];
+    
+    // Calculate data age based on socket or DB
+    const lastUpdateTs = live?.timestamp 
+      ? Number(live.timestamp)
+      : (rider.last_seen ? new Date(rider.last_seen).getTime() : 0);
+    
+    const dataAgeSeconds = lastUpdateTs ? (Date.now() - lastUpdateTs) / 1000 : 9999;
+
+    if (!isOnline) return 'OFFLINE';
+    if (dataAgeSeconds > 130) return 'SIGNAL LOST';
+    if (dataAgeSeconds > 65) return 'DELAYED';
+    return 'LIVE';
+  }, [isRiderOnline, riderLocations]);
 
   const fetchRiders = useCallback(async () => {
     try {
@@ -75,7 +103,7 @@ export function RiderMap() {
       if (response.ok) {
         const data = await response.json();
         setRiders(data);
-        
+
         if (selectedRider) {
           const updated = data.find((r: RiderLive) => r.id === selectedRider.id);
           if (updated) setSelectedRider(updated);
@@ -116,21 +144,20 @@ export function RiderMap() {
 
   const filteredRiders = useMemo(() => {
     return riders.filter(r => {
-      const name = r.name || '';
-      const id = r.id || '';
-      const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           id.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      if (filter === 'online') return matchesSearch && r.is_online;
-      if (filter === 'offline') return matchesSearch && !r.is_online;
+      const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           r.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const online = isRiderOnline(r);
+      if (filter === 'online') return matchesSearch && online;
+      if (filter === 'offline') return matchesSearch && !online;
       return matchesSearch;
     });
-  }, [riders, searchQuery, filter]);
+  }, [riders, searchQuery, filter, isRiderOnline]);
 
-  const activeCount = riders.filter(r => r.is_online).length;
+  const activeCount = riders.filter(r => isRiderOnline(r)).length;
 
   const createCustomIcon = (rider: RiderLive) => {
-    const color = rider.is_online ? '#10b981' : '#94a3b8';
+    const status = getRiderStatusLabel(rider);
+    const color = status === 'LIVE' ? '#10b981' : (status === 'OFFLINE' ? '#94a3b8' : '#f59e0b');
     const isSelected = selectedRider?.id === rider.id;
     
     return L.divIcon({
@@ -140,7 +167,7 @@ export function RiderMap() {
           <div style="width: ${isSelected ? '32px' : '24px'}; height: ${isSelected ? '32px' : '24px'}; background: #1e293b; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: ${isSelected ? '12px' : '10px'};">
             ${(rider.name || 'R').substring(0, 1)}
           </div>
-          <div style="position: absolute; bottom: -1px; right: -1px; width: ${isSelected ? '12px' : '10px'}; height: ${isSelected ? '12px' : '10px'}; background: ${rider.is_online ? '#10b981' : '#94a3b8'}; border: 1.5px solid white; border-radius: 50%;"></div>
+          <div style="position: absolute; bottom: -1px; right: -1px; width: ${isSelected ? '12px' : '10px'}; height: ${isSelected ? '12px' : '10px'}; background: ${color}; border: 1.5px solid white; border-radius: 50%;"></div>
         </div>
       `,
       iconSize: isSelected ? [40, 40] : [32, 32],
@@ -178,7 +205,10 @@ export function RiderMap() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`flex-1 py-1 rounded-md text-[8px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={cn(
+                    "flex-1 py-1 text-[8px] font-black uppercase tracking-widest rounded transition-all",
+                    filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  )}
                 >
                   {f}
                 </button>
@@ -186,177 +216,199 @@ export function RiderMap() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-3 md:px-4 space-y-2 pb-4 custom-scrollbar">
           {loading ? (
-            <div className="text-center py-10">
-               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-               <p className="text-slate-400 font-bold text-[8px] uppercase tracking-widest">Loading...</p>
-            </div>
+             <div className="flex flex-col gap-2">
+                {[1,2,3,4].map(i => <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />)}
+             </div>
           ) : filteredRiders.length === 0 ? (
-            <div className="text-center py-10"><p className="text-slate-400 font-bold text-[8px] uppercase tracking-widest">No riders found</p></div>
+             <div className="py-12 text-center">
+                <Bike className="h-8 w-8 text-slate-100 mx-auto mb-2" />
+                <p className="text-[10px] font-bold text-slate-300">No riders found</p>
+             </div>
           ) : (
-            filteredRiders.map((rider) => (
-              <button
-                key={rider.id}
-                onClick={() => setSelectedRider(rider)}
-                className={`w-full p-2.5 rounded-xl border transition-all text-left flex items-start gap-3 ${selectedRider?.id === rider.id ? 'bg-blue-50 border-blue-100' : 'bg-white border-transparent hover:bg-slate-50'}`}
-              >
-                <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xs shrink-0 relative shadow-sm">
-                  {(rider.name || 'R').substring(0, 1)}
-                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${rider.is_online ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                   <div className="flex items-center justify-between gap-1">
-                      <p className="font-black text-slate-900 truncate text-[10px] leading-tight">{rider.name}</p>
-                      {!rider.is_online && <span className="text-[7px] font-bold text-slate-400 whitespace-nowrap uppercase">Disconnected</span>}
-                   </div>
-                   <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{rider.is_online ? 'Currently Connected' : 'Last seen: ' + (rider.last_seen ? new Date(rider.last_seen).toLocaleTimeString() : 'N/A')}</p>
-                </div>
-                <ChevronRight size={10} className={`mt-1 transition-transform ${selectedRider?.id === rider.id ? 'translate-x-0.5 text-blue-400' : 'text-slate-300'}`} />
-              </button>
-            ))
+            filteredRiders.map((rider) => {
+              const status = getRiderStatusLabel(rider);
+              const isSelected = selectedRider?.id === rider.id;
+              
+              return (
+                <button
+                  key={rider.id}
+                  onClick={() => setSelectedRider(rider)}
+                  className={cn(
+                    "w-full p-2.5 rounded-xl border-2 transition-all text-left flex items-start gap-3",
+                    isSelected 
+                      ? "border-slate-900 bg-slate-900 shadow-lg shadow-slate-900/10" 
+                      : "border-slate-50 hover:border-slate-200 bg-white"
+                  )}
+                >
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0 relative",
+                    isSelected ? "bg-white text-slate-900" : "bg-slate-900 text-white shadow-sm"
+                  )}>
+                    {rider.name.substring(0, 1)}
+                    <div className={cn(
+                      "absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full border border-white",
+                      status === 'LIVE' ? "bg-emerald-500" :
+                      status === 'OFFLINE' ? "bg-slate-400" : "bg-amber-500"
+                    )} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={cn(
+                        "font-black truncate text-[10px] leading-tight",
+                        isSelected ? "text-white" : "text-slate-900"
+                      )}>{rider.name}</p>
+                      <Badge variant="outline" className={cn(
+                        "text-[7px] font-black px-1 py-0 border-none shrink-0",
+                        status === 'LIVE' ? "bg-emerald-50 text-emerald-600" :
+                        status === 'OFFLINE' ? (isSelected ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500") :
+                        "bg-amber-50 text-amber-600 animate-pulse"
+                      )}>
+                        {status}
+                      </Badge>
+                    </div>
+                    <p className={cn(
+                      "text-[9px] font-bold truncate mt-0.5",
+                      isSelected ? "text-slate-400" : "text-slate-500"
+                    )}>
+                      {rider.last_seen ? `Seen ${new Date(rider.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Never seen'}
+                    </p>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
+
+        {selectedRider && (
+          <div className="p-3 md:p-4 border-t border-slate-100 bg-slate-50 animate-in slide-in-from-bottom-full duration-300">
+             <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+                   <Navigation size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                   <h3 className="text-[11px] font-black text-slate-900 truncate uppercase tracking-tight">{selectedRider.name}</h3>
+                   <p className="text-[8px] font-bold text-slate-500 truncate mt-0.5">{selectedRider.email}</p>
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  size="sm" 
+                  className="h-8 rounded-lg bg-white border border-slate-200 text-slate-900 hover:bg-slate-100 text-[8px] font-black uppercase tracking-widest"
+                  onClick={() => {
+                    const loc = getRiderLocation(selectedRider);
+                    if (loc && mapRef.current) {
+                      mapRef.current.flyTo([loc.lat, loc.lng], 16);
+                    }
+                  }}
+                >
+                  Focus Map
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-8 rounded-lg border-slate-200 text-slate-900 hover:bg-slate-100 text-[8px] font-black uppercase tracking-widest"
+                  onClick={() => setSelectedRider(null)}
+                >
+                  Close
+                </Button>
+             </div>
+          </div>
+        )}
       </div>
 
-      {/* Map Area */}
-      <div className="flex-1 relative bg-slate-100">
-        <MapContainer 
-          center={[14.5995, 120.9842]} 
-          zoom={13} 
-          className="h-full w-full z-0"
+      {/* Main Map View */}
+      <div className="flex-1 relative">
+        <MapContainer
+          center={[14.5995, 120.9842]}
+          zoom={12}
+          className="h-full w-full"
           zoomControl={false}
-          ref={(map) => { if (map) mapRef.current = map; }}
+          ref={mapRef}
         >
-          <TileLayer 
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
           <MarkerClusterGroup
             chunkedLoading
-            maxClusterRadius={40}
-            spiderfyOnMaxZoom={false}
-            showCoverageOnHover={false}
+            polygonOptions={{
+              fillColor: '#ffffff',
+              color: '#334155',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.1,
+            }}
           >
-            {riders.map((rider) => (
-              rider.current_lat && rider.current_lng && (
-                <Marker 
-                  key={rider.id} 
-                  position={[Number(rider.current_lat), Number(rider.current_lng)]}
+            {riders.map((rider) => {
+              const loc = getRiderLocation(rider);
+              if (!loc) return null;
+
+              return (
+                <Marker
+                  key={rider.id}
+                  position={[loc.lat, loc.lng]}
                   icon={createCustomIcon(rider)}
-                  eventHandlers={{ click: () => setSelectedRider(rider) }}
+                  eventHandlers={{
+                    click: () => setSelectedRider(rider),
+                  }}
                 >
-                  <Popup className="rider-mini-popup">
-                    <div className="p-1 min-w-[120px]">
-                      <div className="flex items-center gap-2">
-                         <div className="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center font-black text-[10px]">{(rider.name || 'R').substring(0, 1)}</div>
-                         <div>
-                            <p className="font-black text-slate-900 text-[10px] leading-none">{rider.name}</p>
-                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{rider.is_online ? 'Online' : 'Offline'}</p>
-                         </div>
+                  <Popup className="rider-mini-popup" closeButton={false}>
+                    <div className="p-1">
+                      <p className="text-[10px] font-black text-slate-900 uppercase mb-1">{rider.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn(
+                          "w-1.5 h-1.5 rounded-full",
+                          isRiderOnline(rider) ? "bg-emerald-500" : "bg-slate-400"
+                        )} />
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">
+                          {getRiderStatusLabel(rider)}
+                        </span>
                       </div>
                     </div>
                   </Popup>
                 </Marker>
-              )
-            ))}
+              );
+            })}
           </MarkerClusterGroup>
-          {selectedRider?.current_lat && selectedRider?.current_lng && (
-            <MapController center={[Number(selectedRider.current_lat), Number(selectedRider.current_lng)]} zoom={15} />
-          )}
+
+          <MapController center={selectedRider ? [getRiderLocation(selectedRider)?.lat || 0, getRiderLocation(selectedRider)?.lng || 0] : null} />
         </MapContainer>
 
-        {/* Floating Controls */}
-        <div className="absolute top-4 left-4 flex gap-2 z-[400]">
-           <div className="bg-white/90 backdrop-blur-sm p-1 rounded-lg shadow-sm flex items-center gap-2 border border-slate-100">
-              <div className="flex items-center gap-1.5 px-1.5 border-r border-slate-100">
-                 <p className="text-[8px] font-black text-slate-900 uppercase">Live Tracking</p>
-                 <button onClick={() => setAutoUpdate(!autoUpdate)} className={`w-6 h-3.5 rounded-full relative transition-colors ${autoUpdate ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                    <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all ${autoUpdate ? 'left-3' : 'left-0.5'}`} />
-                 </button>
+        {/* Legend Overlay */}
+        <div className="absolute bottom-6 left-6 z-[1000] space-y-2">
+           <Card className="bg-white/90 backdrop-blur-md border-slate-100 p-3 rounded-2xl shadow-2xl">
+              <div className="space-y-2">
+                 <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
+                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Live / Active</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-white shadow-sm" />
+                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Stale Data (&gt;2m)</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-400 border-2 border-white shadow-sm" />
+                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Offline</span>
+                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="h-6 rounded-md font-black text-[8px] uppercase px-2 hover:bg-slate-50" onClick={fetchRiders}>
-                <RefreshCw size={10} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Sync Fleet
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 rounded-md font-black text-[8px] uppercase px-2 hover:bg-slate-50 border-l border-slate-100"
-                onClick={() => {
-                   const first = riders.find(r => r.current_lat && r.current_lng);
-                   if (first) setSelectedRider(first);
-                }}
-              >
-                <Navigation2 size={10} className="mr-1" /> Center Map
-              </Button>
-           </div>
+           </Card>
         </div>
-
-        {/* Selected Rider Detail - Pure Geographic Card */}
-        {selectedRider && (
-           <div className="absolute bottom-6 right-6 w-[280px] z-[400] animate-in slide-in-from-bottom-5 duration-300">
-              <Card className="rounded-[1.5rem] border-none shadow-2xl p-5 space-y-4 relative overflow-hidden bg-white">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-slate-700 to-slate-900" />
-                 
-                 <button onClick={() => setSelectedRider(null)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600 transition-colors">
-                    <AlertCircle size={16} className="rotate-45" />
-                 </button>
-
-                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-base shadow-lg shadow-slate-900/20">
-                      {(selectedRider.name || 'R').substring(0, 1)}
-                    </div>
-                    <div>
-                       <h3 className="text-xs font-black text-slate-900 leading-none">{selectedRider.name}</h3>
-                       <div className="flex items-center gap-1.5 mt-2">
-                          <div className={`w-1.5 h-1.5 rounded-full ${selectedRider.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{selectedRider.is_online ? 'Device Online' : 'Device Offline'}</p>
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="space-y-2 bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
-                    <div className="flex items-start gap-2">
-                       <div className="p-1.5 bg-blue-50 rounded-lg shrink-0"><MapPin size={12} className="text-blue-600" /></div>
-                       <div className="min-w-0">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Last Known Location</p>
-                          <p className="text-[9px] font-bold text-slate-700 leading-tight mt-0.5">{selectedRider.pickup_address || 'Calculating coordinate address...'}</p>
-                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <div className="p-1.5 bg-slate-100 rounded-lg shrink-0"><Signal size={12} className="text-slate-600" /></div>
-                       <div className="min-w-0">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Signal Status</p>
-                          <p className="text-[9px] font-bold text-slate-700">{selectedRider.is_online ? 'High Precision GPS Active' : 'Signal Lost'}</p>
-                       </div>
-                    </div>
-                 </div>
-
-                 <Button className="w-full h-9 rounded-xl bg-slate-900 hover:bg-black font-black uppercase text-[8px] tracking-widest shadow-xl shadow-slate-900/10 transition-all active:scale-[0.98]">
-                    View Detailed Logs
-                 </Button>
-              </Card>
-           </div>
-        )}
       </div>
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
-          border-radius: 10px;
-        }
+      <style dangerouslySetInnerHTML={{ __html: `
         .rider-mini-popup .leaflet-popup-content-wrapper {
           border-radius: 12px;
-          padding: 2px;
+          padding: 0;
           box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-          border: none;
+        }
+        .rider-mini-popup .leaflet-popup-content {
+          margin: 8px 12px;
+        }
+        .rider-mini-popup .leaflet-popup-tip-container {
+          display: none;
         }
         .rider-mini-popup .leaflet-popup-tip {
           background: white;
@@ -365,7 +417,7 @@ export function RiderMap() {
           background: transparent;
           border: none;
         }
-      `}</style>
+      `}} />
     </div>
   );
 }

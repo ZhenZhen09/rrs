@@ -128,8 +128,8 @@ export default function JobDetailsScreen() {
   // --- FULL JOURNEY ROUTING (Rider -> Pickup -> Dropoff) ---
   useEffect(() => {
     async function loadRoads() {
-      const startLat = lastLocation?.lat || job?.pickup_location?.lat;
-      const startLng = lastLocation?.lng || job?.pickup_location?.lng;
+      const startLat = lastLocation?.lat || job?.current_location?.lat || job?.pickup_location?.lat;
+      const startLng = lastLocation?.lng || job?.current_location?.lng || job?.pickup_location?.lng;
 
       if (startLat && job?.pickup_location && job?.dropoff_location) {
         try {
@@ -176,17 +176,20 @@ export default function JobDetailsScreen() {
 
   useEffect(() => {
     if (webViewRef.current && job) {
-      const initialPos = lastLocation || { 
+      const initialPos = lastLocation || (job.current_location?.lat ? {
+        lat: Number(job.current_location.lat),
+        lng: Number(job.current_location.lng)
+      } : { 
         lat: Number(job.pickup_location?.lat || 0), 
         lng: Number(job.pickup_location?.lng || 0) 
-      };
+      });
       const payload = JSON.stringify(initialPos);
       // Small delay to ensure WebView is ready
       setTimeout(() => {
         webViewRef.current?.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
       }, 1000);
     }
-  }, [job?.request_id]);
+  }, [job?.request_id, lastLocation, job?.current_location]);
 
   useEffect(() => {
     if (webViewRef.current && roadPath.length > 0) {
@@ -293,12 +296,14 @@ export default function JobDetailsScreen() {
           let riderMarker = null;
           let roadPolyline = null;
           let roadPath = [];
-          let navigationMode = false;
+          let navigationMode = true; // Force navigation mode for consistent framing
           let followMode = true;
           let currentRiderPosition = null;
           let targetRiderPosition = null;
           let currentHeading = 0;
           let targetHeading = 0;
+          let velocity = { lat: 0, lng: 0 };
+          let lastUpdateAt = Date.now();
           let animationFrame = null;
           let lastCameraMoveAt = 0;
           const navChip = document.getElementById('nav-chip');
@@ -322,7 +327,39 @@ export default function JobDetailsScreen() {
             const now = Date.now();
             if (!force && now - lastCameraMoveAt < 250) return;
             lastCameraMoveAt = now;
-            map.panTo(position, { animate: true, duration: 1.5, easeLinearity: 0.1, noMoveStart: true });
+
+            // ENTERPRISE NAVIGATION MAPPING (Uber/Grab Style)
+            const containerHeight = map.getSize().y;
+            const containerWidth = map.getSize().x;
+            
+            // 1. BOTTOM ANCHORING: Keep car in the bottom ~25% of the visible area (above drawer)
+            // Drawer is 35%, so we want the car at roughly 60% from the top of the physical screen.
+            const verticalOffset = containerHeight * 0.15; // Offset from center to push car down
+            
+            // 2. LEADING VIEW: Offset center based on heading so user sees more road AHEAD
+            const angleRad = (currentHeading - 90) * Math.PI / 180;
+            const leadingDistance = containerHeight * 0.12; // How far ahead to look
+            
+            const leadX = Math.cos(angleRad) * leadingDistance;
+            const leadY = Math.sin(angleRad) * leadingDistance;
+
+            const targetPoint = map.project(position, map.getZoom());
+            // Combine Bottom Anchoring (upwards offset) and Leading View
+            const offsetPoint = targetPoint.add([leadX, leadY - verticalOffset]);
+            const offsetLatLng = map.unproject(offsetPoint, map.getZoom());
+
+            // 3. DYNAMIC ZOOM: Tighter zoom for navigation
+            const targetZoom = 17;
+            if (Math.abs(map.getZoom() - targetZoom) > 0.5) {
+              map.setZoom(targetZoom, { animate: true });
+            }
+
+            map.panTo(offsetLatLng, { 
+              animate: true, 
+              duration: 1.2, 
+              easeLinearity: 0.1, 
+              noMoveStart: true 
+            });
           }
 
           map.on('dragstart zoomstart', function() {
@@ -387,8 +424,11 @@ export default function JobDetailsScreen() {
           }
 
           function renderRiderFrame() {
+            const now = Date.now();
+            const timeSinceUpdate = now - lastUpdateAt;
+
             if (!targetRiderPosition) {
-              animationFrame = null;
+              animationFrame = requestAnimationFrame(renderRiderFrame);
               return;
             }
 
@@ -396,28 +436,31 @@ export default function JobDetailsScreen() {
               currentRiderPosition = targetRiderPosition;
               currentHeading = targetHeading;
             } else {
-              currentRiderPosition = [
-                lerp(currentRiderPosition[0], targetRiderPosition[0], 0.05),
-                lerp(currentRiderPosition[1], targetRiderPosition[1], 0.05),
-              ];
-              currentHeading += normalizeAngleDelta(currentHeading, targetHeading) * 0.1;
+              // DEAD RECKONING: If data is stale, continue moving
+              if (timeSinceUpdate > 2000 && timeSinceUpdate < 15000 && (velocity.lat !== 0 || velocity.lng !== 0)) {
+                const friction = Math.max(0, 1 - (timeSinceUpdate - 2000) / 13000);
+                currentRiderPosition = [
+                  currentRiderPosition[0] + velocity.lat * friction,
+                  currentRiderPosition[1] + velocity.lng * friction
+                ];
+              } else {
+                // SMOOTH INTERPOLATION
+                currentRiderPosition = [
+                  lerp(currentRiderPosition[0], targetRiderPosition[0], 0.05),
+                  lerp(currentRiderPosition[1], targetRiderPosition[1], 0.05),
+                ];
+              }
+
+              // BEARING EASING with turn anticipation
+              const delta = normalizeAngleDelta(currentHeading, targetHeading);
+              const rotationSpeed = Math.abs(delta) > 45 ? 0.15 : 0.1;
+              currentHeading += delta * rotationSpeed;
             }
 
             if (riderMarker) riderMarker.setLatLng(currentRiderPosition);
             const el = document.getElementById('rider-marker');
             if (el) el.style.transform = 'rotate(' + currentHeading + 'deg)';
             moveNavigationCamera(currentRiderPosition, false);
-
-            const latDone = Math.abs(currentRiderPosition[0] - targetRiderPosition[0]) < 0.0000001;
-            const lngDone = Math.abs(currentRiderPosition[1] - targetRiderPosition[1]) < 0.0000001;
-            const headingDone = Math.abs(normalizeAngleDelta(currentHeading, targetHeading)) < 0.1;
-
-            if (latDone && lngDone && headingDone) {
-              currentRiderPosition = targetRiderPosition;
-              currentHeading = targetHeading;
-              animationFrame = null;
-              return;
-            }
 
             animationFrame = requestAnimationFrame(renderRiderFrame);
           }

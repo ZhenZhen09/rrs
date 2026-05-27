@@ -5,6 +5,11 @@ import { ScrollArea } from '../../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  isTerminalRequest, 
+  isActiveRequest, 
+  isPendingRequest 
+} from "../../../utils/statusMapping";
 
 interface RequestListProps {
   requests: DeliveryRequest[];
@@ -44,19 +49,19 @@ export const RequestList: React.FC<RequestListProps> = ({
             onClick={() => onFilterChange('pending')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Pending ({requests.filter(r => r.status === 'pending').length})
+            Pending ({requests.filter(isPendingRequest).length})
           </button>
           <button 
             onClick={() => onFilterChange('active')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Active ({requests.filter(r => r.status === 'approved' && !['completed', 'failed', 'disapproved'].includes(r.delivery_status || '')).length})
+            Active ({requests.filter(isActiveRequest).length})
           </button>
           <button 
             onClick={() => onFilterChange('completed')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Done ({requests.filter(r => ['completed', 'failed', 'disapproved'].includes(r.delivery_status || '') || r.status === 'disapproved').length})
+            Done ({requests.filter(isTerminalRequest).length})
           </button>
         </div>
 
