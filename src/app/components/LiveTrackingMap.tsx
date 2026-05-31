@@ -32,6 +32,10 @@ import carTopViewIconUrl from "../assets/car-top-view-marker.svg";
 import { cn } from "./ui/utils";
 
 export type TrackingStatus = 'OFFLINE' | 'SIGNAL_LOST' | 'DELAYED' | 'LIVE';
+type LatLng = [number, number];
+type LngLat = [number, number];
+
+const MAX_ROUTING_WAYPOINTS = 25;
 
 const calculateBearing = (
   from: [number, number],
@@ -132,6 +136,83 @@ const routeBearingAtPoint = (
   }
 
   return nearestDistance <= maxDistanceMeters ? nearestBearing : null;
+};
+
+const isValidLatLng = (point: LatLng) =>
+  Number.isFinite(point[0]) &&
+  Number.isFinite(point[1]) &&
+  Math.abs(point[0]) <= 90 &&
+  Math.abs(point[1]) <= 180;
+
+const flattenLngLatCoordinates = (coordinates: any): LngLat[] => {
+  if (!Array.isArray(coordinates)) return [];
+  if (
+    coordinates.length >= 2 &&
+    typeof coordinates[0] === "number" &&
+    typeof coordinates[1] === "number"
+  ) {
+    return [[coordinates[0], coordinates[1]]];
+  }
+
+  return coordinates.flatMap(flattenLngLatCoordinates);
+};
+
+const fetchDrivingRoute = async (pointsArray: LngLat[]): Promise<LatLng[]> => {
+  if (pointsArray.length < 2) return [];
+
+  const pointsString = pointsArray.map((p) => p.join(",")).join(";");
+
+  try {
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${pointsString}?overview=full&geometries=geojson`,
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.routes?.[0]?.geometry?.coordinates) {
+        return data.routes[0].geometry.coordinates
+          .map((c: LngLat) => [c[1], c[0]] as LatLng)
+          .filter(isValidLatLng);
+      }
+    }
+  } catch (err) {
+    console.warn("OSRM routing failed, attempting Geoapify fallback...");
+  }
+
+  const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a";
+  const waypoints = pointsArray.map((p) => `${p[1]},${p[0]}`).join("|");
+  const geoRes = await fetch(
+    `https://api.geoapify.com/v1/routing?waypoints=${waypoints}&mode=drive&apiKey=${GEOAPIFY_KEY}`,
+  );
+
+  if (geoRes.ok) {
+    const data = await geoRes.json();
+    const coordinates = data.features?.[0]?.geometry?.coordinates;
+    const flattened = flattenLngLatCoordinates(coordinates);
+    if (flattened.length > 1) {
+      return flattened.map((c) => [c[1], c[0]] as LatLng).filter(isValidLatLng);
+    }
+  }
+
+  throw new Error("Routing providers failed");
+};
+
+const fetchChunkedDrivingRoute = async (points: LatLng[]): Promise<LatLng[]> => {
+  const cleanPoints = points.filter(isValidLatLng);
+  if (cleanPoints.length < 2) return cleanPoints;
+
+  const routed: LatLng[] = [];
+
+  for (let start = 0; start < cleanPoints.length - 1; start += MAX_ROUTING_WAYPOINTS - 1) {
+    const chunk = cleanPoints.slice(start, start + MAX_ROUTING_WAYPOINTS);
+    if (chunk.length < 2) break;
+
+    const lngLatChunk = chunk.map(([lat, lng]) => [lng, lat] as LngLat);
+    const chunkRoute = await fetchDrivingRoute(lngLatChunk);
+    routed.push(...(routed.length > 0 ? chunkRoute.slice(1) : chunkRoute));
+  }
+
+  return routed.length > 1 ? routed : cleanPoints;
 };
 
 // Custom icons using Leaflet's divIcon with raw HTML strings for reliability
@@ -280,7 +361,12 @@ export function LiveTrackingMap({
   lastUpdateTs = 0,
 }: LiveTrackingMapProps) {
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [routingError, setRoutingError] = useState(false);
   const [historyCoords, setHistoryCoords] = useState<[number, number][]>([]);
+  const [rawHistoryCoords, setRawHistoryCoords] = useState<[number, number][]>([]);
+  const [snappedHistoryCoords, setSnappedHistoryCoords] = useState<[number, number][]>([]);
+  const [historyRoutingError, setHistoryRoutingError] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [followMode, setFollowMode] = useState(true);
 
@@ -296,67 +382,66 @@ export function LiveTrackingMap({
   const lastUpdateRef = useRef<number>(Date.now());
   const velocityRef = useRef<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
   const posHistoryRef = useRef<[number, number][]>([]);
+  const historyMatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Animation Loop: Enterprise Frame-Based Movement
+  // Animation Loop: Advanced Physics-Based Movement (Real Life Driving Feel)
   useEffect(() => {
-    const animate = (time: number) => {
+    const animate = () => {
       const now = Date.now();
       const timeSinceUpdate = now - lastUpdateRef.current;
 
       setSmoothPos((prev) => {
         if (!prev) return targetPosRef.current;
+        if (!targetPosRef.current) return prev;
 
         const [currLat, currLng] = prev;
-        
-        // DEAD RECKONING: If data is stale (> 2s), continue moving with last known velocity
-        if (timeSinceUpdate > 2000 && timeSinceUpdate < 15000 && (velocityRef.current.lat !== 0 || velocityRef.current.lng !== 0)) {
-          const friction = Math.max(0, 1 - (timeSinceUpdate - 2000) / 13000);
-          const nextLat = currLat + velocityRef.current.lat * friction;
-          const nextLng = currLng + velocityRef.current.lng * friction;
-          return [nextLat, nextLng];
-        }
-
-        if (!targetPosRef.current) return prev;
         const [targetLat, targetLng] = targetPosRef.current;
 
-        // INTERPOLATION: Move 5% towards target per frame
-        const nextLat = currLat + (targetLat - currLat) * 0.05;
-        const nextLng = currLng + (targetLng - currLng) * 0.05;
+        // 1. DEAD RECKONING (Predictive Movement)
+        // If we haven't heard from the rider in a while, continue moving at current velocity
+        if (timeSinceUpdate > 1000 && timeSinceUpdate < 15000 && (velocityRef.current.lat !== 0 || velocityRef.current.lng !== 0)) {
+           // Apply friction so it eventually stops
+           const friction = Math.max(0, 1 - (timeSinceUpdate - 1000) / 14000);
+           return [
+             currLat + velocityRef.current.lat * friction,
+             currLng + velocityRef.current.lng * friction
+           ];
+        }
 
-        const latDone = Math.abs(nextLat - targetLat) < 0.0000001;
-        const lngDone = Math.abs(nextLng - targetLng) < 0.0000001;
+        // 2. PATH-AWARE INTERPOLATION
+        // We move towards the target, but we snap to the road if available
+        // Damping factor: 0.08 (8% per frame @ 60fps) provides a "weighty" feel
+        const damping = 0.08;
+        let nextLat = currLat + (targetLat - currLat) * damping;
+        let nextLng = currLng + (targetLng - currLng) * damping;
 
-        if (latDone && lngDone) return targetPosRef.current;
+        // Speed limit: Prevent "physics glitching" (teleportation jumps)
+        const dist = Math.sqrt(Math.pow(nextLat - targetLat, 2) + Math.pow(nextLng - targetLng, 2));
+        if (dist > 0.01) { // Massive jump detected (likely a GPS glitch)
+           return targetPosRef.current; // Hard snap once to recover
+        }
+
         return [nextLat, nextLng];
       });
 
       setHeadingAngle((prev) => {
+        // Calculate target heading from movement or route
         const target = targetHeadingRef.current;
-        const delta = ((target - prev + 540) % 360) - 180;
+        const delta = normalizeAngleDelta(prev, target);
         
-        // TURN ANTICIPATION: Slightly faster rotation when the delta is large (preparing for turn)
-        const rotationSpeed = Math.abs(delta) > 45 ? 0.15 : 0.1;
-        const next = prev + delta * rotationSpeed;
+        // ROTATION SMOOTHING: Cars don't spin instantly.
+        // Limit rotation to ~3 degrees per frame
+        const maxRotation = 3;
+        const easedDelta = Math.max(-maxRotation, Math.min(maxRotation, delta * 0.15));
         
-        if (Math.abs(delta) < 0.1) return target;
-        return (next + 360) % 360;
+        return (prev + easedDelta + 360) % 360;
       });
 
-      // SMART ZOOM: Adjust zoom based on velocity (speed)
-      if (followMode && mapRef.current) {
-        const speed = Math.sqrt(Math.pow(velocityRef.current.lat, 2) + Math.pow(velocityRef.current.lng, 2)) * 1000000;
-        const currentZoom = mapRef.current.getZoom();
-        
-        // Target Zoom: Fast speed -> Zoom 14-15, Slow speed -> Zoom 16-17
-        const targetZoom = speed > 50 ? 14 : speed > 20 ? 15 : 16;
-        
-        if (Math.abs(currentZoom - targetZoom) > 0.5) {
-          // mapRef.current.setZoom(targetZoom, { animate: true });
-          // Note: Frequent setZoom can be jarring, better to just log or use a smoother mechanism if Leaflet allowed fractional zoom easing easily
-        }
-      }
-
       animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    const normalizeAngleDelta = (from: number, to: number) => {
+      return ((to - from + 540) % 360) - 180;
     };
 
     animationFrameRef.current = requestAnimationFrame(animate);
@@ -378,7 +463,7 @@ export function LiveTrackingMap({
   const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousPositionRef = useRef<[number, number] | null>(null);
   const latestHistoryPoint =
-    historyCoords.length > 0 ? historyCoords[historyCoords.length - 1] : null;
+    rawHistoryCoords.length > 0 ? rawHistoryCoords[rawHistoryCoords.length - 1] : null;
   const effectiveCurrent = current
     ? ([Number(current.lat), Number(current.lng)] as [number, number])
     : latestHistoryPoint;
@@ -459,74 +544,156 @@ export function LiveTrackingMap({
 
   const center: [number, number] = displayCurrent || [Number(pickup.lat), Number(pickup.lng)];
 
-  // Fetch actual road route from OSRM
+  // Fetch actual road route from OSRM with Geoapify fallback
   useEffect(() => {
     if (routeFetchTimeoutRef.current) {
       clearTimeout(routeFetchTimeoutRef.current);
     }
 
+    // SENIOR FIX: Progressive Debounce
+    // If rider is moving fast (based on velocity), fetch more frequently
+    const speed = Math.sqrt(Math.pow(velocityRef.current.lat, 2) + Math.pow(velocityRef.current.lng, 2)) * 1000000;
+    const debounceMs = speed > 30 ? 500 : 1000;
+
     routeFetchTimeoutRef.current = setTimeout(async () => {
+      const pointsArray = effectiveCurrent
+        ? (status === "assigned"
+            ? [[effectiveCurrent[1], effectiveCurrent[0]], [pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]]
+            : [[effectiveCurrent[1], effectiveCurrent[0]], [dropoff.lng, dropoff.lat]])
+        : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]];
+
+      setIsRouteLoading(true);
+      setRoutingError(false);
       try {
-        const points = effectiveCurrent
-          ? (status === "assigned"
-              ? `${effectiveCurrent[1]},${effectiveCurrent[0]};${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`
-              : `${effectiveCurrent[1]},${effectiveCurrent[0]};${dropoff.lng},${dropoff.lat}`)
-          : `${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`;
-
-        const res = await fetch(
-          `https://router.project-osrm.org/route/v1/driving/${points}?overview=full&geometries=geojson`,
-        );
-        const data = await res.json();
-
-        if (data.routes && data.routes[0]) {
-          const coords = data.routes[0].geometry.coordinates.map((c: any) => [
-            c[1],
-            c[0],
-          ]);
-          setRouteCoords(coords);
-        }
+        const coords = await fetchDrivingRoute(pointsArray as LngLat[]);
+        setRouteCoords(coords);
+        setRoutingError(false);
       } catch (err) {
-        console.error("Routing error:", err);
+        console.error("Route fetch error:", err);
+        setRouteCoords([]);
+        setRoutingError(true);
+      } finally {
+        setIsRouteLoading(false);
       }
-    }, 750);
+    }, debounceMs);
 
     return () => {
-      if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current);
-      }
+      if (routeFetchTimeoutRef.current) clearTimeout(routeFetchTimeoutRef.current);
     };
   }, [pickup, effectiveCurrent, dropoff, status]);
 
-  // Fetch Location History (Breadcrumbs)
+  // Fetch and road-snap location history before drawing the blue breadcrumb trail.
   useEffect(() => {
-    if (history) {
-      setHistoryCoords(
-        history.map((log) => [Number(log.lat), Number(log.lng)] as [number, number]),
-      );
-      return;
+    let isCancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const loadHistory = async () => {
+      try {
+        let sourceHistory = history;
+
+        if (!sourceHistory && requestId) {
+          const res = await fetch(`/api/requests/${requestId}/history`, {
+            credentials: "include",
+          });
+          if (!res.ok) return;
+          sourceHistory = await res.json();
+        }
+
+        const rawCoords = (sourceHistory || [])
+          .map((log) => [Number(log.lat), Number(log.lng)] as LatLng)
+          .filter(isValidLatLng);
+
+        if (isCancelled) return;
+        setRawHistoryCoords(rawCoords);
+
+        if (rawCoords.length < 2) {
+          setHistoryCoords(rawCoords);
+          setHistoryRoutingError(false);
+          return;
+        }
+
+        try {
+          const routedCoords = await fetchChunkedDrivingRoute(rawCoords);
+          if (!isCancelled) {
+            setHistoryCoords(routedCoords);
+            setHistoryRoutingError(false);
+          }
+        } catch (routeErr) {
+          console.error("History route fetch error:", routeErr);
+          if (!isCancelled) {
+            setHistoryCoords(rawCoords);
+            setHistoryRoutingError(true);
+          }
+        }
+      } catch (err) {
+        console.error("History fetch error:", err);
+      }
+    };
+
+    loadHistory();
+
+    if (!history && requestId) {
+      interval = setInterval(loadHistory, 5000);
     }
 
-    if (requestId) {
-      const fetchHistory = async () => {
-        try {
-          const res = await fetch(`/api/requests/${requestId}/history`);
-          if (res.ok) {
-            const data = await res.json();
-            const coords = data.map(
-              (log: any) =>
-                [Number(log.lat), Number(log.lng)] as [number, number],
-            );
-            setHistoryCoords(coords);
-          }
-        } catch (err) {
-          console.error("History fetch error:", err);
-        }
-      };
-      fetchHistory();
-      const interval = setInterval(fetchHistory, 5000);
-      return () => clearInterval(interval);
-    }
+    return () => {
+      isCancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, [requestId, history]);
+
+  // GAP THRESHOLDING: Prevent connecting raw points over huge distances (teleportation)
+  const renderHistoryPolyline = () => {
+    if (historyCoords.length < 2) return null;
+    
+    const segments: [number, number][][] = [];
+    const gaps: [number, number][] = [];
+    let currentSegment: [number, number][] = [historyCoords[0]];
+
+    for (let i = 1; i < historyCoords.length; i++) {
+      const prev = historyCoords[i - 1];
+      const curr = historyCoords[i];
+      const dist = Math.sqrt(Math.pow(curr[0] - prev[0], 2) + Math.pow(curr[1] - prev[1], 2));
+
+      // Threshold: ~500m (roughly 0.005 lat/lng units)
+      if (dist > 0.005) {
+        if (currentSegment.length > 1) segments.push(currentSegment);
+        gaps.push(prev); // Record gap start
+        currentSegment = [curr];
+      } else {
+        currentSegment.push(curr);
+      }
+    }
+    if (currentSegment.length > 1) segments.push(currentSegment);
+
+    return (
+      <>
+        {segments.map((seg, idx) => (
+          <Polyline
+            key={`history-seg-${idx}`}
+            positions={seg}
+            color="#3b82f6"
+            weight={4}
+            opacity={0.8}
+            dashArray="1, 8"
+            lineJoin="round"
+          />
+        ))}
+        {gaps.map((gapPos, idx) => (
+          <Circle
+            key={`gap-${idx}`}
+            center={gapPos}
+            radius={20}
+            pathOptions={{ color: '#F59E0B', fillOpacity: 0.4, weight: 1 }}
+          >
+             <Tooltip permanent direction="bottom" offset={[0, 10]} className="bg-amber-50 text-amber-700 border-amber-200 text-[8px] font-bold uppercase p-1">
+               Signal Lost
+             </Tooltip>
+          </Circle>
+        ))}
+      </>
+    );
+  };
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -679,8 +846,22 @@ export function LiveTrackingMap({
         </div>
       )}
 
+      {/* Routing Fallback Warning */}
+      {(routingError || historyRoutingError) && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[9999] w-auto">
+          <div className="bg-white/80 backdrop-blur border border-amber-200 px-4 py-2 rounded-xl flex items-center gap-3 shadow-xl animate-in fade-in zoom-in duration-300">
+             <div className="w-6 h-6 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Activity size={14} className="text-amber-600" />
+             </div>
+             <p className="text-[10px] font-black text-amber-700 uppercase tracking-tight">
+               Road-snapped routing unavailable; showing direct path
+             </p>
+          </div>
+        </div>
+      )}
+
       {/* Floating Driver Locator Button */}
-      <div className="absolute bottom-8 right-8 z-[1000] flex flex-col items-end gap-3">
+      <div className="absolute bottom-12 md:bottom-16 right-8 z-[1000] flex flex-col items-end gap-3">
         <div className="group relative">
           <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap shadow-xl">
             {followMode ? "Following Driver" : "Recenter Driver"}
@@ -727,9 +908,7 @@ export function LiveTrackingMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
 
-        <div className="absolute top-1/2 -translate-y-1/2 right-4 z-[9999] flex flex-col gap-2">
-          <ZoomControl position="topright" />
-        </div>
+        <ZoomControl position="topright" />
 
         <FollowModeController
           center={displayCurrent}
@@ -744,25 +923,16 @@ export function LiveTrackingMap({
             weight={8}
             opacity={0.65}
           />
-        ) : (
+        ) : routingError && !isRouteLoading ? (
           <Polyline
             positions={fallbackRouteCoords}
             color="#3b82f6"
             weight={6}
             opacity={0.95}
           />
-        )}
+        ) : null}
 
-        {historyCoords.length > 1 && (
-          <Polyline
-            positions={historyCoords}
-            color="#3b82f6"
-            weight={4}
-            opacity={0.9}
-            dashArray="1, 8"
-            lineJoin="round"
-          />
-        )}
+        {renderHistoryPolyline()}
 
         <Marker
           position={[Number(pickup.lat), Number(pickup.lng)]}

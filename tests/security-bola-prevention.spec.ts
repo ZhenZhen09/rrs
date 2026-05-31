@@ -8,7 +8,7 @@ test.describe('BOLA Prevention', () => {
   test.beforeAll(async ({ request }) => {
     // 1. Login as Finance Personnel
     const financeLogin = await request.post('/api/auth/login', {
-      data: { email: 'jose.finance@company.com', password: 'jose' }
+      data: { email: 'jose.finance@company.com', password: 'Hon010125@' }
     });
     const financeData = await financeLogin.json();
     financeToken = financeData.token;
@@ -16,7 +16,7 @@ test.describe('BOLA Prevention', () => {
 
     // 2. Login as HR Personnel
     const hrLogin = await request.post('/api/auth/login', {
-      data: { email: 'john.hr@company.com', password: 'john' }
+      data: { email: 'john.hr@company.com', password: 'Hon010125@' }
     });
     const hrData = await hrLogin.json();
     hrToken = hrData.token;

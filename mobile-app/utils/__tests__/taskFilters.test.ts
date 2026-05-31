@@ -27,11 +27,20 @@ describe('taskFilters', () => {
     expect(getRiderTaskTab(makeJob({ delivery_date: '2026-05-26' }), today)).toBe('tomorrow');
   });
 
-  it('moves same-day jobs past their time window to overdue', () => {
-    expect(getRiderTaskTab(makeJob({
-      delivery_date: '2026-05-25',
-      time_window: '07:00 - 08:00',
-    }), today)).toBe('overdue');
+  it('moves same-day jobs to overdue only at or after 7:00 PM (19:00)', () => {
+    const jobToday = makeJob({ delivery_date: '2026-05-25' });
+    
+    // 6:59 PM -> Today
+    const beforeSeven = new Date(2026, 4, 25, 18, 59);
+    expect(getRiderTaskTab(jobToday, beforeSeven)).toBe('today');
+    
+    // 7:00 PM -> Overdue
+    const atSeven = new Date(2026, 4, 25, 19, 0);
+    expect(getRiderTaskTab(jobToday, atSeven)).toBe('overdue');
+    
+    // 8:00 PM -> Overdue
+    const afterSeven = new Date(2026, 4, 25, 20, 0);
+    expect(getRiderTaskTab(jobToday, afterSeven)).toBe('overdue');
   });
 
   it('hides unapproved and terminal jobs from active rider tabs', () => {

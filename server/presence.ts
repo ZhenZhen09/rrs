@@ -5,37 +5,44 @@ export const onlineRiders = new Map<string, { socketId: string, lastSeen: number
 
 export const cleanupOfflineRiders = async (io?: Server | null) => {
   const now = Date.now();
-  const TTL = 900000; // 15 minutes (Increased from 5m for better idle handling)
+  const TTL = 120000; // 2 minutes (Reduced from 15m for tighter real-time accuracy)
 
   for (const [riderId, data] of onlineRiders.entries()) {
     if (now - data.lastSeen > TTL) {
-      onlineRiders.delete(riderId);
-      
-      if (io) {
-        // 1. Broadcast to global admin room
-        io.to('admin-room').emit('rider-presence-changed', {
+      await removeRiderPresence(riderId, io);
+    }
+  }
+};
+
+export const removeRiderPresence = async (riderId: string, io?: Server | null) => {
+  if (!onlineRiders.has(riderId)) return;
+  
+  const lastSeen = onlineRiders.get(riderId)?.lastSeen || Date.now();
+  onlineRiders.delete(riderId);
+  
+  if (io) {
+    // 1. Broadcast to global admin room
+    io.to('admin-room').emit('rider-presence-changed', {
+      riderId,
+      status: 'offline',
+      lastSeen
+    });
+
+    // 2. TARGETED BROADCAST: Find any active jobs for this rider and notify those specific rooms
+    try {
+      const [activeJobs]: any = await pool.query(
+        "SELECT request_id FROM delivery_requests WHERE assigned_rider_id = ? AND delivery_status NOT IN ('completed', 'failed', 'cancelled')",
+        [riderId]
+      );
+      (activeJobs || []).forEach((job: any) => {
+        io.to(`job_${job.request_id}`).emit('rider-presence-changed', {
           riderId,
           status: 'offline',
-          lastSeen: data.lastSeen
+          lastSeen
         });
-
-        // 2. TARGETED BROADCAST: Find any active jobs for this rider and notify those specific rooms
-        try {
-          const [activeJobs]: any = await pool.query(
-            "SELECT request_id FROM delivery_requests WHERE assigned_rider_id = ? AND delivery_status NOT IN ('completed', 'failed', 'cancelled')",
-            [riderId]
-          );
-          (activeJobs || []).forEach((job: any) => {
-            io.to(`job_${job.request_id}`).emit('rider-presence-changed', {
-              riderId,
-              status: 'offline',
-              lastSeen: data.lastSeen
-            });
-          });
-        } catch (e) {
-          console.error(`[Presence] Failed to find active jobs for broadcast:`, e);
-        }
-      }
+      });
+    } catch (e) {
+      console.error(`[Presence] Failed to find active jobs for offline broadcast:`, e);
     }
   }
 };

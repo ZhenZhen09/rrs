@@ -19,10 +19,10 @@ test.describe('Deep Rapid Testing', () => {
     const aRes = await request.post('/api/auth/login', { data: { email: 'admin@company.com', password: 'password' } });
     adminToken = (await aRes.json()).token;
 
-    const hrRes = await request.post('/api/auth/login', { data: { email: 'john.hr@company.com', password: 'john' } });
+    const hrRes = await request.post('/api/auth/login', { data: { email: 'john.hr@company.com', password: 'Hon010125@' } });
     hrToken = (await hrRes.json()).token;
 
-    const fiRes = await request.post('/api/auth/login', { data: { email: 'jose.finance@company.com', password: 'jose' } });
+    const fiRes = await request.post('/api/auth/login', { data: { email: 'jose.finance@company.com', password: 'Hon010125@' } });
     const fiData = await fiRes.json();
     financeToken = fiData.token;
     

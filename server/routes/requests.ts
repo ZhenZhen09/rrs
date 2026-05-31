@@ -84,17 +84,13 @@ router.get('/availability', authorize(['admin', 'personnel']), async (req: AuthR
 });
 
 // GET /api/requests/counts - Efficient counting for dashboard
-router.get('/counts', authorize(['rider', 'admin']), async (req: AuthRequest, res: Response) => {
+router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     
-    // BOLA PROTECTION: Riders only count their assigned jobs. Admins can see global (if we ever need that, but for now strictly rider-focused)
-    if (user.role !== 'rider' && user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
     let query = `
       SELECT 
+        -- Original Dashboard Stats
         COUNT(CASE 
           WHEN delivery_date = CURRENT_DATE 
           AND status = 'approved' 
@@ -104,19 +100,41 @@ router.get('/counts', authorize(['rider', 'admin']), async (req: AuthRequest, re
           WHEN delivery_date < CURRENT_DATE 
           AND status = 'approved' 
           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
-          THEN 1 END) as overdue
+          THEN 1 END) as overdue,
+          
+        -- Dispatch Console Tab Stats
+        COUNT(CASE 
+          WHEN status IN ('pending', 'returned_for_revision')
+          THEN 1 END) as pending,
+        COUNT(CASE 
+          WHEN status = 'approved' 
+          AND (delivery_status IS NULL OR delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          THEN 1 END) as active,
+        COUNT(CASE 
+          WHEN delivery_status IN ('completed', 'delivered', 'failed', 'cancelled')
+          OR status = 'disapproved'
+          THEN 1 END) as done
       FROM delivery_requests
     `;
     const params: any[] = [];
 
+    // DATA ISOLATION: Apply filters based on role
+    const conditions: string[] = [];
     if (user.role === 'rider') {
-      query += ' WHERE assigned_rider_id = ?';
+      conditions.push('assigned_rider_id = ?');
       params.push(user.id);
+    } else if (user.role === 'personnel') {
+      conditions.push('(requester_department = ? OR requester_id = ?)');
+      params.push(user.department, user.id);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
     }
 
     const [rows]: any = await pool.query(query, params);
 
-    res.json(rows[0] || { today: 0, overdue: 0 });
+    res.json(rows[0] || { today: 0, overdue: 0, pending: 0, active: 0, done: 0 });
   } catch (error) {
     console.error('Error fetching counts:', error);
     res.status(500).json({ error: 'Database error' });
@@ -442,11 +460,17 @@ router.put('/:id/cancel', async (req, res) => {
     const request = rows[0];
 
     // SECURITY: Authorization Logic
-    const isAuthorized = user.role === 'admin' || (user.role === 'personnel' && request.status === 'submitted_waiting' && (request.requester_id === user.id || request.requester_department === user.department));
+    const isOwnerOrAdmin = user.role === 'admin' || 
+      (user.role === 'personnel' && (request.requester_id === user.id || request.requester_department === user.department));
     
-    if (!isAuthorized) {
+    if (!isOwnerOrAdmin) {
       await conn.rollback();
       return res.status(403).json({ error: 'You do not have permission to cancel this request.' });
+    }
+
+    if (user.role === 'personnel' && request.status !== 'submitted_waiting') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'cancellation window has expired. Only pending requests can be cancelled.' });
     }
 
     // TERMINAL LOCK: Block cancellation for terminal jobs
@@ -944,8 +968,13 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       return res.status(400).json({ error: 'Cannot update status of a terminal job.' });
     }
 
+    const isAdminUpdate = user.role === 'admin';
+    const auditRemark = isAdminUpdate
+      ? `[Admin update by ${user.email || user.id}] ${remark || `Status updated to ${status}`}`
+      : remark || `Status updated to ${status}`;
+
     let query = 'UPDATE delivery_requests SET delivery_status = ?, rider_remark = ?';
-    let params: any[] = [status, remark];
+    let params: any[] = [status, auditRemark];
 
     if (status === 'completed' || status === 'failed') {
       query += ', completed_at = ?';
@@ -961,11 +990,6 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     params.push(id);
 
     await connection.query(query, params);
-
-    const isAdminUpdate = user.role === 'admin';
-    const auditRemark = isAdminUpdate
-      ? `[Admin update by ${user.email || user.id}] ${remark || `Status updated to ${status}`}`
-      : remark || `Status updated to ${status}`;
 
     // 1. Status Log Entry (Internal logic)
     await connection.query(

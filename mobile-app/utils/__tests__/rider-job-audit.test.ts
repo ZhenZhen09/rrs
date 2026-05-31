@@ -38,10 +38,17 @@ describe('Rider Job Audit: Transaction #68199574', () => {
     expect(tab).toBe('today');
   });
 
-  it('Audit: Where does it land if Today is May 28 (After Window)?', () => {
-    const today = new Date('2026-05-28T12:00:00'); // 12 PM (Window ended at 11:30)
+  it('Audit: Where does it land if Today is May 28 (After Window but before 7PM)?', () => {
+    const today = new Date('2026-05-28T12:00:00'); // 12 PM (Window ended at 11:30, but before 7PM)
     const tab = getRiderTaskTab(targetJob, today);
     console.log(`Audit Results (Today=May 28, 12PM): Job is in [${tab}] tab`);
+    expect(tab).toBe('today');
+  });
+
+  it('Audit: Where does it land if Today is May 28 (After 7PM)?', () => {
+    const today = new Date('2026-05-28T19:00:00'); // 7 PM
+    const tab = getRiderTaskTab(targetJob, today);
+    console.log(`Audit Results (Today=May 28, 7PM): Job is in [${tab}] tab`);
     expect(tab).toBe('overdue');
   });
 

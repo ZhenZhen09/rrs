@@ -389,27 +389,44 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                   {isTerminal && (request.rider_remark || request.completed_at) && (
                     <div className="p-3 bg-slate-900 rounded-lg text-white space-y-2 shadow-md">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center shrink-0">
-                            <ShieldCheck className="h-3 w-3 text-white" />
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-md bg-white/10 flex items-center justify-center shrink-0">
+                            {request.rider_remark?.includes('[Admin update by') ? (
+                              <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                            ) : (
+                              <Bike className="h-5 w-5 text-white" />
+                            )}
                           </div>
                           <div>
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">Rider Feedback</p>
-                            <h4 className="text-[8px] font-black text-white uppercase tracking-tight leading-none mt-1">Final Report</h4>
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                              {request.rider_remark?.includes('[Admin update by') ? 'ADMIN CLOSURE' : 'RIDER REPORT'}
+                            </p>
+                            <h4 className="text-[9px] font-black text-white uppercase tracking-tight leading-none mt-1.5">
+                              {(() => {
+                                if (request.rider_remark?.includes('[Admin update by')) {
+                                  const match = request.rider_remark.match(/\[Admin update by (.*?)\]/);
+                                  // Extract name/email before @ if present, otherwise raw ID
+                                  return match ? match[1].split('@')[0].toUpperCase() : 'ADMIN';
+                                }
+                                return request.assigned_rider_name?.toUpperCase() || 'SYSTEM';
+                              })()}
+                            </h4>
                           </div>
                         </div>
                         {request.completed_at && (
                           <div className="text-right leading-none">
-                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Completed</p>
+                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">
+                               {isCompleted ? 'Completed' : isFailed ? 'Failed' : 'Finalized'}
+                             </p>
                              <p className="text-[8px] font-bold text-white/90 mt-1">{formatDateTime(request.completed_at, 'MMM d, h:mm a')}</p>
                           </div>
                         )}
                       </div>
                       
                       {request.rider_remark && (
-                        <div className="bg-white/5 p-2 rounded border border-white/10">
-                           <p className="text-[9px] font-bold text-white/95 leading-tight italic break-words">
-                             "{request.rider_remark}"
+                        <div className="bg-white/5 p-2.5 rounded border border-white/10 mt-1">
+                           <p className="text-[10px] font-bold text-white/95 leading-tight italic break-words">
+                             "{request.rider_remark.replace(/\[Admin update by.*?\]\s*/, '')}"
                            </p>
                         </div>
                       )}

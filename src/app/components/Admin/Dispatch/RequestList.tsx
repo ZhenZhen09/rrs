@@ -22,7 +22,7 @@ interface RequestListProps {
   onSortChange: (sort: string) => void;
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
-  onSelectAll?: () => void;
+  onSelectAll?: () => void; counts?: { pending: number; active: number; done: number };
 }
 
 export const RequestList: React.FC<RequestListProps> = ({ 
@@ -36,7 +36,7 @@ export const RequestList: React.FC<RequestListProps> = ({
   onSortChange,
   selectedIds = [],
   onToggleSelect = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {}, counts
 }) => {
   const displayRequests = filteredRequests || requests;
 
@@ -49,19 +49,19 @@ export const RequestList: React.FC<RequestListProps> = ({
             onClick={() => onFilterChange('pending')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Pending ({requests.filter(isPendingRequest).length})
+            Pending ({counts ? counts.pending : requests.filter(isPendingRequest).length})
           </button>
           <button 
             onClick={() => onFilterChange('active')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Active ({requests.filter(isActiveRequest).length})
+            Active ({counts ? counts.active : requests.filter(isActiveRequest).length})
           </button>
           <button 
             onClick={() => onFilterChange('completed')}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            Done ({requests.filter(isTerminalRequest).length})
+            Done ({counts ? counts.done : requests.filter(isTerminalRequest).length})
           </button>
         </div>
 

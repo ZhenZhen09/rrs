@@ -12,6 +12,7 @@ import { useRealTime } from "../context/RealTimeContext";
 import { cn } from "../components/ui/utils";
 
 export type TrackingStatus = 'OFFLINE' | 'SIGNAL_LOST' | 'DELAYED' | 'LIVE';
+export type SyncPhase = 'FETCHING_API' | 'SYNCING_PRESENCE' | 'RIDER_FOUND' | 'READY';
 
 interface TrackingLocation {
   lat: number;
@@ -41,6 +42,8 @@ export function LiveTrackingDashboard() {
   const navigate = useNavigate();
   const { requests, fetchRequestById, refreshData } = useData();
   const { riderLocations, riderPresence, socket } = useRealTime();
+  
+  const [syncPhase, setSyncPhase] = useState<SyncPhase>('FETCHING_API');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isPresenceSyncing, setIsPresenceSyncing] = useState(true);
   const [trackingPayload, setTrackingPayload] = useState<TrackingPayload | null>(null);
@@ -53,29 +56,61 @@ export function LiveTrackingDashboard() {
     return assignedRiderId ? riderLocations[assignedRiderId] : null;
   }, [riderLocations, assignedRiderId]);
 
-  // Wait-for-Truth: Ensure presence is synced before showing "Offline"
+  // Phase Transition: API -> Syncing Presence
   useEffect(() => {
-    if (isInitialLoading) return;
+    if (!isInitialLoading && syncPhase === 'FETCHING_API') {
+      setSyncPhase('SYNCING_PRESENCE');
+    }
+  }, [isInitialLoading, syncPhase]);
+
+  // Phase Transition: Syncing Presence -> Rider Found / Ready
+  useEffect(() => {
+    if (syncPhase !== 'SYNCING_PRESENCE') return;
 
     if (!assignedRiderId) {
+      setSyncPhase('READY');
       setIsPresenceSyncing(false);
       return;
     }
 
-    // If presence is already known (from global sync or previous update), stop syncing
-    if (riderPresence[assignedRiderId] !== undefined) {
-      setIsPresenceSyncing(false);
+    const concludeSync = (found: boolean) => {
+      if (found) {
+        setSyncPhase('RIDER_FOUND');
+        // Small delay to show "Rider Found!" state
+        setTimeout(() => {
+          setSyncPhase('READY');
+          setIsPresenceSyncing(false);
+        }, 800);
+      } else {
+        setSyncPhase('READY');
+        setIsPresenceSyncing(false);
+      }
+    };
+
+    // Rule 1: Immediate finish if socket already knows they are online
+    if (riderPresence[assignedRiderId] === 'online') {
+      concludeSync(true);
       return;
     }
 
-    // Safety timeout: 3 seconds
+    // Rule 2: Immediate finish if we get a live coordinate while waiting
+    if (liveRiderLocation) {
+      concludeSync(true);
+      return;
+    }
+
+    // Rule 3: Faster finish if API says they are online (Socket handshake should be fast)
+    // We'll give it a shorter window if we expect them to be there.
+    const expectedWait = trackingPayload?.tracking_state?.rider_is_online ? 1500 : 3000;
+
+    // Safety timeout: dynamic based on expectations
     const timeout = setTimeout(() => {
       console.log("⏳ Presence sync timeout - showing fallback state");
-      setIsPresenceSyncing(false);
-    }, 3000);
+      concludeSync(false);
+    }, expectedWait);
 
     return () => clearTimeout(timeout);
-  }, [isInitialLoading, assignedRiderId, riderPresence]);
+  }, [syncPhase, assignedRiderId, riderPresence, liveRiderLocation, trackingPayload]);
 
   const fetchTrackingPayload = async () => {
     if (!id) return;
@@ -136,18 +171,48 @@ export function LiveTrackingDashboard() {
     }
   }, [id, socket, assignedRiderId]);
 
-  if (isInitialLoading || (assignedRiderId && isPresenceSyncing)) {
+  if (syncPhase !== 'READY') {
+    const isOnline = assignedRiderId 
+      ? (riderPresence[assignedRiderId] === 'online' || 
+         (riderPresence[assignedRiderId] === undefined && trackingPayload?.tracking_state?.rider_is_online))
+      : false;
+
     return (
-      <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50 animate-in fade-in duration-500">
         <div className="relative mb-8">
-           <div className="w-20 h-20 border-4 border-slate-100 rounded-full" />
-           <div className="w-20 h-20 border-4 border-[#00B14F] border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
-           <div className="absolute inset-0 flex items-center justify-center">
-             <Bike className="text-[#00B14F]" size={24} />
-           </div>
+           {syncPhase === 'RIDER_FOUND' ? (
+             <div className="w-20 h-20 bg-[#00B14F] rounded-full flex items-center justify-center animate-in zoom-in duration-300 shadow-lg shadow-[#00B14F]/20">
+                <CheckCircle2 className="text-white" size={40} />
+             </div>
+           ) : (
+             <>
+               <div className="w-20 h-20 border-4 border-slate-100 rounded-full" />
+               <div className="w-20 h-20 border-4 border-[#00B14F] border-t-transparent rounded-full animate-spin absolute top-0 left-0" />
+               <div className="absolute inset-0 flex items-center justify-center">
+                 <Bike className="text-[#00B14F]" size={24} />
+               </div>
+             </>
+           )}
         </div>
-        <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight uppercase">Connecting to Rider</h2>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Syncing real-time presence...</p>
+        
+        <h2 className="text-xl font-[900] text-slate-900 mb-2 tracking-tight uppercase">
+          {syncPhase === 'FETCHING_API' ? 'Initializing Secure Link' : 
+           syncPhase === 'RIDER_FOUND' ? 'Rider Located!' :
+           'Connecting to Rider'}
+        </h2>
+        
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">
+            {syncPhase === 'FETCHING_API' ? 'Fetching manifest details...' : 
+             syncPhase === 'RIDER_FOUND' ? 'Establishing live stream...' :
+             isOnline ? 'Rider online! Syncing live coordinates...' : 'Syncing real-time presence...'}
+          </p>
+          {syncPhase === 'SYNCING_PRESENCE' && !isOnline && (
+             <p className="text-slate-300 font-bold text-[8px] uppercase tracking-[0.2em] mt-2">
+               Scanning Fleet Network
+             </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -184,13 +249,6 @@ export function LiveTrackingDashboard() {
   const isFailed = trackingRequest.delivery_status === 'failed';
   const isFinished = isCompleted || isFailed;
 
-  // Hybrid Online Check: Use real-time socket first, fall back to API snapshot
-  // SENIOR SYNC FIX: Explicitly check API state if socket map is empty for this rider
-  const isOnline = assignedRiderId 
-    ? (riderPresence[assignedRiderId] === 'online' || 
-       (riderPresence[assignedRiderId] === undefined && trackingPayload?.tracking_state?.rider_is_online))
-    : false;
-  
   const currentLocation = liveRiderLocation
     ? { 
         lat: Number(liveRiderLocation.lat), 
@@ -211,6 +269,15 @@ export function LiveTrackingDashboard() {
         : (trackingRequest.updated_at ? new Date(trackingRequest.updated_at).getTime() : 0));
   
   const dataAgeSeconds = lastUpdateTs ? (Date.now() - lastUpdateTs) / 1000 : 9999;
+  const hasRecentLocation = Boolean(currentLocation) && dataAgeSeconds <= 130;
+
+  // Hybrid Online Check: Use real-time socket first, fall back to API snapshot
+  // A recent GPS pulse should keep the rider live even if the presence handshake is delayed/stale.
+  const isOnline = assignedRiderId 
+    ? (riderPresence[assignedRiderId] === 'online' || 
+       trackingPayload?.tracking_state?.rider_is_online ||
+       hasRecentLocation)
+    : false;
 
   // FINAL STATUS RESOLVER (Single Source)
   // Priority: 1. Connection (Offline) > 2. GPS Age (Signal Lost) > 3. Data Delay > 4. Live
@@ -226,11 +293,12 @@ export function LiveTrackingDashboard() {
     trackingStatus = 'DELAYED';
   }
 
-  const trackingLabel = trackingPayload?.tracking_state?.is_request_specific
-    ? "Live delivery tracking"
-    : trackingPayload?.tracking_state?.is_fallback
-      ? "Assigned rider location"
-      : "Waiting for rider location";
+  const trackingLabel = isFinished ? "Delivery session complete" :
+    trackingStatus === 'SIGNAL_LOST' ? "Tracking Suspended (Weak Signal)" :
+    trackingStatus === 'DELAYED' ? "Tracking Delayed (Poor Connection)" :
+    trackingStatus === 'OFFLINE' ? "Rider is currently offline" :
+    trackingPayload?.tracking_state?.is_request_specific ? "Live delivery tracking" :
+    "Assigned rider location";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col animate-in fade-in duration-1000">

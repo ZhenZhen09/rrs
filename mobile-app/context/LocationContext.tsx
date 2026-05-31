@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { io } from 'socket.io-client';
@@ -31,6 +31,7 @@ type LocationState = {
   isSocketConnected: boolean;
   startTracking: (requestId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
+  refreshCurrentLocation: (requestId?: string) => Promise<LocationState['lastLocation']>;
   simulateLocation: (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => void;
 };
 
@@ -129,7 +130,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   }
   if (data) {
     const { locations } = data as { locations?: Location.LocationObject[] };
-    const location = locations?.[0];
+    // --- SENIOR FIX: PICK FRESHEST LOCATION ---
+    // Background tasks often batch multiple locations. We must pick the most recent one.
+    const location = locations?.[locations.length - 1];
+    
     if (location) {
       const safeLocation = normalizeLocation(location, 'background');
       if (!safeLocation) {
@@ -162,10 +166,21 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         });
       } catch (err: any) {
         const status = err?.response?.status;
+        const reason = err?.response?.data?.error;
+
         if (status === 401 || status === 403) {
           await stopBackgroundTracking(`auth failure ${status}`);
           return;
         }
+
+        // --- SILENT HANDLING: Expected Hardening Rejections ---
+        // These are rejected by server-side safety logic (stale, low accuracy, skew).
+        // We log them as warnings instead of loud errors.
+        if (status === 400 && (reason === 'stale_location' || reason === 'low_accuracy' || reason === 'stale_location')) {
+          console.warn(`[Background] Server rejected fix: ${reason}`);
+          return;
+        }
+
         console.error('Failed to update background location:', err);
       }
     }
@@ -181,11 +196,16 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [backgroundPermissionGranted, setBackgroundPermissionGranted] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [lastLocation, setLastLocation] = useState<LocationState['lastLocation']>(null);
+  const lastLocationRef = useRef<LocationState['lastLocation']>(null);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const activeRequestId = useRef<string | null>(null);
   const foregroundSubscription = useRef<Location.LocationSubscription | null>(null);
   const socketAuthRefreshInFlight = useRef(false);
-  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    lastLocationRef.current = lastLocation;
+  }, [lastLocation]);
 
   // --- HEARTBEAT MECHANISM ---
   const sendHeartbeat = async () => {
@@ -204,6 +224,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           lat = fresh.coords.latitude;
           lng = fresh.coords.longitude;
           heading = fresh.coords.heading;
+          lastLocationRef.current = { lat, lng, heading };
           setLastLocation({ lat, lng, heading });
         }
       } catch (err) {
@@ -251,11 +272,103 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     setIsTracking(false);
   };
 
+  const publishSafeLocation = useCallback(async (
+    safeLocation: NonNullable<ReturnType<typeof normalizeLocation>>,
+    source: 'initial' | 'watch' | 'manual',
+    requestIdOverride?: string,
+  ) => {
+    if (!user?.id) return null;
+
+    const nextLocation = {
+      lat: safeLocation.lat,
+      lng: safeLocation.lng,
+      heading: safeLocation.heading,
+    };
+    lastLocationRef.current = nextLocation;
+    setLastLocation(nextLocation);
+
+    const payload = {
+      riderId: user.id,
+      lat: safeLocation.lat,
+      lng: safeLocation.lng,
+      heading: safeLocation.heading,
+      accuracy: safeLocation.accuracy,
+      timestamp: safeLocation.timestamp,
+      requestId: requestIdOverride || activeRequestId.current || 'idle',
+    };
+
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('update-location', payload);
+      return nextLocation;
+    }
+
+    try {
+      await updateLocationBackground(payload);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        console.warn(`[LocationContext] ${source} location fallback rejected: ${status}`);
+      } else {
+        console.error(`[LocationContext] ${source} location fallback failed:`, err);
+      }
+    }
+
+    return nextLocation;
+  }, [user?.id]);
+
+  const refreshCurrentLocation = useCallback(async (requestId?: string) => {
+    if (user?.role !== 'rider') return lastLocationRef.current;
+
+    if (requestId) {
+      activeRequestId.current = requestId;
+      await AsyncStorage.setItem(STORAGE_REQUEST_ID, requestId);
+      setIsTracking(true);
+    }
+
+    let permission = locationPermission;
+    if (permission !== 'granted') {
+      const result = await Location.requestForegroundPermissionsAsync();
+      permission = result.status;
+      setLocationPermission(result.status);
+    }
+
+    if (permission !== 'granted') {
+      console.warn('[LocationContext] Cannot refresh current location without foreground permission');
+      return lastLocationRef.current;
+    }
+
+    try {
+      const cachedLocation = await Location.getLastKnownPositionAsync({
+        maxAge: FG_MAX_AGE_MS,
+        requiredAccuracy: FG_MAX_ACCURACY_M,
+      });
+      const safeCached = cachedLocation ? normalizeLocation(cachedLocation) : null;
+      if (safeCached) {
+        await publishSafeLocation(safeCached, 'manual', requestId);
+      }
+    } catch (err) {
+      console.warn('[LocationContext] Last-known location lookup failed:', err);
+    }
+
+    try {
+      const freshLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const safeFresh = normalizeLocation(freshLocation);
+      if (!safeFresh) return lastLocationRef.current;
+      return publishSafeLocation(safeFresh, 'manual', requestId);
+    } catch (err) {
+      console.warn('[LocationContext] Manual current location refresh failed:', err);
+      return lastLocationRef.current;
+    }
+  }, [locationPermission, publishSafeLocation, user?.role]);
+
   const simulateLocation = (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => {
     const targetRiderId = overrideRiderId || user?.id;
     if (!targetRiderId || !isValidCoordinate(lat, lng)) return;
     
     // Update local state so the app UI reacts
+    lastLocationRef.current = { lat, lng, heading };
     setLastLocation({ lat, lng, heading });
 
     // Emit to system via socket so Admin/Personnel see it
@@ -279,6 +392,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         socketRef.current = null;
       }
       setIsSocketConnected(false);
+      lastLocationRef.current = null;
       setLastLocation(null);
       return;
     }
@@ -382,6 +496,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     const handleLocationUpdate = (data: any) => {
       // ENFORCE SSOT: Only process updates for the current user/rider
       if (data.riderId === user?.id && data.lat && data.lng) {
+        lastLocationRef.current = {
+          lat: data.lat,
+          lng: data.lng,
+          heading: data.heading || null,
+        };
         setLastLocation({
           lat: data.lat,
           lng: data.lng,
@@ -444,38 +563,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           console.warn(`[LocationContext] Ignoring stale or inaccurate ${source} location`);
           return;
         }
-
-        setLastLocation({
-          lat: safeLocation.lat,
-          lng: safeLocation.lng,
-          heading: safeLocation.heading,
-        });
-
-        const payload = {
-          riderId: user.id,
-          lat: safeLocation.lat,
-          lng: safeLocation.lng,
-          heading: safeLocation.heading,
-          accuracy: safeLocation.accuracy,
-          timestamp: safeLocation.timestamp,
-          requestId: activeRequestId.current || 'idle',
-        };
-
-        if (socketRef.current?.connected) {
-          socketRef.current.emit('update-location', payload);
-          return;
-        }
-
-        try {
-          await updateLocationBackground(payload);
-        } catch (err: any) {
-          const status = err?.response?.status;
-          if (status === 401 || status === 403) {
-            console.warn(`[LocationContext] Foreground location fallback rejected: ${status}`);
-          } else {
-            console.error('[LocationContext] Foreground location fallback failed:', err);
-          }
-        }
+        await publishSafeLocation(safeLocation, source);
       };
 
       // 5. Send a fresh first fix before starting continuous watching.
@@ -521,7 +609,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (foregroundSubscription.current) foregroundSubscription.current.remove();
     };
-  }, [user?.id, user?.role]);
+  }, [publishSafeLocation, user?.id, user?.role]);
 
   return (
     <LocationContext.Provider value={{ 
@@ -532,6 +620,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       isSocketConnected,
       startTracking,
       stopTracking,
+      refreshCurrentLocation,
       simulateLocation
     }}>
       {children}

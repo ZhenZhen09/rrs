@@ -39,9 +39,9 @@ export const addToQueue = async (item: Omit<QueueItem, 'idempotencyKey'>) => {
 export const processQueue = async () => {
   const db = await getDb();
   
-  // 1. Get all pending items
+  // 1. Get all pending items (SENIOR FIX: Skip failed/syncing)
   const items = await db.getAllAsync(
-    "SELECT * FROM sync_queue WHERE status != 'syncing' AND expires_at > ? ORDER BY priority DESC, created_at ASC",
+    "SELECT * FROM sync_queue WHERE status = 'pending' AND expires_at > ? ORDER BY priority DESC, created_at ASC",
     [Date.now()]
   ) as any[];
 
@@ -77,11 +77,18 @@ export const processQueue = async () => {
 
       // Don't retry client errors (4xx) except for transient ones
       if (!isNetworkError && status >= 400 && status < 500 && status !== 429) {
-         console.error(`[SyncQueue] Fatal error for ${item.endpoint}:`, err.message);
-         await db.runAsync(
-           "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
-           [err.message, item.id]
-         );
+         // SPECIAL CASE: Location updates that are rejected by server hardening (stale, low accuracy)
+         // should be discarded immediately to prevent queue bloat.
+         if (item.endpoint === '/api/users/location' && status === 400) {
+           console.warn(`[SyncQueue] Server rejected stale/inaccurate location (ID: ${item.id}), discarding.`);
+           await db.runAsync("DELETE FROM sync_queue WHERE id = ?", [item.id]);
+         } else {
+           console.error(`[SyncQueue] Fatal error for ${item.endpoint}:`, err.message);
+           await db.runAsync(
+             "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
+             [err.message, item.id]
+           );
+         }
       } else {
         // Network error or 5xx: Revert to pending for next retry
         console.warn(`[SyncQueue] Transient error for ${item.endpoint}, will retry:`, err.message);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Alert, BackHandler, Linking, Dimensions, Animated, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useJobDetails } from '@/hooks/data/useJobDetails';
 import { useLocation } from '@/context/LocationContext';
-import { encode as base64Encode } from 'base-64';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,13 +33,13 @@ export default function JobDetailsScreen() {
     isSelfUpdated,
   } = useJobDetails();
 
-  const { backgroundPermissionGranted, isSocketConnected, lastLocation, simulateLocation } = useLocation();
+  const { backgroundPermissionGranted, isSocketConnected, lastLocation, refreshCurrentLocation, simulateLocation } = useLocation();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const webViewRef = useRef<WebView>(null);
   
   const [roadPath, setRoadPath] = useState<{latitude: number, longitude: number}[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
-  const simulationInterval = useRef<NodeJS.Timeout | null>(null);
+  const simulationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const remoteTerminalAlertedRef = useRef<string | null>(null);
 
   // --- REMOTE SYNC & AUTO-NAVIGATION ---
@@ -61,12 +60,7 @@ export default function JobDetailsScreen() {
           Alert.alert("Job Updated", message, [{ text: "OK" }]);
         }
       } else {
-        // Updated by the Rider themselves
-        // We'll give them a short moment to see the completion status
-        // or just let them stay on the page until they click 'Back to Today'
-        // Given the user's feedback, they want it to go back.
         const timer = setTimeout(() => {
-          // Only auto-navigate if the modal is closed (success submitted)
           if (!statusModalVisible) {
             router.replace('/(tabs)');
           }
@@ -94,21 +88,23 @@ export default function JobDetailsScreen() {
       }
       
       const point = roadPath[step];
-      
-      // 1. Update system (Socket.io) so Admin/Personnel see it
-      // If we are an admin, we override the riderId with the job's assigned rider
       simulateLocation(point.latitude, point.longitude, null, job?.assigned_rider_id);
 
-      // 2. Update local WebView map
       const payload = JSON.stringify({ 
         lat: point.latitude, 
         lng: point.longitude,
-        heading: null
+        heading: null,
+        isSimulated: true
       });
-      webViewRef.current?.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
+      webViewRef.current?.injectJavaScript(`
+        if(window.updateRider) {
+          window.updateRider(${payload});
+        }
+        true;
+      `);
       
-      step += Math.max(1, Math.floor(roadPath.length / 50)); 
-    }, 2000);
+      step += 1; 
+    }, 500);
   };
 
   const stopSimulation = () => {
@@ -125,7 +121,7 @@ export default function JobDetailsScreen() {
     };
   }, []);
 
-  // --- FULL JOURNEY ROUTING (Rider -> Pickup -> Dropoff) ---
+  // --- FULL JOURNEY ROUTING ---
   useEffect(() => {
     async function loadRoads() {
       const startLat = lastLocation?.lat || job?.current_location?.lat || job?.pickup_location?.lat;
@@ -143,9 +139,6 @@ export default function JobDetailsScreen() {
           const response = await fetch(url);
           if (!response.ok) return;
 
-          const contentType = response.headers.get("content-type");
-          if (!contentType || !contentType.includes("application/json")) return;
-
           const data = await response.json();
 
           if (data.code === 'Ok' && data.routes && data.routes[0]) {
@@ -162,50 +155,110 @@ export default function JobDetailsScreen() {
     if (job) loadRoads();
   }, [job?.delivery_status, job?.pickup_location, job?.dropoff_location, lastLocation?.lat, lastLocation?.lng]);
 
-  // Update Rider in WebView smoothly
-  useEffect(() => {
-    if (lastLocation && webViewRef.current) {
-      const payload = JSON.stringify({ 
-        lat: lastLocation.lat, 
-        lng: lastLocation.lng,
-        heading: lastLocation.heading
-      });
-      webViewRef.current.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
-    }
-  }, [lastLocation]);
-
-  useEffect(() => {
-    if (webViewRef.current && job) {
-      const initialPos = lastLocation || (job.current_location?.lat ? {
-        lat: Number(job.current_location.lat),
-        lng: Number(job.current_location.lng)
-      } : { 
-        lat: Number(job.pickup_location?.lat || 0), 
-        lng: Number(job.pickup_location?.lng || 0) 
-      });
-      const payload = JSON.stringify(initialPos);
-      // Small delay to ensure WebView is ready
-      setTimeout(() => {
-        webViewRef.current?.injectJavaScript(`if(window.updateRider) window.updateRider(${payload}); true;`);
-      }, 1000);
-    }
-  }, [job?.request_id, lastLocation, job?.current_location]);
-
-  useEffect(() => {
-    if (webViewRef.current && roadPath.length > 0) {
-      const payload = JSON.stringify(roadPath);
-      webViewRef.current.injectJavaScript(`if(window.updatePath) window.updatePath(${payload}); true;`);
-    }
-  }, [roadPath]);
+  const isMapReady = useRef(false);
 
   const deliveryStatus = job?.delivery_status?.toLowerCase();
   const isNavigationMode = deliveryStatus === 'in_progress';
 
-  useEffect(() => {
-    if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`if(window.setNavigationMode) window.setNavigationMode(${isNavigationMode}); true;`);
+  const mapRiderPosition = useMemo(() => {
+    if (!job) return null;
+
+    if (lastLocation?.lat && lastLocation?.lng) {
+      return {
+        lat: Number(lastLocation.lat),
+        lng: Number(lastLocation.lng),
+        heading: lastLocation.heading ?? null,
+      };
     }
-  }, [isNavigationMode]);
+
+    if (job.current_location?.lat && job.current_location?.lng) {
+      return {
+        lat: Number(job.current_location.lat),
+        lng: Number(job.current_location.lng),
+        heading: null,
+      };
+    }
+
+    return null;
+  }, [
+    job?.request_id,
+    job?.current_location?.lat,
+    job?.current_location?.lng,
+    lastLocation?.lat,
+    lastLocation?.lng,
+    lastLocation?.heading,
+  ]);
+
+  useEffect(() => {
+    if (!job?.request_id) return;
+    refreshCurrentLocation(job.request_id);
+  }, [job?.request_id, refreshCurrentLocation]);
+
+  const initialRiderForHtml = useMemo(() => {
+    if (!job) return null;
+    return job.current_location?.lat && job.current_location?.lng
+      ? {
+          lat: Number(job.current_location.lat),
+          lng: Number(job.current_location.lng),
+          heading: null,
+        }
+      : null;
+  }, [
+    job?.request_id,
+    job?.current_location?.lat,
+    job?.current_location?.lng,
+  ]);
+
+  const pushMapStateToWebView = useCallback((force = false) => {
+    if (!webViewRef.current || !job) return;
+    if (!force && !isMapReady.current) return;
+
+    if (roadPath.length > 0) {
+      const payload = JSON.stringify(roadPath);
+      webViewRef.current.injectJavaScript(`
+        if (window.updatePath) {
+          window.updatePath(${payload});
+        }
+        true;
+      `);
+    }
+
+    if (mapRiderPosition) {
+      const payload = JSON.stringify(mapRiderPosition);
+      webViewRef.current.injectJavaScript(`
+        if (window.updateRider) {
+          window.updateRider(${payload});
+        }
+        true;
+      `);
+    }
+
+    webViewRef.current.injectJavaScript(`
+      if (window.setNavigationMode) {
+        window.setNavigationMode(${isNavigationMode});
+      }
+      true;
+    `);
+  }, [job?.request_id, mapRiderPosition, roadPath, isNavigationMode]);
+
+  useEffect(() => {
+    pushMapStateToWebView();
+  }, [pushMapStateToWebView]);
+
+  const onMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'MAP_READY') {
+        isMapReady.current = true;
+        pushMapStateToWebView(true);
+        console.log('✅ WebView Map is ready');
+      } else if (data.type === 'ERROR') {
+        console.error('❌ WebView Error:', data.msg);
+      } else if (data.type === 'DEBUG') {
+        console.log('🐞 WebView Debug:', data.msg);
+      }
+    } catch (e) {}
+  };
 
   const snapPoints = useMemo(() => ['35%', '90%'], []);
 
@@ -224,7 +277,6 @@ export default function JobDetailsScreen() {
     return () => bh.remove();
   }, [job?.delivery_status]);
 
-  // --- MAP CONFIG HOOKS (MUST BE ABOVE ALL RETURNS) ---
   const pickup = useMemo(() => ({ 
     latitude: Number(job?.pickup_location?.lat || 0), 
     longitude: Number(job?.pickup_location?.lng || 0) 
@@ -237,31 +289,26 @@ export default function JobDetailsScreen() {
 
   const isLocked = ['assigned', 'in_progress'].includes(deliveryStatus || '');
   
-  const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="#073f5a" d="M256 25c-82 0-103 29-103 88v22c-11 4-18 9-18 16v24c0 4 3 6 7 5l14-5v226c0 57 25 84 100 86 75-2 100-29 100-86V175l14 5c4 1 7-1 7-5v-24c0-7-7-12-18-16v-22C359 54 338 25 256 25Z"/><path fill="#3aa3d9" d="M256 39c-72 0-91 24-91 76v34c-16 4-28 10-28 18v14c0 3 2 4 5 3l23-9v223c0 48 20 72 91 74 71-2 91-26 91-74V175l23 9c3 1 5 0 5-3v-14c0-8-12-14-28-18v-34c0-52-19-76-91-76Z"/><path fill="#053d56" d="M192 162c43-13 85-18 128-5l-10 70c-36-14-72-18-108 0l-10-65Z"/><path fill="#053d56" d="M187 329c44 14 91 16 138-1l2 61c-49 26-95 27-142 0l2-60Z"/><path fill="#053d56" opacity=".72" d="M169 175l10 53v100l-18 58V184l8-9Z"/><path fill="#053d56" opacity=".72" d="M343 175l-10 53v100l18 58V184l-8-9Z"/><path fill="#134f68" d="M188 371c44 26 90 26 136 0l3 18c-49 27-95 27-142 0l3-18Z"/><path fill="#64bee9" d="M190 279c44 10 88 10 132 0v46c-41 19-85 19-132 0v-46Z"/><path fill="#64bee9" d="M178 146c53-20 106-26 156-7l-13 18c-42-14-86-10-130 5l-13-16Z"/><path fill="#b7d6f5" d="M176 62c17-11 39-13 50-6 4 3 3 7-1 9l-36 14c-9 4-17-8-13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 64c8-6 17-9 28-10-10 8-19 16-28 25-5-3-6-10 0-15Z"/><path fill="#b7d6f5" d="M336 62c-17-11-39-13-50-6-4 3-3 7 1 9l36 14c9 4 17-8 13-17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 64c-8-6-17-9-28-10 10 8 19 16 28 25-5-3-6-10 0-15Z"/><path fill="#b7d6f5" d="M176 450c17 11 39 13 50 6 4-3 3-7-1-9l-36-14c-9-4-17 8-13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M178 448c8 6 17 9 28 10-10-8-19-16-28-25-5 3-6 10 0 15Z"/><path fill="#b7d6f5" d="M336 450c-17 11-39 13-50 6-4-3-3-7 1-9l36-14c9-4 17 8 13 17Z"/><path fill="#d1e5ff" opacity=".9" d="M334 448c-8 6-17 9-28 10 10-8 19-16 28-25 5 3 6 10 0 15Z"/><path fill="#0a5977" d="M160 275h18v5h-18z"/><path fill="#0a5977" d="M334 275h18v5h-18z"/><path fill="#197aa5" opacity=".35" d="M256 39c-72 0-91 24-91 76v34c-10 3-19 6-24 10 54-19 132-32 206-10v-34c0-52-19-76-91-76Z"/></svg>`;
-  
-  // Use Base64 for data URIs for maximum compatibility in all WebViews
-  const carMarkerDataUri = useMemo(() => {
-    return `data:image/svg+xml;base64,${base64Encode(carMarkerSvg)}`;
-  }, [carMarkerSvg]);
+  const carMarkerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:48px;height:48px;"><path fill="#073f5a" d="M256 25c-82 0-103 29-103 88v22c-11 4-18 9-18 16v24c0 4 3 6 7 5l14-5v226c0 57 25 84 100 86 75-2 100-29 100-86V175l14 5c4 1 7-1 7-5v-24c0-7-7-12-18-16v-22C359 54 338 25 256 25Z"/><path fill="#3aa3d9" d="M256 39c-72 0-91 24-91 76v34c-16 4-28 10-28 18v14c0 3 2 4 5 3l23-9v223c0 48 20 72 91 74 71-2 91-26 91-74V175l23 9c3 1 5 0 5-3v-14c0-8-12-14-28-18v-34c0-52-19-76-91-76Z"/><path fill="#053d56" d="M192 162c43-13 85-18 128-5l-10 70c-36-14-72-18-108 0l-10-65Z"/><path fill="#053d56" d="M187 329c44 14 91 16 138-1l2 61c-49 26-95 27-142 0l2-60Z"/><path fill="#64bee9" d="M190 279c44 10 88 10 132 0v46c-41 19-85 19-132 0v-46Z"/></svg>`;
 
   const mapHtml = useMemo(() => {
     if (!job) return '';
+    const initialRiderPayload = JSON.stringify(initialRiderForHtml);
     return `
     <!DOCTYPE html>
     <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
         <style>
           body { margin: 0; padding: 0; }
           #map { height: 100vh; width: 100vw; background: #f8fafc; }
           .marker-pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: #c30b82; position: absolute; transform: rotate(-45deg); left: 50%; top: 50%; margin: -15px 0 0 -15px; }
           .marker-pin::after { content: ''; width: 24px; height: 24px; margin: 3px 0 0 3px; background: #fff; position: absolute; border-radius: 50%; }
-          .rider-car-icon { background: transparent; border: 0; transition: transform 0.7s linear; z-index: 9999 !important; }
-          .rider-car-wrap { position: relative; width: 48px; height: 48px; animation: car-road-glide 1.4s ease-in-out infinite; }
-          .rider-car-body { width: 48px; height: 48px; transform-origin: 50% 50%; transition: transform 0.35s ease; }
-          .rider-car-body img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(15,23,42,0.28)); }
+          .rider-car-icon { background: transparent; border: 0; z-index: 9999 !important; }
+          .rider-car-wrap { position: relative; width: 48px; height: 48px; }
+          .rider-car-body { width: 48px; height: 48px; transform-origin: 50% 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1); }
           .rider-car-pulse { position: absolute; inset: 0; border-radius: 999px; background: #60A5FA; opacity: 0.2; z-index: -1; animation: car-pulse 1.2s cubic-bezier(0,0,0.2,1) infinite; }
           .nav-recenter { position: fixed; right: 16px; bottom: 38%; z-index: 9999; width: 48px; height: 48px; border-radius: 999px; border: 0; background: #0F172A; box-shadow: 0 10px 24px rgba(15,23,42,0.24); display: none; align-items: center; justify-content: center; }
           .nav-recenter.visible { display: flex; }
@@ -269,7 +316,6 @@ export default function JobDetailsScreen() {
           .nav-chip { position: fixed; left: 16px; top: 82px; z-index: 9999; display: none; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px; background: rgba(15,23,42,0.88); color: #fff; font: 800 10px system-ui, -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 1px; text-transform: uppercase; box-shadow: 0 10px 24px rgba(15,23,42,0.18); }
           .nav-chip.visible { display: flex; }
           .nav-chip span { width: 7px; height: 7px; border-radius: 999px; background: #10B981; box-shadow: 0 0 0 5px rgba(16,185,129,0.18); }
-          @keyframes car-road-glide { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.025); } }
           @keyframes car-pulse { 75%, 100% { transform: scale(1.8); opacity: 0; } }
         </style>
       </head>
@@ -278,88 +324,121 @@ export default function JobDetailsScreen() {
         <div id="nav-chip" class="nav-chip"><span></span>Navigation</div>
         <button id="nav-recenter" class="nav-recenter" aria-label="Recenter rider"></button>
         <script>
+          const CAR_MARKER_SVG = ${JSON.stringify(carMarkerSvg)};
+          const INITIAL_RIDER = ${initialRiderPayload};
+          const debug = (msg) => {
+            if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'DEBUG', msg }));
+          };
+          window.onerror = function(msg, url, line, column, error) {
+            if (msg === 'Script error.' && line === 0) {
+              debug('Ignored generic external script error');
+              return true;
+            }
+
+            const details = [
+              msg,
+              url ? 'url=' + url : null,
+              line ? 'line=' + line : null,
+              column ? 'column=' + column : null,
+              error && error.stack ? error.stack : null,
+            ].filter(Boolean).join(' ');
+
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', msg: details || 'Unknown WebView error' }));
+            }
+          };
+
           const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${pickup.latitude}, ${pickup.longitude}], 14);
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
           const pickupIcon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#10B981;' class='marker-pin'></div>", iconSize: [30, 42], iconAnchor: [15, 42] });
           const dropoffIcon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#EF4444;' class='marker-pin'></div>", iconSize: [30, 42], iconAnchor: [15, 42] });
-          const riderIcon = L.divIcon({ 
-            className: 'rider-car-icon', 
-            html: "<div class='rider-car-wrap'><div id='rider-marker' class='rider-car-body'><img src='${carMarkerDataUri}' alt='' /></div><div class='rider-car-pulse'></div></div>", 
-            iconSize: [48, 48], 
-            iconAnchor: [24, 24] 
-          });
-
-          L.marker([${pickup.latitude}, ${pickup.longitude}], { icon: pickupIcon }).addTo(map);
-          L.marker([${dropoff.latitude}, ${dropoff.longitude}], { icon: dropoffIcon }).addTo(map);
           
           let riderMarker = null;
           let roadPolyline = null;
           let roadPath = [];
-          let navigationMode = true; // Force navigation mode for consistent framing
+          let navigationMode = true; 
           let followMode = true;
-          let currentRiderPosition = null;
+          
           let targetRiderPosition = null;
+          let currentRiderPosition = null;
           let currentHeading = 0;
           let targetHeading = 0;
-          let velocity = { lat: 0, lng: 0 };
-          let lastUpdateAt = Date.now();
           let animationFrame = null;
-          let lastCameraMoveAt = 0;
+          let lastFrameTime = performance.now();
+          let lastUpdateAt = Date.now();
+          let velocity = { lat: 0, lng: 0 };
+          
           const navChip = document.getElementById('nav-chip');
           const recenterButton = document.getElementById('nav-recenter');
 
+          function normalizeAngle(a) {
+            return (a + 180) % 360 - 180;
+          }
+
+          function lerpAngle(start, end, amount) {
+            const diff = (end - start + 540) % 360 - 180;
+            return (start + diff * amount + 360) % 360;
+          }
+
+          window.updateRider = (data) => {
+            if (!data) return;
+            const lat = Number(data.lat || data.latitude);
+            const lng = Number(data.lng || data.longitude);
+
+            if (!isNaN(lat) && !isNaN(lng)) {
+              const newPos = [lat, lng];
+              const snapped = snapToRoute(newPos, 100);
+              const now = Date.now();
+
+              if (targetRiderPosition) {
+                const timeDelta = now - lastUpdateAt;
+                if (timeDelta > 0) {
+                  const latVel = (snapped.point[0] - targetRiderPosition[0]) / timeDelta;
+                  const lngVel = (snapped.point[1] - targetRiderPosition[1]) / timeDelta;
+
+                  if (Math.abs(latVel) < 0.00001 && Math.abs(lngVel) < 0.00001) {
+                    velocity = { lat: latVel, lng: lngVel };
+                  }
+                }
+              }
+
+              targetRiderPosition = snapped.point;
+              lastUpdateAt = now;
+
+              if (snapped.bearing !== null) {
+                targetHeading = snapped.bearing;
+              } else if (data.heading !== undefined && data.heading !== null) {
+                targetHeading = Number(data.heading);
+              } else if (targetRiderPosition && currentRiderPosition) {
+                const latDiff = Math.abs(currentRiderPosition[0] - targetRiderPosition[0]);
+                const lngDiff = Math.abs(currentRiderPosition[1] - targetRiderPosition[1]);
+                if (latDiff > 0.0000001 || lngDiff > 0.0000001) {
+                  targetHeading = calculateBearing(currentRiderPosition, targetRiderPosition);
+                }
+              }
+
+              if (!riderMarker) {
+                currentRiderPosition = [...targetRiderPosition];
+                currentHeading = targetHeading;
+
+                const riderIcon = L.divIcon({ 
+                  className: 'rider-car-icon', 
+                  html: '<div class="rider-car-wrap"><div id="rider-marker" class="rider-car-body">' + CAR_MARKER_SVG + '</div><div class="rider-car-pulse"></div></div>', 
+                  iconSize: [48, 48], 
+                  iconAnchor: [24, 24] 
+                });
+                riderMarker = L.marker(currentRiderPosition, { icon: riderIcon, zIndexOffset: 1000 }).addTo(map);
+                moveNavigationCamera(currentRiderPosition, true);
+              }
+
+              startRiderAnimation();
+            }
+          };
+
           function setNavigationUi() {
             if (navChip) navChip.classList.toggle('visible', navigationMode);
-            if (recenterButton) recenterButton.classList.toggle('visible', navigationMode && !followMode);
-          }
-
-          function normalizeAngleDelta(from, to) {
-            return ((to - from + 540) % 360) - 180;
-          }
-
-          function lerp(start, end, amount) {
-            return start + (end - start) * amount;
-          }
-
-          function moveNavigationCamera(position, force) {
-            if (!navigationMode || !followMode || !position) return;
-            const now = Date.now();
-            if (!force && now - lastCameraMoveAt < 250) return;
-            lastCameraMoveAt = now;
-
-            // ENTERPRISE NAVIGATION MAPPING (Uber/Grab Style)
-            const containerHeight = map.getSize().y;
-            const containerWidth = map.getSize().x;
-            
-            // 1. BOTTOM ANCHORING: Keep car in the bottom ~25% of the visible area (above drawer)
-            // Drawer is 35%, so we want the car at roughly 60% from the top of the physical screen.
-            const verticalOffset = containerHeight * 0.15; // Offset from center to push car down
-            
-            // 2. LEADING VIEW: Offset center based on heading so user sees more road AHEAD
-            const angleRad = (currentHeading - 90) * Math.PI / 180;
-            const leadingDistance = containerHeight * 0.12; // How far ahead to look
-            
-            const leadX = Math.cos(angleRad) * leadingDistance;
-            const leadY = Math.sin(angleRad) * leadingDistance;
-
-            const targetPoint = map.project(position, map.getZoom());
-            // Combine Bottom Anchoring (upwards offset) and Leading View
-            const offsetPoint = targetPoint.add([leadX, leadY - verticalOffset]);
-            const offsetLatLng = map.unproject(offsetPoint, map.getZoom());
-
-            // 3. DYNAMIC ZOOM: Tighter zoom for navigation
-            const targetZoom = 17;
-            if (Math.abs(map.getZoom() - targetZoom) > 0.5) {
-              map.setZoom(targetZoom, { animate: true });
-            }
-
-            map.panTo(offsetLatLng, { 
-              animate: true, 
-              duration: 1.2, 
-              easeLinearity: 0.1, 
-              noMoveStart: true 
-            });
+            if (recenterButton) recenterButton.classList.toggle('visible', !followMode && navigationMode);
           }
 
           map.on('dragstart zoomstart', function() {
@@ -372,8 +451,14 @@ export default function JobDetailsScreen() {
             recenterButton.addEventListener('click', function() {
               followMode = true;
               setNavigationUi();
-              moveNavigationCamera(currentRiderPosition || targetRiderPosition, true);
+              if (currentRiderPosition) map.setView(currentRiderPosition, 16, { animate: true });
             });
+          }
+
+          function moveNavigationCamera(position, force) {
+            if ((followMode || force) && position) {
+              map.setView(position, 16, { animate: true });
+            }
           }
 
           function calculateBearing(from, to) {
@@ -423,111 +508,109 @@ export default function JobDetailsScreen() {
             return nearest.distance <= maxDistanceMeters ? nearest : { point, bearing: null };
           }
 
-          function renderRiderFrame() {
-            const now = Date.now();
-            const timeSinceUpdate = now - lastUpdateAt;
-
+          function renderRiderFrame(time) {
             if (!targetRiderPosition) {
-              animationFrame = requestAnimationFrame(renderRiderFrame);
+              animationFrame = null;
               return;
             }
 
-            if (!currentRiderPosition) {
-              currentRiderPosition = targetRiderPosition;
-              currentHeading = targetHeading;
-            } else {
-              // DEAD RECKONING: If data is stale, continue moving
-              if (timeSinceUpdate > 2000 && timeSinceUpdate < 15000 && (velocity.lat !== 0 || velocity.lng !== 0)) {
-                const friction = Math.max(0, 1 - (timeSinceUpdate - 2000) / 13000);
-                currentRiderPosition = [
-                  currentRiderPosition[0] + velocity.lat * friction,
-                  currentRiderPosition[1] + velocity.lng * friction
-                ];
-              } else {
-                // SMOOTH INTERPOLATION
-                currentRiderPosition = [
-                  lerp(currentRiderPosition[0], targetRiderPosition[0], 0.05),
-                  lerp(currentRiderPosition[1], targetRiderPosition[1], 0.05),
-                ];
-              }
+            const now = Date.now();
+            const timeSinceUpdate = now - lastUpdateAt;
+            lastFrameTime = time;
 
-              // BEARING EASING with turn anticipation
-              const delta = normalizeAngleDelta(currentHeading, targetHeading);
-              const rotationSpeed = Math.abs(delta) > 45 ? 0.15 : 0.1;
-              currentHeading += delta * rotationSpeed;
+            if (timeSinceUpdate > 1000 && timeSinceUpdate < 15000 && (velocity.lat !== 0 || velocity.lng !== 0)) {
+              const friction = Math.max(0, 1 - (timeSinceUpdate - 1000) / 14000);
+              currentRiderPosition = [
+                currentRiderPosition[0] + velocity.lat * friction,
+                currentRiderPosition[1] + velocity.lng * friction
+              ];
+            } else {
+              const damping = 0.08;
+              const nextLat = currentRiderPosition[0] + (targetRiderPosition[0] - currentRiderPosition[0]) * damping;
+              const nextLng = currentRiderPosition[1] + (targetRiderPosition[1] - currentRiderPosition[1]) * damping;
+              const dist = Math.sqrt(Math.pow(nextLat - targetRiderPosition[0], 2) + Math.pow(nextLng - targetRiderPosition[1], 2));
+
+              currentRiderPosition = dist > 0.01 ? [...targetRiderPosition] : [nextLat, nextLng];
             }
 
-            if (riderMarker) riderMarker.setLatLng(currentRiderPosition);
-            const el = document.getElementById('rider-marker');
-            if (el) el.style.transform = 'rotate(' + currentHeading + 'deg)';
-            moveNavigationCamera(currentRiderPosition, false);
+            currentHeading = lerpAngle(currentHeading, targetHeading, 0.12);
+            
+            if (riderMarker) {
+              riderMarker.setLatLng(currentRiderPosition);
+              const el = document.getElementById('rider-marker');
+              if (el) {
+                el.style.transform = 'rotate(' + currentHeading + 'deg)';
+              }
+            }
+            
+            if (followMode) {
+              moveNavigationCamera(currentRiderPosition, false);
+            }
 
             animationFrame = requestAnimationFrame(renderRiderFrame);
           }
 
           function startRiderAnimation() {
-            if (!animationFrame) animationFrame = requestAnimationFrame(renderRiderFrame);
+            if (!animationFrame) {
+              lastFrameTime = performance.now();
+              animationFrame = requestAnimationFrame(renderRiderFrame);
+            }
           }
 
-          window.updateRider = (data) => {
-            if (data.lat && data.lng) {
-              const newPos = [Number(data.lat), Number(data.lng)];
-              const snapped = snapToRoute(newPos, 80);
-              targetRiderPosition = snapped.point;
-              
-              if (snapped.bearing !== null) {
-                targetHeading = snapped.bearing;
-              } else if (data.heading !== undefined && data.heading !== null) {
-                targetHeading = Number(data.heading);
-              } else if (currentRiderPosition) {
-                const b = calculateBearing(currentRiderPosition, targetRiderPosition);
-                if (Math.abs(currentRiderPosition[0]-targetRiderPosition[0]) > 0.00001 || 
-                    Math.abs(currentRiderPosition[1]-targetRiderPosition[1]) > 0.00001) {
-                  targetHeading = b;
+          window.updatePath = function(path) {
+            if (path && path.length > 0) {
+              roadPath = path.map(p => [Number(p.latitude || p.lat), Number(p.longitude || p.lng)]);
+              if (roadPolyline) map.removeLayer(roadPolyline);
+              roadPolyline = L.polyline(roadPath, { color: '#3B82F6', weight: 5, opacity: 0.8 }).addTo(map);
+
+              if (targetRiderPosition) {
+                const snapped = snapToRoute(targetRiderPosition, 100);
+                targetRiderPosition = snapped.point;
+                if (snapped.bearing !== null) {
+                  targetHeading = snapped.bearing;
+                }
+              }
+
+              if (currentRiderPosition) {
+                const snapped = snapToRoute(currentRiderPosition, 100);
+                currentRiderPosition = snapped.point;
+                if (riderMarker) {
+                  riderMarker.setLatLng(currentRiderPosition);
+                }
+                if (snapped.bearing !== null) {
+                  targetHeading = snapped.bearing;
                 }
               }
 
               if (!riderMarker) {
-                currentRiderPosition = targetRiderPosition;
-                currentHeading = targetHeading;
-                riderMarker = L.marker(currentRiderPosition, { icon: riderIcon }).addTo(map);
-                moveNavigationCamera(currentRiderPosition, true);
-              }
-
-              startRiderAnimation();
-            }
-          };
-
-          window.setNavigationMode = function(enabled) {
-            navigationMode = Boolean(enabled);
-            followMode = navigationMode ? true : followMode;
-            setNavigationUi();
-            if (navigationMode) {
-              moveNavigationCamera(currentRiderPosition || targetRiderPosition, true);
-            }
-          };
-
-          window.updatePath = function(path) {
-            if (path && path.length > 0) {
-              roadPath = path.map(p => [Number(p.latitude), Number(p.longitude)]);
-              if (roadPolyline) map.removeLayer(roadPolyline);
-              roadPolyline = L.polyline(roadPath, { color: '#3B82F6', weight: 5 }).addTo(map);
-              if (navigationMode && (currentRiderPosition || targetRiderPosition)) {
-                moveNavigationCamera(currentRiderPosition || targetRiderPosition, true);
-              } else {
                 map.fitBounds(roadPolyline.getBounds(), { padding: [50, 50] });
               }
             }
           };
 
+          window.setNavigationMode = (mode) => {
+            navigationMode = !!mode;
+            setNavigationUi();
+          };
+
+          L.marker([${pickup.latitude}, ${pickup.longitude}], { icon: pickupIcon }).addTo(map);
+          L.marker([${dropoff.latitude}, ${dropoff.longitude}], { icon: dropoffIcon }).addTo(map);
+
           setNavigationUi();
+
+          if (INITIAL_RIDER) {
+            window.updateRider(INITIAL_RIDER);
+          }
+          
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
+          }
         </script>
       </body>
     </html>
   `;
-  }, [job?.request_id, pickup.latitude, pickup.longitude, dropoff.latitude, dropoff.longitude, carMarkerDataUri]);
+  }, [job?.request_id, pickup.latitude, pickup.longitude, dropoff.latitude, dropoff.longitude, carMarkerSvg, initialRiderForHtml]);
 
-  // --- EARLY RETURNS (AFTER ALL HOOKS) ---
   if (loading && !job) {
     return (
       <View style={styles.center}>
@@ -546,6 +629,10 @@ export default function JobDetailsScreen() {
           originWhitelist={['*']}
           source={{ html: mapHtml }}
           scrollEnabled={false}
+          onMessage={onMessage}
+          onLoadStart={() => {
+            isMapReady.current = false;
+          }}
           style={{ flex: 1 }}
         />
       </View>
@@ -736,6 +823,7 @@ const styles = StyleSheet.create({
   mainInfoText: { fontSize: 16, fontWeight: '700', color: '#1E40AF', marginTop: 2 },
   locationDetailText: { fontSize: 12, fontWeight: '600', color: '#475569', marginTop: 6, lineHeight: 17 },
   locationLandmarkText: { fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 3, lineHeight: 15 },
+  detailsArea: { marginTop: 0 },
   classificationActionArea: { marginTop: 18, paddingTop: 18, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   primaryBtn: { backgroundColor: '#0F172A', height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 },
   primaryBtnLoading: { backgroundColor: '#1E293B' },

@@ -1,10 +1,10 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test';
 import { saveSession } from './utils/session-manager';
 
-const WEB_BASE_URL = process.env.BASE_URL || 'http://localhost:5174';
+const WEB_BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://127.0.0.1:3001/api';
 
-const PERSONNEL = { email: 'john.hr@company.com', password: 'john' };
+const PERSONNEL = { email: 'john.hr@company.com', password: 'Hon010125@' };
 const ADMIN = { email: 'admin@company.com', password: 'password' };
 const RIDER = { 
   email: 'rider1@company.com', 

@@ -63,7 +63,7 @@ export function DispatchConsole() {
     disapproveRequest,
     returnForRevision,
     cancelRequest,
-    refreshData,
+    refreshData, globalStats,
   } = useGlobalData();
 
   const { riderLocations, riderPresence, lastSync } = useRealTime();
@@ -192,14 +192,7 @@ export function DispatchConsole() {
     [requests, selectedRequestId],
   );
 
-  const stats = useMemo(() => {
-    if (!requests) return { pending: 0, active: 0, done: 0 };
-    return {
-      pending: requests.filter(isPendingRequest).length,
-      active: requests.filter(isActiveRequest).length,
-      done: requests.filter(isTerminalRequest).length,
-    };
-  }, [requests]);
+  const stats = globalStats || { pending: 0, active: 0, done: 0 };
 
   const handleRefresh = async (showToast = true) => {
     setIsRefreshing(true);
@@ -423,7 +416,7 @@ export function DispatchConsole() {
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 filter={filterTab}
-                onFilterChange={setFilterTab}
+                onFilterChange={setFilterTab} counts={stats}
               />
             </div>
           </ResizablePanel>
@@ -746,3 +739,4 @@ export function DispatchConsole() {
     </div>
   );
 }
+// Global Stats Patch

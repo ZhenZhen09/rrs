@@ -40,14 +40,16 @@ describe('Intensive Date & Status Audit: Rider App Matrix', () => {
       expect(getRiderTaskTab(job, artificialToday)).toBe('overdue');
     });
 
-    it('should categorize Today (Future Window 13:00) as TODAY', () => {
-      const job = { ...mockBaseJob, delivery_date: '2026-05-25', time_window: '13:00 - 15:00' };
-      expect(getRiderTaskTab(job, artificialToday)).toBe('today');
+    it('should categorize Today as TODAY when before 7:00 PM', () => {
+      const beforeSeven = new Date('2026-05-25T18:59:00');
+      const job = { ...mockBaseJob, delivery_date: '2026-05-25' };
+      expect(getRiderTaskTab(job, beforeSeven)).toBe('today');
     });
 
-    it('should categorize Today (Passed Window 08:00) as OVERDUE', () => {
-      const job = { ...mockBaseJob, delivery_date: '2026-05-25', time_window: '08:00 - 10:00' };
-      expect(getRiderTaskTab(job, artificialToday)).toBe('overdue');
+    it('should categorize Today as OVERDUE when at or after 7:00 PM', () => {
+      const afterSeven = new Date('2026-05-25T19:00:00');
+      const job = { ...mockBaseJob, delivery_date: '2026-05-25' };
+      expect(getRiderTaskTab(job, afterSeven)).toBe('overdue');
     });
 
     it('should categorize Tomorrow (May 26) as TOMORROW', () => {

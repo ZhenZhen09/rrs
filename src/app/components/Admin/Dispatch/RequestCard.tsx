@@ -52,13 +52,15 @@ export const RequestCard: React.FC<RequestCardProps> = ({
     }
 
     const group = getGroupedStatus(status, deliveryStatus);
+    const isAdminOverride = request.rider_remark?.includes('[Admin update by');
     const riderName = request.assigned_rider_name?.split(" ")[0] || "RIDER";
+    const displayName = isAdminOverride ? "ADMIN" : riderName;
     const remark = request.rider_remark ? `: ${request.rider_remark.substring(0, 15)}${request.rider_remark.length > 15 ? '...' : ''}` : "";
 
     switch (group) {
       case 'done':
         return {
-          label: request.assigned_rider_id ? `COMPLETE (${riderName})` : "COMPLETE (ADMIN)",
+          label: (request.assigned_rider_id && !isAdminOverride) ? `COMPLETE (${riderName})` : `COMPLETE (${displayName})`,
           color: "text-emerald-500",
           dot: "bg-emerald-500",
           pulse: false,
@@ -66,7 +68,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         };
       case 'failed':
         return {
-          label: request.assigned_rider_id ? `FAILED (${riderName})${remark}` : "FAILED (ADMIN)",
+          label: (request.assigned_rider_id && !isAdminOverride) ? `FAILED (${riderName})${remark}` : `FAILED (${displayName})${remark}`,
           color: "text-rose-500",
           dot: "bg-rose-500",
           pulse: false,

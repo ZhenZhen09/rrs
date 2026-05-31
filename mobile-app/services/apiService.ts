@@ -99,5 +99,23 @@ export const updateLocationBackground = async (data: {
   accuracy?: number | null;
   timestamp?: number;
 }) => {
-  return api.post('/api/users/location', data);
+  try {
+    return await api.post('/api/users/location', data);
+  } catch (err: any) {
+    if (!err.response) {
+      // Network failure: Buffer the location update
+      console.warn('[Location] Network offline, buffering coordinate to sync queue');
+      try {
+        await addToQueue({
+          endpoint: '/api/users/location',
+          method: 'POST',
+          payload: data
+        });
+        return { success: true, buffered: true };
+      } catch (queueErr) {
+        console.error('[Location] Failed to buffer coordinate:', queueErr);
+      }
+    }
+    throw err;
+  }
 };

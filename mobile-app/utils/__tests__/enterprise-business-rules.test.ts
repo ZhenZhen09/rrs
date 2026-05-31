@@ -24,10 +24,17 @@ describe('Enterprise Business Rules: Task Filtering', () => {
     expect(result).toBe('today');
   });
 
-  it('✅ PASS: Categorizes today job as "overdue" if window is passed', () => {
-    // Set 'today' context to 11:00 AM so the 09:00-10:00 window is passed
+  it('✅ PASS: Categorizes today job as "today" if window is passed but before 7:00 PM', () => {
+    // Set 'today' context to 11:00 AM so the 09:00-10:00 window is passed, but it is before 7:00 PM
     const lateContext = new Date('2026-05-25T11:00:00');
     const result = getRiderTaskTab(mockJob, lateContext);
+    expect(result).toBe('today');
+  });
+
+  it('✅ PASS: Categorizes today job as "overdue" at or after 7:00 PM', () => {
+    // Set 'today' context to 7:00 PM (19:00)
+    const nightContext = new Date('2026-05-25T19:00:00');
+    const result = getRiderTaskTab(mockJob, nightContext);
     expect(result).toBe('overdue');
   });
 

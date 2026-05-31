@@ -96,7 +96,7 @@ router.patch('/:id', authorize(['admin']), async (req: AuthRequest, res: Respons
 // Location Update (Rider only)
 router.post('/location', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, requestId, heading, accuracy, timestamp } = req.body || {};
+    const { lat, lng, requestId, heading, accuracy, timestamp, isSimulation } = req.body || {};
     const user = req.user!;
     const io = req.app.get('io');
     
@@ -112,6 +112,7 @@ router.post('/location', async (req: AuthRequest, res: Response) => {
       heading,
       accuracy,
       timestamp,
+      isSimulation,
       riderName: (user as any).name || 'Rider',
       verifyAssignment: true,
       io,

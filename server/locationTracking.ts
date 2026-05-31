@@ -153,6 +153,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
 
   if (!riderId || !isValidCoordinate(lat, lng)) {
     console.warn(`[Location] REJECT_ZERO_COORD for rider ${riderId}: Invalid coordinates (${lat}, ${lng})`);
+    if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'invalid_location' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
@@ -162,6 +163,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
 
   if (accuracy !== null && (!Number.isFinite(accuracy) || accuracy > MAX_ACCEPTABLE_ACCURACY_M)) {
     console.warn(`[Location] REJECT_LOW_ACCURACY for rider ${riderId}: Low accuracy (${Math.round(accuracy)}m)`);
+    if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'low_accuracy' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
@@ -181,6 +183,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
   // Bypassed for simulations as they often jump around during testing.
   if (!isSimulation && lastFix && timestamp !== null && Number(timestamp) <= lastFix.timestamp) {
     console.warn(`[Location] REJECT_TIME_SKEW for ${riderId}: Received ${timestamp}, but DB has ${lastFix.timestamp}`);
+    if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'stale_location', type: 'time_skew' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
@@ -196,6 +199,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
       timestamp - now > MAX_FUTURE_LOCATION_SKEW_MS)
   ) {
     console.warn(`[Location] REJECT_STALE_FIX for rider ${riderId}: Stale timestamp (Age: ${Math.round((now - timestamp)/1000)}s)`);
+    if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'stale_location', type: 'age_limit' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
@@ -206,6 +210,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
   const isPossible = isSimulation ? true : isPhysicallyPossible(riderId, lat, lng, physicsTimestamp, lastFix);
 
   if (!isPossible) {
+    if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'invalid_location', type: 'physics_violation' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,

@@ -9,18 +9,6 @@ export const isActiveApprovedTask = (task: Job): boolean => {
   return task.status === 'approved' && !TERMINAL_DELIVERY_STATUSES.includes(task.delivery_status);
 };
 
-const isPastTimeWindow = (timeWindow: string | undefined, now: Date): boolean => {
-  const parts = (timeWindow || '').split('-');
-  if (parts.length !== 2) return false;
-
-  const [endHour, endMinute] = parts[1].trim().split(':').map(Number);
-  if (isNaN(endHour) || isNaN(endMinute)) return false;
-
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  return currentHour > endHour || (currentHour === endHour && currentMinute > endMinute);
-};
-
 export const getRiderTaskTab = (task: Job, today: Date = new Date()): RiderTaskTab => {
   // Defensive: Fail-Hidden logic for missing critical fields (Enterprise Hardening)
   if (!task?.request_id || !task?.status || !task?.delivery_status) {
@@ -37,7 +25,8 @@ export const getRiderTaskTab = (task: Job, today: Date = new Date()): RiderTaskT
 
   if (deliveryDate < todayStr) return 'overdue';
   if (deliveryDate === todayStr) {
-    return isPastTimeWindow(task.time_window, today) ? 'overdue' : 'today';
+    // BUSINESS RULE: Tasks scheduled for today move to "Overdue" strictly at 7:00 PM (19:00)
+    return today.getHours() >= 19 ? 'overdue' : 'today';
   }
   if (deliveryDate === tomorrowStr) return 'tomorrow';
   return 'future';

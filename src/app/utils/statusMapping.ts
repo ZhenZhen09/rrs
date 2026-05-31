@@ -30,7 +30,7 @@ export const getGroupedStatus = (
   }
 
   // 2. Terminal Negative - Failed/Cancelled
-  if (['failed', 'cancelled', 'returned_for_revision'].includes(s) || 
+  if (['failed', 'cancelled'].includes(s) || 
       ['failed', 'cancelled'].includes(ds)) {
     return 'failed';
   }
@@ -46,6 +46,10 @@ export const getGroupedStatus = (
   }
 
   // 5. Awaiting Review (Includes Revisions)
+  if (s === 'returned_for_revision' || s === 'pending') {
+    return 'pending';
+  }
+
   return 'pending';
 };
 

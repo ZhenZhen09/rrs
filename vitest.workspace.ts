@@ -1,0 +1,1 @@
+﻿import { defineWorkspace } from 'vitest/config'; export default defineWorkspace([ { test: { name: 'web-unit', include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'], exclude: ['mobile-app/**', '**/*.spec.ts'], environment: 'node', }, } ]);

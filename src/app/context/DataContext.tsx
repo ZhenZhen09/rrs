@@ -1,3 +1,4 @@
+// Data Context for Rider Scheduling System
 import React, { 
   createContext, 
   useContext, 
@@ -14,7 +15,7 @@ import { WifiOff, Bike } from "lucide-react";
 
 interface DataContextType {
   requests: DeliveryRequest[];
-  notifications: Notification[];
+  notifications: Notification[]; globalStats: { pending: number; active: number; done: number };
   submitRequest: (
     request: Omit<
       DeliveryRequest,
@@ -62,6 +63,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useRealTime();
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [globalStats, setGlobalStats] = useState({ pending: 0, active: 0, done: 0 });
   const pendingOptimisticIds = useRef<Set<string>>(new Set());
   
   // Enterprise Pattern: Keep a ref of the latest requests for socket event access
@@ -92,6 +94,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     },
     [logout],
   );
+
+  const fetchCounts = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetchWithAuth(`${API_URL}/requests/counts`);
+      if (res && res.ok) {
+        const stats = await res.json();
+        setGlobalStats({
+          pending: stats.pending || 0,
+          active: stats.active || 0,
+          done: stats.done || 0
+        });
+      }
+    } catch (error) {
+      console.error("Fetch counts error:", error);
+    }
+  }, [user, fetchWithAuth]);
 
   const fetchRequests = useCallback(async () => {
     if (!user) return;
@@ -198,8 +217,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id, fetchWithAuth]);
 
   const refreshData = useCallback(async () => {
-    await Promise.all([fetchRequests(), fetchNotifications()]);
-  }, [fetchRequests, fetchNotifications]);
+    await Promise.all([fetchRequests(), fetchNotifications(), fetchCounts()]);
+  }, [fetchRequests, fetchNotifications, fetchCounts]);
 
   useEffect(() => {
     if (user) {
@@ -250,6 +269,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
 
       fetchRequests();
+      fetchCounts();
     });
 
     socket.on(
@@ -346,6 +366,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
       // Background fetch to ensure full data consistency
       fetchRequests();
+      fetchCounts();
     });
 
     socket.on("new_assignment", () => {
@@ -371,7 +392,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       socket.off("notification-added");
       socket.off("connect");
     };
-  }, [socket, fetchRequests, fetchNotifications, refreshData]);
+  }, [socket, fetchRequests, fetchNotifications, refreshData, fetchCounts]);
 
   const submitRequest = async (
     requestData: Omit<
@@ -412,6 +433,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === tempId ? realRequest : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(tempId);
         setRequests((prev) => prev.filter((r) => r.request_id !== tempId));
@@ -461,6 +483,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -508,6 +531,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -547,6 +571,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -586,6 +611,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -636,6 +662,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -664,6 +691,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setRequests((prev) => 
           prev.map((r) => r.request_id === requestId ? { ...r, is_optimistic: false } : r)
         );
+        fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
         setRequests(previousRequests);
@@ -710,6 +738,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       value={{
         requests,
         notifications,
+        globalStats,
         submitRequest,
         resubmitRequest,
         approveRequest,
@@ -737,3 +766,4 @@ export function useData() {
   }
   return context;
 }
+

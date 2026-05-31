@@ -21,7 +21,7 @@ import analyticsRoutes from './routes/analytics';
 import { pool } from './db';
 import { authenticate } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
-import { onlineRiders, updateRiderPresence, cleanupOfflineRiders } from './presence';
+import { onlineRiders, updateRiderPresence, removeRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate } from './locationTracking';
 
 Bugsnag.start({
@@ -349,7 +349,7 @@ io.on('connection', (socket: any) => {
   });
 
   socket.on('update-location', async (data: any) => {
-    const { requestId, lat, lng, riderId, heading, accuracy, timestamp } = data;
+    const { requestId, lat, lng, riderId, heading, accuracy, timestamp, isSimulation, isHeartbeat } = data;
     if (lat === undefined || lng === undefined || !riderId) return;
 
     // Security Practice: Prevent rider from spoofing location for another rider.
@@ -371,6 +371,8 @@ io.on('connection', (socket: any) => {
         heading,
         accuracy,
         timestamp,
+        isSimulation,
+        isHeartbeat,
         riderName: data.riderName || 'Rider',
         verifyAssignment: true,
         presenceSocketId: socket.id,
@@ -388,9 +390,11 @@ io.on('connection', (socket: any) => {
       const rid = sessionRiderId;
       setTimeout(async () => {
         const currentData = onlineRiders.get(rid);
+        // ONLY remove if the rider hasn't reconnected with a NEW socket ID
+        // during the grace period (e.g. page refresh)
         if (currentData && currentData.socketId === socket.id) {
-          // Use unified async cleanup logic
-          await cleanupOfflineRiders(io);
+          // ENTERPRISE FIX: Use immediate removal logic
+          await removeRiderPresence(rid, io as any);
         }
       }, DISCONNECT_GRACE_PERIOD);
     }

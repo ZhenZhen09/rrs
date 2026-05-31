@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  * Verifies the 60-second cancellation enforcement.
  */
 
-const TARGET_URL = 'https://rrs-vhgr.onrender.com';
+const TARGET_URL = 'http://localhost:5173';
 
 test.describe('Personnel Lifecycle Audit', () => {
   
