@@ -16,7 +16,7 @@ export function SystemInfo() {
       
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Rider Scheduling & Delivery System</DialogTitle>
+          <DialogTitle>GoFinance</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="demo" className="w-full">

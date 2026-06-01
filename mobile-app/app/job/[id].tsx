@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { useJobDetails } from '@/hooks/data/useJobDetails';
 import { useLocation } from '@/context/LocationContext';
 
+import { LEAFLET_JS, LEAFLET_CSS } from './LeafletAssets';
+
 const { width, height } = Dimensions.get('window');
 
 export default function JobDetailsScreen() {
@@ -38,39 +40,15 @@ export default function JobDetailsScreen() {
   const webViewRef = useRef<WebView>(null);
   
   const [roadPath, setRoadPath] = useState<{latitude: number, longitude: number}[]>([]);
+  const [offCourseCount, setOffCourseCount] = useState(0);
   const [isSimulating, setIsSimulating] = useState(false);
   const simulationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const remoteTerminalAlertedRef = useRef<string | null>(null);
 
-  // --- REMOTE SYNC & AUTO-NAVIGATION ---
-  useEffect(() => {
-    const status = job?.delivery_status?.toLowerCase();
-    const terminalStatuses = ['completed', 'failed', 'cancelled', 'disapproved'];
-    
-    if (status && terminalStatuses.includes(status)) {
-      if (!isSelfUpdated) {
-        if (remoteTerminalAlertedRef.current !== status) {
-          remoteTerminalAlertedRef.current = status;
-          const message = status === 'failed'
-            ? 'Transaction marked as failed by the admin.'
-            : status === 'completed'
-              ? 'Transaction marked as complete by the admin.'
-              : `This job has been marked as ${status.toUpperCase()} by the administrator.`;
+  const deliveryStatus = job?.delivery_status?.toLowerCase();
+  const isNavigationMode = deliveryStatus === 'in_progress';
 
-          Alert.alert("Job Updated", message, [{ text: "OK" }]);
-        }
-      } else {
-        const timer = setTimeout(() => {
-          if (!statusModalVisible) {
-            router.replace('/(tabs)');
-          }
-        }, 1500);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [job?.delivery_status, isSelfUpdated, statusModalVisible]);
-
-  const startSimulation = () => {
+  const startSimulation = (mode: 'normal' | 'deviate' = 'normal') => {
     if (roadPath.length === 0) {
       Alert.alert("No Route", "Please wait for the route to load before simulating.");
       return;
@@ -79,6 +57,11 @@ export default function JobDetailsScreen() {
     setIsSimulating(true);
     let step = 0;
     
+    // For 'deviate' mode, we'll add an offset after 20% of the trip
+    const deviateThreshold = Math.floor(roadPath.length * 0.2);
+    const offsetLat = 0.0015; // Approx 160 meters
+    const offsetLng = 0.0015;
+
     simulationInterval.current = setInterval(() => {
       if (step >= roadPath.length) {
         clearInterval(simulationInterval.current!);
@@ -88,11 +71,21 @@ export default function JobDetailsScreen() {
       }
       
       const point = roadPath[step];
-      simulateLocation(point.latitude, point.longitude, null, job?.assigned_rider_id);
+      let finalLat = point.latitude;
+      let finalLng = point.longitude;
+
+      if (mode === 'deviate' && step > deviateThreshold) {
+        // Gradually veer off the path
+        const multiplier = Math.min(step - deviateThreshold, 10);
+        finalLat += offsetLat * (multiplier / 10);
+        finalLng += offsetLng * (multiplier / 10);
+      }
+
+      simulateLocation(finalLat, finalLng, null, job?.assigned_rider_id);
 
       const payload = JSON.stringify({ 
-        lat: point.latitude, 
-        lng: point.longitude,
+        lat: finalLat, 
+        lng: finalLng,
         heading: null,
         isSimulated: true
       });
@@ -105,6 +98,23 @@ export default function JobDetailsScreen() {
       
       step += 1; 
     }, 500);
+  };
+
+  const handleSimulatePress = () => {
+    if (isSimulating) {
+      stopSimulation();
+      return;
+    }
+
+    Alert.alert(
+      "Simulation Mode",
+      "Choose how you want to simulate this delivery:",
+      [
+        { text: "Follow Original Route", onPress: () => startSimulation('normal') },
+        { text: "Deviate (Test Rerouting)", onPress: () => startSimulation('deviate') },
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
   };
 
   const stopSimulation = () => {
@@ -122,43 +132,92 @@ export default function JobDetailsScreen() {
   }, []);
 
   // --- FULL JOURNEY ROUTING ---
-  useEffect(() => {
-    async function loadRoads() {
-      const startLat = lastLocation?.lat || job?.current_location?.lat || job?.pickup_location?.lat;
-      const startLng = lastLocation?.lng || job?.current_location?.lng || job?.pickup_location?.lng;
+  const loadRoads = useCallback(async () => {
+    const startLat = lastLocation?.lat || job?.current_location?.lat || job?.pickup_location?.lat;
+    const startLng = lastLocation?.lng || job?.current_location?.lng || job?.pickup_location?.lng;
 
-      if (startLat && job?.pickup_location && job?.dropoff_location) {
-        try {
-          const isAssigned = ['assigned', 'pending'].includes(job.delivery_status?.toLowerCase() || '');
-          const points = isAssigned 
-            ? `${startLng},${startLat};${job.pickup_location.lng},${job.pickup_location.lat};${job.dropoff_location.lng},${job.dropoff_location.lat}`
-            : `${startLng},${startLat};${job.dropoff_location.lng},${job.dropoff_location.lat}`;
+    if (startLat && job?.pickup_location && job?.dropoff_location) {
+      try {
+        const isAssigned = ['assigned', 'pending'].includes(job.delivery_status?.toLowerCase() || '');
+        const points = isAssigned 
+          ? `${startLng},${startLat};${job.pickup_location.lng},${job.pickup_location.lat};${job.dropoff_location.lng},${job.dropoff_location.lat}`
+          : `${startLng},${startLat};${job.dropoff_location.lng},${job.dropoff_location.lat}`;
 
-          const url = `https://router.project-osrm.org/route/v1/driving/${points}?overview=full&geometries=polyline`;
-          
-          const response = await fetch(url);
-          if (!response.ok) return;
+        const url = `https://router.project-osrm.org/route/v1/driving/${points}?overview=full&geometries=polyline`;
+        
+        const response = await fetch(url);
+        if (!response.ok) return;
 
-          const data = await response.json();
+        const data = await response.json();
 
-          if (data.code === 'Ok' && data.routes && data.routes[0]) {
-            const polyline = require('polyline');
-            const points = polyline.decode(data.routes[0].geometry);
-            const path = points.map((p: any) => ({ latitude: p[0], longitude: p[1] }));
-            setRoadPath(path);
-          }
-        } catch (e) {
-          console.warn('Road snap error:', e);
+        if (data.code === 'Ok' && data.routes && data.routes[0]) {
+          const polyline = require('polyline');
+          const points = polyline.decode(data.routes[0].geometry);
+          const path = points.map((p: any) => ({ latitude: p[0], longitude: p[1] }));
+          setRoadPath(path);
+          setOffCourseCount(0); // Reset count after successful re-route
+          console.log('🔄 Route updated/re-routed');
         }
+      } catch (e) {
+        console.warn('Road snap error:', e);
       }
     }
-    if (job) loadRoads();
   }, [job?.delivery_status, job?.pickup_location, job?.dropoff_location, lastLocation?.lat, lastLocation?.lng]);
 
-  const isMapReady = useRef(false);
+  useEffect(() => {
+    if (job && roadPath.length === 0) loadRoads();
+  }, [job, loadRoads, roadPath.length]);
 
-  const deliveryStatus = job?.delivery_status?.toLowerCase();
-  const isNavigationMode = deliveryStatus === 'in_progress';
+  // --- AUTOMATIC REROUTING LOGIC ---
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const distToSegment = (p: {lat: number, lng: number}, v: {lat: number, lng: number}, w: {lat: number, lng: number}) => {
+    const l2 = Math.pow(getDistance(v.lat, v.lng, w.lat, w.lng), 2);
+    if (l2 === 0) return getDistance(p.lat, p.lng, v.lat, v.lng);
+    let t = ((p.lat - v.lat) * (w.lat - v.lat) + (p.lng - v.lng) * (w.lng - v.lng)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return getDistance(p.lat, p.lng, v.lat + t * (w.lat - v.lat), v.lng + t * (w.lng - v.lng));
+  };
+
+  useEffect(() => {
+    if (!isNavigationMode || roadPath.length < 2 || !lastLocation?.lat || isSimulating) return;
+
+    let minReach = Infinity;
+    const p = { lat: Number(lastLocation.lat), lng: Number(lastLocation.lng) };
+
+    for (let i = 0; i < roadPath.length - 1; i++) {
+      const d = distToSegment(p, 
+        { lat: roadPath[i].latitude, lng: roadPath[i].longitude }, 
+        { lat: roadPath[i+1].latitude, lng: roadPath[i+1].longitude }
+      );
+      if (d < minReach) minReach = d;
+    }
+
+    if (minReach > 50) { // 50 meters off-track
+      setOffCourseCount(prev => prev + 1);
+    } else {
+      setOffCourseCount(0);
+    }
+  }, [lastLocation, roadPath, isNavigationMode, isSimulating]);
+
+  useEffect(() => {
+    if (offCourseCount >= 3) { // Consistent off-track for ~15 seconds (assuming 5s updates)
+      loadRoads();
+    }
+  }, [offCourseCount, loadRoads]);
+
+  const isMapReady = useRef(false);
 
   const mapRiderPosition = useMemo(() => {
     if (!job) return null;
@@ -299,9 +358,8 @@ export default function JobDetailsScreen() {
     <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
         <style>
+          ${LEAFLET_CSS}
           body { margin: 0; padding: 0; }
           #map { height: 100vh; width: 100vw; background: #f8fafc; }
           .marker-pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: #c30b82; position: absolute; transform: rotate(-45deg); left: 50%; top: 50%; margin: -15px 0 0 -15px; }
@@ -324,6 +382,8 @@ export default function JobDetailsScreen() {
         <div id="nav-chip" class="nav-chip"><span></span>Navigation</div>
         <button id="nav-recenter" class="nav-recenter" aria-label="Recenter rider"></button>
         <script>
+          ${LEAFLET_JS}
+          
           const CAR_MARKER_SVG = ${JSON.stringify(carMarkerSvg)};
           const INITIAL_RIDER = ${initialRiderPayload};
           const debug = (msg) => {
@@ -348,8 +408,16 @@ export default function JobDetailsScreen() {
             }
           };
 
-          const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${pickup.latitude}, ${pickup.longitude}], 14);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          const map = L.map('map', { 
+            zoomControl: false, 
+            attributionControl: false,
+            fadeAnimation: true
+          }).setView([${pickup.latitude}, ${pickup.longitude}], 14);
+          
+          // CartoDB Voyager - Mobile optimized
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20
+          }).addTo(map);
 
           const pickupIcon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#10B981;' class='marker-pin'></div>", iconSize: [30, 42], iconAnchor: [15, 42] });
           const dropoffIcon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#EF4444;' class='marker-pin'></div>", iconSize: [30, 42], iconAnchor: [15, 42] });
@@ -509,7 +577,7 @@ export default function JobDetailsScreen() {
           }
 
           function renderRiderFrame(time) {
-            if (!targetRiderPosition) {
+            if (!targetRiderPosition || !currentRiderPosition) {
               animationFrame = null;
               return;
             }
@@ -517,6 +585,10 @@ export default function JobDetailsScreen() {
             const now = Date.now();
             const timeSinceUpdate = now - lastUpdateAt;
             lastFrameTime = time;
+
+            // Capture previous position for movement vector calculation
+            const prevLat = currentRiderPosition[0];
+            const prevLng = currentRiderPosition[1];
 
             if (timeSinceUpdate > 1000 && timeSinceUpdate < 15000 && (velocity.lat !== 0 || velocity.lng !== 0)) {
               const friction = Math.max(0, 1 - (timeSinceUpdate - 1000) / 14000);
@@ -533,7 +605,20 @@ export default function JobDetailsScreen() {
               currentRiderPosition = dist > 0.01 ? [...targetRiderPosition] : [nextLat, nextLng];
             }
 
-            currentHeading = lerpAngle(currentHeading, targetHeading, 0.12);
+            // Calculate visual movement vector
+            const dx = currentRiderPosition[1] - prevLng;
+            const dy = currentRiderPosition[0] - prevLat;
+
+            // DEAD ZONE: Only update heading if moved more than ~0.5 meters (approx 0.000005 degrees)
+            // This prevents "shaking" or "spinning" when the rider is stationary
+            if (Math.abs(dx) > 0.000005 || Math.abs(dy) > 0.000005) {
+              const moveHeading = calculateBearing([prevLat, prevLng], currentRiderPosition);
+              targetHeading = moveHeading;
+            }
+
+            // SMOOTHING: Slow down the rotation speed (0.06 instead of 0.12)
+            // This makes the turns look more like a heavy vehicle and less like a needle
+            currentHeading = lerpAngle(currentHeading, targetHeading, 0.06);
             
             if (riderMarker) {
               riderMarker.setLatLng(currentRiderPosition);
@@ -651,6 +736,34 @@ export default function JobDetailsScreen() {
         </View>
       )}
 
+      {offCourseCount >= 1 && offCourseCount < 3 && (
+        <View style={styles.navigationStartingOverlay} pointerEvents="none">
+          <View style={[styles.navigationStartingCard, { backgroundColor: 'rgba(239, 68, 68, 0.92)' }]}>
+            <View style={[styles.navigationSpinnerRing, { backgroundColor: '#B91C1C' }]}>
+              <ActivityIndicator color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.navigationStartingTitle}>Off Course Detected</Text>
+              <Text style={styles.navigationStartingText}>Rerouting in {(3 - offCourseCount) * 5}s...</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {offCourseCount >= 3 && (
+        <View style={styles.navigationStartingOverlay} pointerEvents="none">
+          <View style={[styles.navigationStartingCard, { backgroundColor: 'rgba(37, 99, 235, 0.92)' }]}>
+            <View style={[styles.navigationSpinnerRing, { backgroundColor: '#1E40AF' }]}>
+              <ActivityIndicator color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.navigationStartingTitle}>Recalculating</Text>
+              <Text style={styles.navigationStartingText}>Finding new path to destination...</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       <SafeAreaView style={styles.overlayHeader} pointerEvents="box-none">
         {!isLocked ? (
           <TouchableOpacity testID="job_back_button" style={styles.iconBtn} onPress={handleBackPress}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></TouchableOpacity>
@@ -661,7 +774,7 @@ export default function JobDetailsScreen() {
         {__DEV__ && (
           <TouchableOpacity 
             style={[styles.simulateBtn, isSimulating && { backgroundColor: '#EF4444' }]} 
-            onPress={isSimulating ? stopSimulation : startSimulation}
+            onPress={handleSimulatePress}
           >
             <MaterialIcons name={isSimulating ? "stop" : "play-arrow"} size={20} color="white" />
             <Text style={styles.simulateBtnText}>{isSimulating ? "STOP" : "SIMULATE"}</Text>

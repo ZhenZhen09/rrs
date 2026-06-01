@@ -119,38 +119,27 @@ export function Login() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] font-sans overflow-hidden">
       {/* LEFT SIDE: Branding & Image Context */}
-      <div className="relative flex-1 hidden md:flex flex-col justify-center px-12 lg:px-24 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=2000" 
-            alt="Logistics background" 
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-tr from-[#b45309]/90 via-[#d97706]/40 to-transparent" />
-        </div>
-
-        {/* Dynamic Light Trails */}
-        <LightTrails />
-
+      <div className="relative flex-1 hidden md:flex flex-col items-center justify-center bg-[#f3bc2c] overflow-hidden">
         <motion.div 
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="relative z-10 space-y-6 max-w-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className="relative z-10 w-full h-full flex items-center justify-center p-12"
         >
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
-            className="absolute -inset-4 bg-amber-500/10 blur-3xl rounded-full"
+          <img 
+            src="/assets/images/logo.png" 
+            alt="GoFinance Logo" 
+            className="max-w-full max-h-full object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
           />
-          <h1 className="text-5xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight relative">
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-amber-100 to-white animate-pulse">
-              Rider 
-            </span><br/>
-            <span className="text-[#fef3c7] drop-shadow-[0_2px_10px_rgba(251,191,36,0.3)]">Scheduling System.</span>
-          </h1>
         </motion.div>
+
+        {/* Decorative subtle pulse */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.1, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-0 bg-white"
+        />
       </div>
 
       {/* RIGHT SIDE: Interfaces */}
@@ -168,7 +157,7 @@ export function Login() {
                 transition={{ duration: 0.4, ease: "circOut" }}
               >
                 <div className="md:hidden text-center mb-8">
-                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">RSS: Logistic App</h1>
+                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase tracking-widest">GoFinance</h1>
                 </div>
 
                 <Card className="border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] p-4 border-2 ring-1 ring-white/20">
@@ -367,7 +356,7 @@ export function Login() {
                 <Truck size={22} className="text-white" />
               </motion.div>
               <span className="text-2xl font-black text-slate-900 md:text-slate-800 tracking-tighter uppercase italic drop-shadow-sm">
-                RSS: <span className="text-amber-600">Logistic App</span>
+                Go<span className="text-[#f3bc2c]">Finance</span>
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] opacity-80">

@@ -126,7 +126,7 @@ export function Dashboard() {
                 <Truck className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="font-semibold">Rider Scheduling System</h2>
+                <h2 className="font-semibold text-lg tracking-tight">Go<span className="text-amber-600">Finance</span></h2>
                 <p className="text-sm text-muted-foreground">{getRoleName(user?.role || '')}</p>
               </div>
             </div>

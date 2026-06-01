@@ -41,7 +41,7 @@ export function AdminLayout() {
             <Truck className="h-4.5 w-4.5 text-white" />
           </div>
           <div>
-            <h2 className="font-black text-sm leading-none tracking-tight">Rider System</h2>
+            <h2 className="font-black text-sm leading-none tracking-tight">Go<span className="text-amber-500">Finance</span></h2>
             <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Administrator</p>
           </div>
         </div>
@@ -151,7 +151,7 @@ export function AdminLayout() {
                         <Truck className="h-4 w-4 text-white" />
                       </div>
                       <div>
-                        <h2 className="font-black text-xs leading-none tracking-tight text-white">Rider System</h2>
+                        <h2 className="font-black text-xs leading-none tracking-tight text-white">Go<span className="text-amber-500">Finance</span></h2>
                         <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Administrator</p>
                       </div>
                     </div>

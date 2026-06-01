@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Rider",
+    "name": "GoFinance",
     "slug": "rider",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon2.png",
     "scheme": "cfarss",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,8 +17,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F9610B",
-        "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#f3bc2c",
+        "foregroundImage": "./assets/images/icon2.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,8 +41,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
-          "color": "#F9610B"
+          "icon": "./assets/images/icon2.png",
+          "color": "#f3bc2c"
         }
       ],
       [
@@ -54,19 +54,20 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.png",
-          "imageWidth": 200,
+          "image": "./assets/images/icon2.png",
+          "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#F9610B"
+          "backgroundColor": "#f3bc2c"
         }
       ],
       "expo-web-browser",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font"
     ],
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/icon2.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F9610B"
+      "backgroundColor": "#f3bc2c"
     },
     "experiments": {
       "typedRoutes": true,

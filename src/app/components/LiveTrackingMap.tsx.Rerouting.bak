@@ -544,75 +544,14 @@ export function LiveTrackingMap({
 
   const center: [number, number] = displayCurrent || [Number(pickup.lat), Number(pickup.lng)];
 
-  const [offCourseCount, setOffCourseCount] = useState(0);
-  const [lastReroutePoint, setLastReroutePoint] = useState<[number, number] | null>(null);
-
-  // --- DISTANCE UTILITIES ---
-  const getDistance = (p1: [number, number], p2: [number, number]) => {
-    const R = 6371e3; // meters
-    const rad = Math.PI / 180;
-    const φ1 = p1[0] * rad, φ2 = p2[0] * rad;
-    const Δφ = (p2[0] - p1[0]) * rad;
-    const Δλ = (p2[1] - p1[1]) * rad;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
-
-  const distToSegment = (p: [number, number], v: [number, number], w: [number, number]) => {
-    const l2 = Math.pow(getDistance(v, w), 2);
-    if (l2 === 0) return getDistance(p, v);
-    let t = ((p[0] - v[0]) * (w[0] - v[0]) + (p[1] - v[1]) * (w[1] - v[1])) / l2;
-    t = Math.max(0, Math.min(1, t));
-    return getDistance(p, [v[0] + t * (w[0] - v[0]), v[1] + t * (w[1] - v[1])]);
-  };
-
-  // --- LOCAL ROUTE CLIPPING & REROUTE TRIGGER ---
-  useEffect(() => {
-    if (!effectiveCurrent || routeCoords.length < 2) return;
-
-    let minReach = Infinity;
-    let closestIdx = -1;
-
-    for (let i = 0; i < routeCoords.length - 1; i++) {
-      const d = distToSegment(effectiveCurrent, routeCoords[i], routeCoords[i+1]);
-      if (d < minReach) {
-        minReach = d;
-        closestIdx = i;
-      }
-    }
-
-    // Reroute Logic - Only if not already loading and status is active
-    const isActive = status === 'assigned' || status === 'in_progress';
-    if (isActive && !isRouteLoading && minReach > 50) {
-      setOffCourseCount(prev => prev + 1);
-    } else {
-      setOffCourseCount(0);
-      
-      // Local Clipping: If we are close to the route, remove the segments we've already passed
-      // to keep the map clean without an API call.
-      if (closestIdx > 0) {
-        setRouteCoords(prev => prev.slice(closestIdx));
-      }
-    }
-  }, [effectiveCurrent, routeCoords, isRouteLoading, status]);
-
   // Fetch actual road route from OSRM with Geoapify fallback
   useEffect(() => {
     if (routeFetchTimeoutRef.current) {
       clearTimeout(routeFetchTimeoutRef.current);
     }
 
-    // Only fetch if:
-    // 1. Initial load (routeCoords empty)
-    // 2. We've been off-course for 3 updates
-    // 3. The destination/status changed
-    const shouldFetch = routeCoords.length === 0 || offCourseCount >= 3;
-
-    if (!shouldFetch) return;
-
     // SENIOR FIX: Progressive Debounce
+    // If rider is moving fast (based on velocity), fetch more frequently
     const speed = Math.sqrt(Math.pow(velocityRef.current.lat, 2) + Math.pow(velocityRef.current.lng, 2)) * 1000000;
     const debounceMs = speed > 30 ? 500 : 1000;
 
@@ -628,8 +567,6 @@ export function LiveTrackingMap({
       try {
         const coords = await fetchDrivingRoute(pointsArray as LngLat[]);
         setRouteCoords(coords);
-        setOffCourseCount(0);
-        setLastReroutePoint(effectiveCurrent);
         setRoutingError(false);
       } catch (err) {
         console.error("Route fetch error:", err);
@@ -643,7 +580,7 @@ export function LiveTrackingMap({
     return () => {
       if (routeFetchTimeoutRef.current) clearTimeout(routeFetchTimeoutRef.current);
     };
-  }, [pickup, dropoff, status, offCourseCount]);
+  }, [pickup, effectiveCurrent, dropoff, status]);
 
   // Fetch and road-snap location history before drawing the blue breadcrumb trail.
   useEffect(() => {
@@ -918,18 +855,6 @@ export function LiveTrackingMap({
              </div>
              <p className="text-[10px] font-black text-amber-700 uppercase tracking-tight">
                Road-snapped routing unavailable; showing direct path
-             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Rerouting Indicator */}
-      {isRouteLoading && routeCoords.length > 0 && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[9999] w-auto">
-          <div className="bg-blue-600 border border-blue-400 px-4 py-2 rounded-xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-2 duration-300">
-             <Loader2 size={14} className="text-white animate-spin" />
-             <p className="text-[10px] font-black text-white uppercase tracking-widest">
-               Rerouting...
              </p>
           </div>
         </div>
