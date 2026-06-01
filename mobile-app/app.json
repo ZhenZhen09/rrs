@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "GoFinance",
+    "name": "CFA-RSS",
     "slug": "rider",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon2.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "cfarss",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,7 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#f3bc2c",
-        "foregroundImage": "./assets/images/icon2.png"
+        "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,7 +41,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon2.png",
+          "icon": "./assets/images/icon.png",
           "color": "#f3bc2c"
         }
       ],
@@ -54,7 +54,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon2.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 240,
           "resizeMode": "contain",
           "backgroundColor": "#f3bc2c"
@@ -65,7 +65,7 @@
       "expo-font"
     ],
     "splash": {
-      "image": "./assets/images/icon2.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#f3bc2c"
     },

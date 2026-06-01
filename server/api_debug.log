@@ -3445,3 +3445,11 @@ Sample data: {"id":"admin_001","email":"admin@company.com","name":"Angel Vie","r
 [AUTH ERROR 2026-06-01T01:36:44.485Z] jwt expired | Path: /api/requests/counts | Client: undefined | Token Start: eyJhbGciOi...
 [AUTH ERROR 2026-06-01T02:39:00.916Z] jwt expired | Path: /api/rider/tasks/active | Client: mobile | Token Start: eyJhbGciOi...
 [AUTH ERROR 2026-06-01T03:39:20.078Z] jwt expired | Path: /api/rider/tasks/active | Client: mobile | Token Start: eyJhbGciOi...
+[DEBUG 2026-06-01T05:26:03.075Z] Fetched 4 users. First row keys: id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled
+Sample data: {"id":"admin_001","email":"admin@company.com","name":"Angel Vie","role":"admin","department":null,"status":"active","created_at":"2026-03-30 22:52:40","updated_at":"2026-06-01 13:25:32","last_password_change":null,"require_password_reset":0,"mfa_enabled":0}
+[DEBUG 2026-06-01T05:26:03.096Z] Fetched 4 users. First row keys: id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled
+Sample data: {"id":"admin_001","email":"admin@company.com","name":"Angel Vie","role":"admin","department":null,"status":"active","created_at":"2026-03-30 22:52:40","updated_at":"2026-06-01 13:25:32","last_password_change":null,"require_password_reset":0,"mfa_enabled":0}
+[DEBUG 2026-06-01T05:26:03.889Z] Fetched 4 users. First row keys: id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled
+Sample data: {"id":"admin_001","email":"admin@company.com","name":"Angel Vie","role":"admin","department":null,"status":"active","created_at":"2026-03-30 22:52:40","updated_at":"2026-06-01 13:25:32","last_password_change":null,"require_password_reset":0,"mfa_enabled":0}
+[DEBUG 2026-06-01T05:26:03.905Z] Fetched 4 users. First row keys: id, email, name, role, department, status, created_at, updated_at, last_password_change, require_password_reset, mfa_enabled
+Sample data: {"id":"admin_001","email":"admin@company.com","name":"Angel Vie","role":"admin","department":null,"status":"active","created_at":"2026-03-30 22:52:40","updated_at":"2026-06-01 13:25:32","last_password_change":null,"require_password_reset":0,"mfa_enabled":0}

@@ -120,27 +120,37 @@ export function Login() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] font-sans overflow-hidden">
       {/* LEFT SIDE: Branding & Image Context */}
-      <div className="relative flex-1 hidden md:flex flex-col items-center justify-center bg-[#f3bc2c] overflow-hidden">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="relative z-10 w-full h-full flex items-center justify-center p-12"
-        >
+      <div className="relative flex-1 hidden md:flex flex-col justify-center px-12 lg:px-24 overflow-hidden">
+        <div className="absolute inset-0 z-0">
           <img 
-            src={logoImage} 
-            alt="GoFinance Logo" 
-            className="max-w-full max-h-full object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
+            src="https://images.unsplash.com/photo-1757777440206-00dcce0205e3?auto=format&fit=crop&q=80&w=2000" 
+            alt="Minimalist errands rider" 
+            className="w-full h-full object-cover"
           />
-        </motion.div>
+          {/* Subdued Brand Overlay: Lowered opacity for a more subtle look */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#f3bc2c]/60 via-[#f3bc2c]/20 to-transparent" />
+          <div className="absolute inset-0 bg-black/10" /> {/* Subtle darkening for text contrast */}
+        </div>
 
-        {/* Decorative subtle pulse */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.1, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 bg-white"
-        />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className="relative z-10 flex flex-col items-start gap-1 max-w-xl p-12"
+        >
+          {/* Minimalist Transparent Brand Plate */}
+          <div className="bg-transparent">
+            <h1 className="text-5xl lg:text-7xl font-black text-slate-900 leading-none tracking-tighter mb-2">
+              CFA <span className="text-white drop-shadow-md">RSS</span>
+            </h1>
+            <div className="flex items-center gap-3">
+              <div className="h-px w-8 bg-slate-900/40" />
+              <p className="text-[10px] lg:text-xs font-black text-slate-900/70 uppercase tracking-[0.4em]">
+                Errands. Simplified.
+              </p>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
       {/* RIGHT SIDE: Interfaces */}
@@ -158,7 +168,7 @@ export function Login() {
                 transition={{ duration: 0.4, ease: "circOut" }}
               >
                 <div className="md:hidden text-center mb-8">
-                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase tracking-widest">GoFinance</h1>
+                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase tracking-widest">CFA RSS</h1>
                 </div>
 
                 <Card className="border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] p-4 border-2 ring-1 ring-white/20">
@@ -357,7 +367,7 @@ export function Login() {
                 <Truck size={22} className="text-white" />
               </motion.div>
               <span className="text-2xl font-black text-slate-900 md:text-slate-800 tracking-tighter uppercase italic drop-shadow-sm">
-                Go<span className="text-[#f3bc2c]">Finance</span>
+                CFA<span className="text-[#f3bc2c]"> RSS</span>
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] opacity-80">

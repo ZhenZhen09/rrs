@@ -41,7 +41,9 @@ export function AdminLayout() {
             <Truck className="h-4.5 w-4.5 text-white" />
           </div>
           <div>
-            <h2 className="font-black text-sm leading-none tracking-tight">Go<span className="text-amber-500">Finance</span></h2>
+            <h2 className="font-black text-sm leading-none tracking-tight text-white uppercase italic">
+              CFA <span className="text-[#f3bc2c]">RSS</span>
+            </h2>
             <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Administrator</p>
           </div>
         </div>

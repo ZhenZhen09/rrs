@@ -16,7 +16,7 @@ export function SystemInfo() {
       
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>GoFinance</DialogTitle>
+          <DialogTitle>CFA RSS</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="demo" className="w-full">
