@@ -10,6 +10,7 @@ import { Truck, AlertCircle, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LightTrails } from '../components/LightTrails';
 import { PasswordResetOverlay } from '../components/PasswordResetOverlay';
+import logoImage from '../../assets/images/logo.png';
 
 export function Login() {
   const navigate = useNavigate();
@@ -127,7 +128,7 @@ export function Login() {
           className="relative z-10 w-full h-full flex items-center justify-center p-12"
         >
           <img 
-            src="/assets/images/logo.png" 
+            src={logoImage} 
             alt="GoFinance Logo" 
             className="max-w-full max-h-full object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
           />
