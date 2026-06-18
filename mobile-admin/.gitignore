@@ -8,6 +8,9 @@ expo-env.d.ts
 .expo/
 node_modules/
 dist/
+android/
+ios/
+.gradle/
 npm-debug.*
 yarn-debug.*
 yarn-error.*

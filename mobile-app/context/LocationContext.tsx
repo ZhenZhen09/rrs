@@ -5,14 +5,21 @@ import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { Config } from '@/constants/Config';
 import { useQueryClient } from '@tanstack/react-query';
-import { updateLocationBackground } from '@/services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthManager } from '@/utils/AuthManager';
 
+import * as Battery from 'expo-battery';
+import * as Network from 'expo-network';
+import { updateLocationBackground, updateDutyStatus, submitAttendance, getMyAttendance } from '@/services/apiService';
+import { Alert } from 'react-native';
+
 const LOCATION_TASK_NAME = 'background-location-task';
 const STORAGE_USER_ID = '@rider_id';
 const STORAGE_REQUEST_ID = '@active_request_id';
+const STORAGE_DUTY_STATUS = '@is_on_duty';
+const STORAGE_ATTENDANCE_DATE = '@attendance_date';
+const STORAGE_ATTENDANCE_STATUS = '@attendance_status';
 
 // HARDENING CONSTANTS (Slice 1)
 const FG_MAX_AGE_MS = 30000;      // 30 seconds
@@ -23,15 +30,22 @@ const BG_MAX_ACCURACY_M = 1000;   // 1000 meters (Relaxed for background stabili
 let isStoppingBackgroundTask = false;
 let hasStoppedBackgroundTask = false;
 
+type AttendanceStatus = 'present' | 'absent' | 'on_leave' | null;
+
 type LocationState = {
   lastLocation: { lat: number; lng: number; heading?: number | null } | null;
   isTracking: boolean;
+  isOnDuty: boolean;
+  attendanceStatus: AttendanceStatus;
   locationPermission: Location.PermissionStatus | null;
   backgroundPermissionGranted: boolean;
   isSocketConnected: boolean;
   startTracking: (requestId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
+  toggleDuty: (status: boolean, reason?: string) => Promise<boolean>;
+  checkIn: (status: 'present' | 'absent' | 'on_leave', reason?: string) => Promise<boolean>;
   refreshCurrentLocation: (requestId?: string) => Promise<LocationState['lastLocation']>;
+  refreshAttendance: () => Promise<AttendanceStatus>;
   simulateLocation: (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => void;
 };
 
@@ -124,6 +138,21 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     return;
   }
 
+  // --- PRIVACY GATE: Check Duty Status ---
+  try {
+    const [dutyStatus, riderId] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_DUTY_STATUS),
+      AsyncStorage.getItem(STORAGE_USER_ID)
+    ]);
+    
+    if (dutyStatus !== 'true' || !riderId) {
+      // Exit silently: task wakes up but does nothing
+      return;
+    }
+  } catch (err) {
+    return;
+  }
+
   if (error) {
     console.error('Background location task error:', error);
     return;
@@ -191,6 +220,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [isTracking, setIsTracking] = useState(false);
+  const [isOnDuty, setIsOnDuty] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>(null);
   const [locationPermission, setLocationPermission] =
     useState<Location.PermissionStatus | null>(null);
   const [backgroundPermissionGranted, setBackgroundPermissionGranted] = useState(false);
@@ -207,9 +238,64 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     lastLocationRef.current = lastLocation;
   }, [lastLocation]);
 
+  // --- DUTY MANAGEMENT ---
+  const toggleDuty = async (status: boolean, reason?: string) => {
+    if (!user?.id) return false;
+
+    try {
+      await updateDutyStatus(user.id, status, reason);
+      await AsyncStorage.setItem(STORAGE_DUTY_STATUS, status ? 'true' : 'false');
+      setIsOnDuty(status);
+      
+      // If toggled on, refresh tasks immediately
+      if (status) {
+        queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
+      }
+      return true;
+    } catch (err: any) {
+      console.error('Failed to update duty status:', err);
+      
+      // SENIOR UX: Capture specific server-side validation error
+      if (err.response?.status === 400) {
+        const serverError = err.response?.data?.error || "Cannot go off duty while a job is in progress.";
+        Alert.alert("Active Task Detected", serverError);
+      } else {
+        Alert.alert("Connection Error", "Could not update your duty status. Please check your internet connection.");
+      }
+      return false;
+    }
+  };
+
+  const checkIn = async (status: 'present' | 'absent' | 'on_leave', reason?: string) => {
+    if (!user?.id) return false;
+
+    try {
+      await submitAttendance(user.id, status, reason);
+      const todayStr = new Date().toISOString().split('T')[0];
+      await AsyncStorage.setItem(STORAGE_ATTENDANCE_DATE, todayStr);
+      
+      setAttendanceStatus(status);
+      if (status === 'present') {
+        setIsOnDuty(true);
+        await AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'true');
+      } else {
+        setIsOnDuty(false);
+        await AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'false');
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
+      return true;
+    } catch (err: any) {
+      console.error('Attendance failed:', err);
+      const msg = err.response?.data?.error || "Failed to log attendance. Please try again.";
+      Alert.alert("Attendance Error", msg);
+      return false;
+    }
+  };
+
   // --- HEARTBEAT MECHANISM ---
   const sendHeartbeat = async () => {
-    if (!socketRef.current?.connected || !user?.id) return;
+    if (!socketRef.current?.connected || !user?.id || !isOnDuty) return;
     if (user.role !== 'rider') return;
 
     let lat = lastLocation?.lat || null;
@@ -232,6 +318,10 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Health metrics
+    const battery = await Battery.getBatteryLevelAsync();
+    const network = await Network.getNetworkStateAsync();
+
     console.log('[Heartbeat] Sending presence keep-alive...', lat ? `with fix (${lat}, ${lng})` : 'presence-only');
     socketRef.current.emit('update-location', {
       riderId: user.id,
@@ -240,12 +330,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       heading,
       timestamp: Date.now(),
       requestId: activeRequestId.current || 'idle',
-      isHeartbeat: true
+      isHeartbeat: true,
+      batteryLevel: Math.round(battery * 100),
+      networkType: network.type
     });
   };
 
   useEffect(() => {
-    if (isSocketConnected && user?.id) {
+    if (isSocketConnected && user?.id && isOnDuty) {
       if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
       // Reduce interval to 1 minute for better stability
       heartbeatInterval.current = setInterval(sendHeartbeat, 60000);
@@ -257,7 +349,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         heartbeatInterval.current = null;
       }
     };
-  }, [isSocketConnected, user?.id]);
+  }, [isSocketConnected, user?.id, isOnDuty]);
 
   // --- TRACKING CONTROL FUNCTIONS ---
   const startTracking = async (requestId: string) => {
@@ -277,7 +369,10 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     source: 'initial' | 'watch' | 'manual',
     requestIdOverride?: string,
   ) => {
-    if (!user?.id) return null;
+    if (!user?.id || !isOnDuty) {
+      console.log(`[LocationContext] Suppressing ${source} update: User is ${!user?.id ? 'unauthenticated' : 'off-duty'}`);
+      return null;
+    }
 
     const nextLocation = {
       lat: safeLocation.lat,
@@ -287,6 +382,10 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     lastLocationRef.current = nextLocation;
     setLastLocation(nextLocation);
 
+    // Health metrics
+    const battery = await Battery.getBatteryLevelAsync();
+    const network = await Network.getNetworkStateAsync();
+
     const payload = {
       riderId: user.id,
       lat: safeLocation.lat,
@@ -295,6 +394,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       accuracy: safeLocation.accuracy,
       timestamp: safeLocation.timestamp,
       requestId: requestIdOverride || activeRequestId.current || 'idle',
+      batteryLevel: Math.round(battery * 100),
+      networkType: network.type
     };
 
     if (socketRef.current?.connected) {
@@ -314,7 +415,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     }
 
     return nextLocation;
-  }, [user?.id]);
+  }, [user?.id, isOnDuty]);
 
   const refreshCurrentLocation = useCallback(async (requestId?: string) => {
     if (user?.role !== 'rider') return lastLocationRef.current;
@@ -362,6 +463,31 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       return lastLocationRef.current;
     }
   }, [locationPermission, publishSafeLocation, user?.role]);
+
+  const syncStatus = useCallback(async () => {
+    try {
+      const serverData = await getMyAttendance();
+      if (serverData.status) {
+        setAttendanceStatus(serverData.status);
+        await AsyncStorage.setItem(STORAGE_ATTENDANCE_STATUS, serverData.status);
+      } else {
+        setAttendanceStatus(null);
+        await AsyncStorage.removeItem(STORAGE_ATTENDANCE_STATUS);
+      }
+      return serverData.status;
+    } catch (err) {
+      const local = await AsyncStorage.getItem(STORAGE_ATTENDANCE_STATUS);
+      if (local) {
+        setAttendanceStatus(local as any);
+        return local as any;
+      }
+      return null;
+    }
+  }, []);
+
+  const refreshAttendance = async () => {
+    return await syncStatus();
+  };
 
   const simulateLocation = (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => {
     const targetRiderId = overrideRiderId || user?.id;
@@ -456,6 +582,15 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       if (user?.id) socket.emit('join', user.id);
     });
 
+    socket.on('attendance-updated', async (data: any) => {
+      setAttendanceStatus(data.status);
+      if (data.status === 'present') {
+        setIsOnDuty(true);
+        await AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'true');
+      }
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
+    });
+
     let lastRefreshTime = 0;
     const REFRESH_COOLDOWN_MS = 60000; // Only refresh once per minute maximum
 
@@ -512,6 +647,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     socket.on('rider-location-updated', handleLocationUpdate);
     socket.on('new_assignment', refreshRiderData);
     socket.on('request-updated', refreshRiderData);
+    socket.on('requests-updated', (data: any) => {
+      // LAYER 2: Instant Route Optimization Sync
+      if (data?.message) {
+        // Show an in-app alert for route changes
+        Alert.alert("📍 Route Optimized", data.message);
+      }
+      refreshRiderData(data);
+    });
     socket.on('delivery-status-updated', refreshRiderData);
     socket.on('notification-added', refreshRiderData);
 
@@ -519,6 +662,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       socket.off('rider-location-updated', handleLocationUpdate);
       socket.off('new_assignment', refreshRiderData);
       socket.off('request-updated', refreshRiderData);
+      socket.off('requests-updated');
       socket.off('delivery-status-updated', refreshRiderData);
       socket.off('notification-added', refreshRiderData);
       socket.off('connect_error');
@@ -529,9 +673,17 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   // Request permissions and setup always-on tracking
   useEffect(() => {
-    (async () => {
-      if (user?.role !== 'rider') return;
+    if (user?.role !== 'rider') return;
 
+    if (!isOnDuty) {
+      if (foregroundSubscription.current) {
+        foregroundSubscription.current.remove();
+        foregroundSubscription.current = null;
+      }
+      return;
+    }
+
+    (async () => {
       resetBackgroundTaskStopState();
 
       // 1. Store ID for background task
@@ -607,20 +759,56 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     })();
 
     return () => {
-      if (foregroundSubscription.current) foregroundSubscription.current.remove();
+      if (foregroundSubscription.current) {
+        foregroundSubscription.current.remove();
+        foregroundSubscription.current = null;
+      }
     };
-  }, [publishSafeLocation, user?.id, user?.role]);
+  }, [publishSafeLocation, user?.id, user?.role, isOnDuty]);
+
+  // Load initial states
+  useEffect(() => {
+    (async () => {
+      const duty = await AsyncStorage.getItem(STORAGE_DUTY_STATUS);
+      if (duty === 'true') setIsOnDuty(true);
+
+      if (user?.id) {
+        syncStatus();
+      }
+    })();
+  }, [user?.id, syncStatus]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (socket) {
+      socket.on('dev-simulate', (data: any) => {
+        if (data.type === 'AUTO_OFF') {
+          setIsOnDuty(false);
+          AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'false');
+          Alert.alert("Shift Ended", data.message);
+        }
+      });
+      return () => {
+        socket.off('dev-simulate');
+      };
+    }
+  }, [isSocketConnected]);
 
   return (
     <LocationContext.Provider value={{ 
       lastLocation, 
       isTracking, 
+      isOnDuty,
+      attendanceStatus,
       locationPermission, 
       backgroundPermissionGranted,
       isSocketConnected,
       startTracking,
       stopTracking,
+      toggleDuty,
+      checkIn,
       refreshCurrentLocation,
+      refreshAttendance,
       simulateLocation
     }}>
       {children}

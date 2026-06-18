@@ -20,7 +20,9 @@ const getTimeframeFilter = (timeframe: string) => {
 // 1. Actual vs. Estimated Route Efficiency
 router.get('/route-efficiency', async (req, res) => {
   try {
-    const filter = getTimeframeFilter(req.query.timeframe as string);
+    const tf = req.query.timeframe as string;
+    const filter = getTimeframeFilter(tf);
+    
     const [requests] = await pool.query(`
       SELECT request_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng 
       FROM delivery_requests 
@@ -28,12 +30,31 @@ router.get('/route-efficiency', async (req, res) => {
       AND ${filter}
     `) as any[];
     
-    const [logs] = await pool.query(`
-      SELECT request_id, lat, lng, timestamp 
-      FROM location_logs 
-      WHERE timestamp > DATE_SUB(NOW(), INTERVAL 30 DAY)
-      ORDER BY timestamp ASC
-    `) as any[];
+    // Decimate logs for longer timeframes to prevent memory/performance issues
+    let logsQuery = '';
+    if (tf === 'real-time' || tf === 'daily') {
+      logsQuery = `
+        SELECT request_id, lat, lng, timestamp 
+        FROM location_logs 
+        WHERE ${filter.replace(/created_at/g, 'timestamp')}
+        ORDER BY timestamp ASC
+      `;
+    } else {
+      // Decimate coordinates into 5-minute intervals (300 seconds)
+      logsQuery = `
+        SELECT 
+          request_id, 
+          AVG(lat) as lat, 
+          AVG(lng) as lng, 
+          MIN(timestamp) as timestamp 
+        FROM location_logs 
+        WHERE ${filter.replace(/created_at/g, 'timestamp')}
+        GROUP BY request_id, UNIX_TIMESTAMP(timestamp) DIV 300
+        ORDER BY timestamp ASC
+      `;
+    }
+
+    const [logs] = await pool.query(logsQuery) as any[];
 
     res.json({ requests, logs });
   } catch (error) {
@@ -263,6 +284,94 @@ router.get('/location-insights', async (req, res) => {
     res.json({ pickups, dropoffs });
   } catch (error) {
     console.error('Error fetching location insights:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// 11. Operational Integrity (Layer 4)
+router.get('/operational-integrity', async (req, res) => {
+  try {
+    const filter = getTimeframeFilter(req.query.timeframe as string);
+    
+    // Matrix 1: Tactical Leave Correlation
+    // Flags riders who report 'absent' within 60 mins of a schedule view/assignment
+    const [tacticalLeaves] = await pool.query(`
+      SELECT u.name as rider_name, al.date, al.status, al.reason,
+             me.timestamp as view_timestamp, al.created_at as report_timestamp,
+             TIMESTAMPDIFF(MINUTE, me.timestamp, al.created_at) as gap_minutes
+      FROM users u
+      JOIN attendance_logs al ON u.id = al.rider_id
+      JOIN movement_events me ON u.id = me.rider_id
+      WHERE al.status IN ('absent', 'on_leave')
+      AND me.event_type = 'assignment'
+      AND ABS(TIMESTAMPDIFF(MINUTE, me.timestamp, al.created_at)) < 60
+      AND ${filter.replace(/created_at/g, 'al.created_at')}
+    `) as any[];
+
+    // Matrix 2: Departmental Bias Matrix
+    const [biasMatrix] = await pool.query(`
+      SELECT requester_department as department,
+             COUNT(*) as total_tasks,
+             SUM(CASE WHEN delivery_status = 'completed' THEN 1 ELSE 0 END) as completed,
+             ROUND((SUM(CASE WHEN delivery_status = 'completed' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as completion_rate,
+             AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) as avg_handle_time
+      FROM delivery_requests
+      WHERE delivery_status IS NOT NULL
+      AND ${filter}
+      GROUP BY requester_department
+      ORDER BY completion_rate DESC
+    `) as any[];
+
+    // Matrix 3: Sequence Deviation Log
+    const [deviationLog] = await pool.query(`
+      SELECT u.name as rider_name, me.message as reason, me.timestamp,
+             JSON_UNQUOTE(JSON_EXTRACT(me.metadata, '$.requestId')) as request_id,
+             JSON_UNQUOTE(JSON_EXTRACT(me.metadata, '$.photoUrl')) as has_photo
+      FROM movement_events me
+      JOIN users u ON me.rider_id = u.id
+      WHERE me.event_type = 'deviation_requested'
+      AND ${filter.replace(/created_at/g, 'me.timestamp')}
+      ORDER BY me.timestamp DESC
+    `) as any[];
+
+    // Matrix 4: Ghost Miles / Route Compliance
+    const [ghostMiles] = await pool.query(`
+      SELECT u.name as rider_name,
+             COUNT(CASE WHEN me.event_type = 'idle_alert' THEN 1 END) as idle_incidents,
+             COUNT(CASE WHEN me.event_type = 'deviation_resolved' THEN 1 END) as approved_skips,
+             COUNT(DISTINCT me.request_id) as total_tasks
+      FROM users u
+      LEFT JOIN movement_events me ON u.id = me.rider_id
+      WHERE u.role = 'rider'
+      AND ${filter.replace(/created_at/g, 'me.timestamp')}
+      GROUP BY u.id, u.name
+    `) as any[];
+
+    // Calculate Master Integrity Scores
+    const [integrityScores] = await pool.query(`
+      SELECT u.name, u.id,
+             100 - (
+               (COUNT(CASE WHEN me.event_type = 'deviation_requested' THEN 1 END) * 10) +
+               (COUNT(CASE WHEN me.event_type = 'idle_alert' THEN 1 END) * 5)
+             ) as score
+      FROM users u
+      LEFT JOIN movement_events me ON u.id = me.rider_id
+      WHERE u.role = 'rider'
+      GROUP BY u.id, u.name
+    `) as any[];
+
+    res.json({
+      tacticalLeaves,
+      biasMatrix,
+      deviationLog,
+      ghostMiles,
+      integrityScores: integrityScores.map((s: any) => ({
+        ...s,
+        score: Math.max(0, Math.min(100, s.score))
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching integrity analytics:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });

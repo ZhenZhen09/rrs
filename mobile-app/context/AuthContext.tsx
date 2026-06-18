@@ -103,6 +103,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api.post('/api/auth/logout', { userId: user?.id });
     } catch (e) {}
     await AuthManager.clearSession();
+
+    // --- PRIVACY SYNC: Clear duty status ---
+    await AsyncStorage.setItem('@is_on_duty', 'false');
+
     await AsyncStorage.multiRemove(['@rider_id', '@active_request_id']);
     resetAuthStatus();
     setToken(null);

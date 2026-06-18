@@ -83,6 +83,15 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           icon: <Ban size={10} className="text-red-600" />
         };
       case 'active':
+        if (deliveryStatus === 'pending_review') {
+          return {
+            label: "REVIEW",
+            color: "text-purple-600",
+            dot: "bg-purple-500",
+            pulse: true,
+            icon: <AlertCircle size={10} className="text-purple-500" />
+          };
+        }
         return {
           label: deliveryStatus === 'in_progress' ? "ON ROUTE" : "ACTIVE",
           color: "text-sky-500",
@@ -111,8 +120,18 @@ export const RequestCard: React.FC<RequestCardProps> = ({
     <motion.div
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      className="w-full max-w-[350px]"
+      className={cn("w-full max-w-[350px] relative", isActiveTab && "mt-3")}
     >
+      {/* Rank Indicator - Top Left (Active Tab Only) */}
+      {isActiveTab && request.queue_order && (
+        <div className={cn(
+          "absolute -top-2.5 -left-2.5 w-6 h-6 rounded-lg text-white text-[10px] font-black flex items-center justify-center shadow-md z-[60] border-2 border-white",
+          request.queue_order === 1 ? "bg-emerald-500" : "bg-slate-900"
+        )}>
+          {request.queue_order}
+        </div>
+      )}
+
       <Card
         className={cn(
           "rounded-lg border border-slate-100 transition-all duration-200 cursor-pointer group mb-1.5 relative overflow-hidden flex flex-col bg-white w-full",

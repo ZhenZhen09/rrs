@@ -9,6 +9,36 @@ export const isActiveApprovedTask = (task: Job): boolean => {
   return task.status === 'approved' && !TERMINAL_DELIVERY_STATUSES.includes(task.delivery_status);
 };
 
+/**
+ * Global Sequence Enforcement Logic
+ * A task is locked if there's any task with a lower queue_order that isn't 'in_progress' or terminal.
+ */
+export const isTaskLocked = (currentTask: Job, allTasks: Job[]): boolean => {
+  // If the task itself is already in progress, it's never locked
+  if (currentTask.delivery_status === 'in_progress') return false;
+
+  const currentOrder = currentTask.queue_order || 999;
+
+  return allTasks.some(t => {
+    // Only check tasks that are actually supposed to be visible to the rider
+    if (!isActiveApprovedTask(t)) return false;
+
+    const otherOrder = t.queue_order || 999;
+    
+    // We only care about tasks earlier in the sequence
+    if (otherOrder < currentOrder) {
+      // If an earlier task is not finished and not currently being worked on, it blocks this one
+      const isTerminal = TERMINAL_DELIVERY_STATUSES.includes(t.delivery_status);
+      const isInProgress = t.delivery_status === 'in_progress';
+      
+      if (!isTerminal && !isInProgress) {
+        return true;
+      }
+    }
+    return false;
+  });
+};
+
 export const getRiderTaskTab = (task: Job, today: Date = new Date()): RiderTaskTab => {
   // Defensive: Fail-Hidden logic for missing critical fields (Enterprise Hardening)
   if (!task?.request_id || !task?.status || !task?.delivery_status) {

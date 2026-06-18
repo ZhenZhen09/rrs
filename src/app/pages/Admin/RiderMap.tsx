@@ -7,7 +7,20 @@ import { Badge } from '../../components/ui/badge';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
-import { Search, MapPin, Bike, Navigation, Info, Clock, AlertTriangle } from 'lucide-react';
+import { 
+  Search, 
+  MapPin, 
+  Bike, 
+  Navigation, 
+  Info, 
+  Clock, 
+  AlertTriangle, 
+  Battery, 
+  BatteryLow, 
+  BatteryMedium, 
+  Wifi, 
+  Power 
+} from 'lucide-react';
 import { cn } from '../../components/ui/utils';
 import 'leaflet/dist/leaflet.css';
 
@@ -33,6 +46,9 @@ interface RiderLive {
   current_lat: number | null;
   current_lng: number | null;
   pickup_address: string | null;
+  is_on_duty: boolean;
+  last_battery_level: number | null;
+  last_signal_strength: string | null;
 }
 
 function MapController({ center, zoom }: { center: [number, number] | null, zoom?: number }) {
@@ -52,7 +68,7 @@ export function RiderMap() {
   const [riders, setRiders] = useState<RiderLive[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [filter, setFilter] = useState<'all' | 'online' | 'offline' | 'on-duty'>('all');
   const [selectedRider, setSelectedRider] = useState<RiderLive | null>(null);
   const [autoUpdate, setAutoUpdate] = useState(true);
   const mapRef = useRef<L.Map | null>(null);
@@ -80,6 +96,10 @@ export function RiderMap() {
 
   const getRiderStatusLabel = useCallback((rider: RiderLive) => {
     const isOnline = isRiderOnline(rider);
+    
+    // NEW: Off-duty status takes precedence for labeling
+    if (!rider.is_on_duty) return 'OFF DUTY';
+
     const live = riderLocations[rider.id];
     
     // Calculate data age based on socket or DB
@@ -146,28 +166,37 @@ export function RiderMap() {
     return riders.filter(r => {
       const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            r.email.toLowerCase().includes(searchQuery.toLowerCase());
+      
       const online = isRiderOnline(r);
+      
+      if (filter === 'on-duty') return matchesSearch && r.is_on_duty;
       if (filter === 'online') return matchesSearch && online;
       if (filter === 'offline') return matchesSearch && !online;
       return matchesSearch;
     });
   }, [riders, searchQuery, filter, isRiderOnline]);
 
-  const activeCount = riders.filter(r => isRiderOnline(r)).length;
+  const activeCount = riders.filter(r => r.is_on_duty).length;
 
   const createCustomIcon = (rider: RiderLive) => {
     const status = getRiderStatusLabel(rider);
-    const color = status === 'LIVE' ? '#10b981' : (status === 'OFFLINE' ? '#94a3b8' : '#f59e0b');
+    const hasUnfinishedTasks = !!rider.request_id;
+    const isOverdueOffDuty = !rider.is_on_duty && hasUnfinishedTasks;
+    
+    let color = status === 'LIVE' ? '#10b981' : (status === 'OFFLINE' ? '#94a3b8' : '#f59e0b');
+    if (isOverdueOffDuty) color = '#ef4444'; // Red for overdue log-off
+
     const isSelected = selectedRider?.id === rider.id;
     
     return L.divIcon({
       className: 'custom-rider-icon',
       html: `
-        <div style="position: relative; width: ${isSelected ? '40px' : '32px'}; height: ${isSelected ? '40px' : '32px'}; background: white; border-radius: 50%; border: 2px solid ${color}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease;">
+        <div style="position: relative; width: ${isSelected ? '40px' : '32px'}; height: ${isSelected ? '40px' : '32px'}; background: white; border-radius: 50%; border: 2px solid ${color}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; ${isOverdueOffDuty ? 'opacity: 0.5;' : ''}">
           <div style="width: ${isSelected ? '32px' : '24px'}; height: ${isSelected ? '32px' : '24px'}; background: #1e293b; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: ${isSelected ? '12px' : '10px'};">
             ${(rider.name || 'R').substring(0, 1)}
           </div>
           <div style="position: absolute; bottom: -1px; right: -1px; width: ${isSelected ? '12px' : '10px'}; height: ${isSelected ? '12px' : '10px'}; background: ${color}; border: 1.5px solid white; border-radius: 50%;"></div>
+          ${isOverdueOffDuty ? '<div class="absolute inset-0 rounded-full animate-red-pulse -z-10" style="background: rgba(239, 68, 68, 0.4);"></div>' : ''}
         </div>
       `,
       iconSize: isSelected ? [40, 40] : [32, 32],
@@ -186,7 +215,7 @@ export function RiderMap() {
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Location Overview</p>
              </div>
              <Badge variant="secondary" className="bg-slate-900 text-white font-black px-2 py-0 h-4 text-[8px]">
-                {activeCount} ONLINE
+                {activeCount} ON DUTY
              </Badge>
           </div>
 
@@ -201,16 +230,18 @@ export function RiderMap() {
           </div>
 
           <div className="flex items-center gap-1 p-0.5 bg-slate-50 rounded-md">
-             {(['all', 'online', 'offline'] as const).map((f) => (
+             {(['on-duty', 'online', 'all'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={cn(
                     "flex-1 py-1 text-[8px] font-black uppercase tracking-widest rounded transition-all",
-                    filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                    filter === f 
+                      ? f === 'on-duty' ? "bg-emerald-500 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm" 
+                      : "text-slate-400 hover:text-slate-600"
                   )}
                 >
-                  {f}
+                  {f === 'on-duty' ? 'On Duty' : f}
                 </button>
              ))}
           </div>
@@ -230,30 +261,41 @@ export function RiderMap() {
             filteredRiders.map((rider) => {
               const status = getRiderStatusLabel(rider);
               const isSelected = selectedRider?.id === rider.id;
+              const hasUnfinishedTasks = !!rider.request_id;
+              const isOverdueOffDuty = !rider.is_on_duty && hasUnfinishedTasks;
               
               return (
                 <button
                   key={rider.id}
                   onClick={() => setSelectedRider(rider)}
                   className={cn(
-                    "w-full p-2.5 rounded-xl border-2 transition-all text-left flex items-start gap-3",
+                    "w-full p-2.5 rounded-xl border-2 transition-all text-left flex items-start gap-3 relative overflow-hidden",
                     isSelected 
                       ? "border-slate-900 bg-slate-900 shadow-lg shadow-slate-900/10" 
+                      : isOverdueOffDuty
+                      ? "border-rose-100 bg-rose-50/20 hover:border-rose-200"
                       : "border-slate-50 hover:border-slate-200 bg-white"
                   )}
                 >
+                  {isOverdueOffDuty && (
+                    <div className="absolute top-0 right-0 p-1">
+                      <div className="bg-rose-500 text-white text-[6px] font-black px-1 rounded-bl-md uppercase tracking-tighter">Overdue</div>
+                    </div>
+                  )}
                   <div className={cn(
                     "w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0 relative",
-                    isSelected ? "bg-white text-slate-900" : "bg-slate-900 text-white shadow-sm"
+                    isSelected ? "bg-white text-slate-900" : isOverdueOffDuty ? "bg-rose-500 text-white" : "bg-slate-900 text-white shadow-sm",
+                    isOverdueOffDuty && "opacity-60"
                   )}>
                     {rider.name.substring(0, 1)}
                     <div className={cn(
                       "absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full border border-white",
+                      isOverdueOffDuty ? "bg-rose-500" :
                       status === 'LIVE' ? "bg-emerald-500" :
                       status === 'OFFLINE' ? "bg-slate-400" : "bg-amber-500"
                     )} />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className={cn("flex-1 min-w-0", isOverdueOffDuty && "opacity-70")}>
                     <div className="flex items-center justify-between gap-1">
                       <p className={cn(
                         "font-black truncate text-[10px] leading-tight",
@@ -268,12 +310,77 @@ export function RiderMap() {
                         {status}
                       </Badge>
                     </div>
+
+                    {rider.request_id && (
+                      <div className="mt-1 flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className={cn(
+                            "text-[7px] font-black uppercase tracking-tighter px-1 rounded",
+                            isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500"
+                          )}>
+                             #{rider.request_id.slice(-6).toUpperCase()}
+                          </span>
+                          <span className={cn(
+                            "text-[8px] font-bold truncate",
+                            isSelected ? "text-slate-300" : "text-slate-500"
+                          )}>
+                             {rider.delivery_status || 'Assigned'}
+                          </span>
+                        </div>
+                        <p className={cn(
+                          "text-[8px] font-medium truncate",
+                          isSelected ? "text-slate-400" : "text-slate-400"
+                        )}>
+                          {rider.pickup_address || 'Fetching pickup location...'}
+                        </p>
+                      </div>
+                    )}
                     <p className={cn(
                       "text-[9px] font-bold truncate mt-0.5",
                       isSelected ? "text-slate-400" : "text-slate-500"
                     )}>
                       {rider.last_seen ? `Seen ${new Date(rider.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Never seen'}
                     </p>
+
+                    <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-50/10">
+                      <div className="flex items-center gap-1">
+                        {(() => {
+                          const level = rider.last_battery_level ?? 0;
+                          const color = level < 20 ? "text-rose-500" : isSelected ? "text-slate-400" : "text-slate-500";
+                          if (level === 0) return <Battery size={10} className="text-slate-300" />;
+                          if (level < 20) return <BatteryLow size={10} className={color} />;
+                          return <BatteryMedium size={10} className={color} />;
+                        })()}
+                        <span className={cn(
+                          "text-[8px] font-black tracking-tighter",
+                          (rider.last_battery_level ?? 0) < 20 ? "text-rose-500" : isSelected ? "text-slate-400" : "text-slate-500"
+                        )}>
+                          {rider.last_battery_level ? `${rider.last_battery_level}%` : '--'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1">
+                        <Wifi size={10} className={isSelected ? "text-slate-400" : "text-slate-500"} />
+                        <span className={cn(
+                          "text-[8px] font-black uppercase tracking-tighter",
+                          isSelected ? "text-slate-400" : "text-slate-500"
+                        )}>
+                          {rider.last_signal_strength || 'Unknown'}
+                        </span>
+                      </div>
+                      
+                      {rider.is_on_duty ? (
+                         <div className="flex items-center gap-1 bg-emerald-500/10 px-1 rounded">
+                            <Power size={8} className="text-emerald-500" />
+                            <span className="text-[7px] font-black text-emerald-500 uppercase tracking-tighter">On Duty</span>
+                         </div>
+                      ) : (
+                         <div className="flex items-center gap-1 bg-slate-500/10 px-1 rounded">
+                            <Power size={8} className="text-slate-500" />
+                            <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">Off Duty</span>
+                         </div>
+                      )}
+                    </div>
                   </div>
                 </button>
               );
@@ -282,20 +389,66 @@ export function RiderMap() {
         </div>
 
         {selectedRider && (
-          <div className="p-3 md:p-4 border-t border-slate-100 bg-slate-50 animate-in slide-in-from-bottom-full duration-300">
-             <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+          <div className="p-4 border-t border-slate-100 bg-white animate-in slide-in-from-bottom-4 duration-300 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+             <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-lg shadow-slate-900/20">
                    <Navigation size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                   <h3 className="text-[11px] font-black text-slate-900 truncate uppercase tracking-tight">{selectedRider.name}</h3>
-                   <p className="text-[8px] font-bold text-slate-500 truncate mt-0.5">{selectedRider.email}</p>
+                   <h3 className="text-xs font-black text-slate-900 truncate uppercase tracking-tight">{selectedRider.name}</h3>
+                   <p className="text-[9px] font-bold text-slate-500 truncate">{selectedRider.email}</p>
+                   <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                         <MapPin size={8} className="text-slate-400" />
+                         <span className="text-[7px] font-black text-slate-600 tabular-nums">
+                            {selectedRider.current_lat?.toString().slice(0, 9)}, {selectedRider.current_lng?.toString().slice(0, 9)}
+                         </span>
+                      </div>
+                   </div>
                 </div>
              </div>
+
+             {selectedRider.request_id ? (
+                <div className="mb-4 space-y-2">
+                   <div className="flex items-center justify-between">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Active Transaction</p>
+                      <Badge className="bg-primary/10 text-primary border-none font-black text-[7px] h-4">
+                         #{selectedRider.request_id.slice(-8).toUpperCase()}
+                      </Badge>
+                   </div>
+                   <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 space-y-2">
+                      <div className="flex items-center gap-2">
+                         <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                         <p className="text-[9px] font-black text-slate-900 uppercase">
+                            {selectedRider.delivery_status || 'Assigned'}
+                         </p>
+                      </div>
+                      <div className="space-y-1.5 ml-3.5">
+                         <div className="flex items-start gap-2">
+                            <div className="w-1 h-1 rounded-full bg-slate-300 mt-1" />
+                            <p className="text-[8px] font-bold text-slate-500 leading-tight">
+                               <span className="text-slate-900 font-black">PICKUP:</span> {selectedRider.pickup_address || 'Loading...'}
+                            </p>
+                         </div>
+                         <div className="flex items-start gap-2">
+                            <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1" />
+                            <p className="text-[8px] font-bold text-slate-500 leading-tight">
+                               <span className="text-slate-900 font-black">DELIVER TO:</span> {selectedRider.time_window || 'Schedule Pending'}
+                            </p>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             ) : (
+                <div className="mb-4 py-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-center">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter italic">No Active Job Assigned</p>
+                </div>
+             )}
+
              <div className="grid grid-cols-2 gap-2">
                 <Button 
                   size="sm" 
-                  className="h-8 rounded-lg bg-white border border-slate-200 text-slate-900 hover:bg-slate-100 text-[8px] font-black uppercase tracking-widest"
+                  className="h-9 rounded-xl bg-slate-900 text-white hover:bg-black text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all"
                   onClick={() => {
                     const loc = getRiderLocation(selectedRider);
                     if (loc && mapRef.current) {
@@ -308,10 +461,10 @@ export function RiderMap() {
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  className="h-8 rounded-lg border-slate-200 text-slate-900 hover:bg-slate-100 text-[8px] font-black uppercase tracking-widest"
+                  className="h-9 rounded-xl border-slate-200 text-slate-900 hover:bg-slate-50 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
                   onClick={() => setSelectedRider(null)}
                 >
-                  Close
+                  Dismiss
                 </Button>
              </div>
           </div>
@@ -356,15 +509,22 @@ export function RiderMap() {
                   }}
                 >
                   <Popup className="rider-mini-popup" closeButton={false}>
-                    <div className="p-1">
-                      <p className="text-[10px] font-black text-slate-900 uppercase mb-1">{rider.name}</p>
-                      <div className="flex items-center gap-1.5">
-                        <div className={cn(
-                          "w-1.5 h-1.5 rounded-full",
-                          isRiderOnline(rider) ? "bg-emerald-500" : "bg-slate-400"
-                        )} />
-                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">
-                          {getRiderStatusLabel(rider)}
+                    <div className="p-2 min-w-[120px]">
+                      <p className="text-[10px] font-black text-slate-900 uppercase leading-none">{rider.name}</p>
+                      <p className="text-[8px] font-bold text-slate-400 mt-1 mb-2 truncate">{rider.email}</p>
+                      
+                      <div className="flex items-center justify-between border-t border-slate-50 pt-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            isRiderOnline(rider) ? "bg-emerald-500" : "bg-slate-400"
+                          )} />
+                          <span className="text-[8px] font-black text-slate-600 uppercase tracking-tight">
+                            {getRiderStatusLabel(rider)}
+                          </span>
+                        </div>
+                        <span className="text-[7px] font-black text-slate-400 tabular-nums">
+                           {rider.last_seen ? new Date(rider.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </span>
                       </div>
                     </div>
@@ -416,6 +576,14 @@ export function RiderMap() {
         .custom-rider-icon {
           background: transparent;
           border: none;
+        }
+        @keyframes red-pulse {
+          0% { transform: scale(1); opacity: 0.4; }
+          50% { transform: scale(1.3); opacity: 0.2; }
+          100% { transform: scale(1.1); opacity: 0.4; }
+        }
+        .animate-red-pulse {
+          animation: red-pulse 2s infinite ease-in-out;
         }
       `}} />
     </div>

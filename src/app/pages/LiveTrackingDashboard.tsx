@@ -34,6 +34,7 @@ interface TrackingPayload {
     is_fallback: boolean;
     rider_status: string | null;
     rider_is_online?: boolean; // New field for clearer fallback
+    rider_is_on_duty?: boolean;
   };
 }
 
@@ -148,6 +149,9 @@ export function LiveTrackingDashboard() {
     }
   }, [id]);
 
+  // Keep a local ref of presence pings to avoid "Signal Lost" when stationary
+  const [lastPresencePulse, setLastPresencePulse] = useState<number>(0);
+
   useEffect(() => {
     if (!id) return;
 
@@ -169,6 +173,23 @@ export function LiveTrackingDashboard() {
       console.log('🤝 Targeted Handshake: Checking status for', assignedRiderId);
       socket.emit('check-rider-presence', assignedRiderId);
     }
+
+    // LISTENER FIX: Also listen to global presence pings to keep the UI "Live"
+    const handlePresenceChange = (data: { riderId: string, status: string, lastSeen: number }) => {
+      if (data.riderId === assignedRiderId) {
+        console.log('💓 Heartbeat received for tracking:', data);
+        if (data.status === 'online') {
+          setLastPresencePulse(data.lastSeen || Date.now());
+        } else {
+          setLastPresencePulse(0); // Clear pulse if they go offline
+        }
+      }
+    };
+
+    socket.on('rider-presence-changed', handlePresenceChange);
+    return () => {
+      socket.off('rider-presence-changed', handlePresenceChange);
+    };
   }, [id, socket, assignedRiderId]);
 
   if (syncPhase !== 'READY') {
@@ -262,34 +283,39 @@ export function LiveTrackingDashboard() {
       : null);
 
   // DATA AGE AUDIT (User Request)
+  // Fix: Incorporate lastPresencePulse to avoid "Signal Lost" when stationary
   const lastUpdateTs = liveRiderLocation?.timestamp 
     ? Number(liveRiderLocation.timestamp)
-    : (trackingPayload?.current_location?.updated_at 
-        ? new Date(trackingPayload.current_location.updated_at).getTime() 
-        : (trackingRequest.updated_at ? new Date(trackingRequest.updated_at).getTime() : 0));
+    : (lastPresencePulse > 0 
+        ? lastPresencePulse 
+        : (trackingPayload?.current_location?.updated_at 
+            ? new Date(trackingPayload.current_location.updated_at).getTime() 
+            : (trackingRequest.updated_at ? new Date(trackingRequest.updated_at).getTime() : 0)));
   
   const dataAgeSeconds = lastUpdateTs ? (Date.now() - lastUpdateTs) / 1000 : 9999;
-  const hasRecentLocation = Boolean(currentLocation) && dataAgeSeconds <= 130;
+  
+  // Tighter threshold for 'DELAYED' but more relaxed for 'SIGNAL_LOST'
+  const hasRecentLocation = Boolean(currentLocation) && dataAgeSeconds <= 180;
 
   // Hybrid Online Check: Use real-time socket first, fall back to API snapshot
-  // A recent GPS pulse should keep the rider live even if the presence handshake is delayed/stale.
+  // CRITICAL FIX: Explicitly check for 'offline' status in socket data to override API snapshot.
   const isOnline = assignedRiderId 
     ? (riderPresence[assignedRiderId] === 'online' || 
-       trackingPayload?.tracking_state?.rider_is_online ||
-       hasRecentLocation)
+       (riderPresence[assignedRiderId] === undefined && (trackingPayload?.tracking_state?.rider_is_online || hasRecentLocation)) ||
+       (lastPresencePulse > 0 && (Date.now() - lastPresencePulse) < 180000))
     : false;
 
   // FINAL STATUS RESOLVER (Single Source)
   // Priority: 1. Connection (Offline) > 2. GPS Age (Signal Lost) > 3. Data Delay > 4. Live
-  // Thresholds calibrated for 1-minute heartbeat interval
+  // Thresholds calibrated for reliability
   let trackingStatus: TrackingStatus = 'LIVE';
   if (!isOnline) {
     trackingStatus = 'OFFLINE';
-  } else if (dataAgeSeconds > 130) {
-    // Online but no GPS pulse for > 2 heartbeats
+  } else if (dataAgeSeconds > 180) {
+    // Online but no pulse for > 3 minutes
     trackingStatus = 'SIGNAL_LOST';
-  } else if (dataAgeSeconds > 65) {
-    // Online but missed exactly one heartbeat window
+  } else if (dataAgeSeconds > 90) {
+    // Online but missed pulse window
     trackingStatus = 'DELAYED';
   }
 
@@ -373,6 +399,7 @@ export function LiveTrackingDashboard() {
              containerClassName="h-full w-full"
              trackingStatus={trackingStatus}
              lastUpdateTs={lastUpdateTs}
+             isOnDuty={trackingPayload?.tracking_state?.rider_is_on_duty}
            />
            
            {isFinished && (

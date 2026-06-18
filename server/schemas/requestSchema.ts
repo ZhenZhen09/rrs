@@ -49,3 +49,20 @@ export const updateStatusSchema = z.object({
   current_lng: z.coerce.number().optional(),
   timestamp: z.string().optional()
 });
+
+export const resequenceSchema = z.object({
+  riderId: z.string().min(1, 'Rider ID is required'),
+  sequence: z.array(z.string()).min(1, 'Sequence must contain at least one request ID'),
+  note: z.string().optional()
+});
+
+export const patchLocationsSchema = z.object({
+  pickup: z.object({
+    lat: z.number(),
+    lng: z.number()
+  }).optional(),
+  dropoff: z.object({
+    lat: z.number(),
+    lng: z.number()
+  }).optional()
+});

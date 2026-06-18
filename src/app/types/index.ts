@@ -180,6 +180,7 @@ export interface DeliveryRequest {
   assigned_rider_id?: string;
   delivery_status?: DeliveryStatus;
   rider_remark?: string;
+  queue_order?: number;
   
   // Metadata
   requester_name?: string;

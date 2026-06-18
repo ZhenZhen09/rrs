@@ -26,6 +26,7 @@ import {
   MessageSquare,
   AlertOctagon,
   WifiOff,
+  Activity,
   Sparkles,
   Calendar,
   Ban
@@ -57,8 +58,13 @@ interface RequestDetailsPanelProps {
   onDecline: (remark: string) => void;
   isSubmitting: boolean;
   onBack?: () => void;
+  onManageRoute?: (riderId: string) => void;
   readOnly?: boolean;
 }
+
+import { useEffect } from 'react';
+import { TimelineComponent } from './TimelineComponent';
+import { Settings } from 'lucide-react';
 
 export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   request,
@@ -68,6 +74,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   onDecline,
   isSubmitting,
   onBack,
+  onManageRoute,
   readOnly = false
 }) => {
   const { updateDeliveryStatus, cancelRequest, returnForRevision } = useData();
@@ -77,10 +84,32 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [closureReason, setClosureReason] = useState('');
   const [selectedCommonReasons, setSelectedCommonReasons] = useState<string[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean, status: string | null }>({
     open: false,
     status: null
   });
+
+  const fetchTimeline = async () => {
+    if (!request?.request_id) return;
+    setLoadingTimeline(true);
+    try {
+      const res = await fetch(`/api/requests/${request.request_id}/timeline`);
+      const data = await res.json();
+      setTimeline(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Failed to fetch timeline', e);
+    } finally {
+      setLoadingTimeline(false);
+    }
+  };
+
+  useEffect(() => {
+    if (request?.request_id) {
+      fetchTimeline();
+    }
+  }, [request?.request_id]);
 
   const COMMON_REASONS = [
     "Rider forgot to click complete",
@@ -187,6 +216,13 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
 
   const renderStatusBadge = () => {
     if (isPending) {
+      if (request.delivery_status === 'pending_review') {
+        return (
+          <Badge variant="outline" className="font-black text-[8px] tracking-widest px-2 shrink-0 bg-purple-50 text-purple-600 border-purple-100">
+            REVIEW
+          </Badge>
+        );
+      }
       return (
         <Badge variant="outline" className="font-black text-[8px] tracking-widest px-2 shrink-0 bg-amber-50 text-amber-600 border-amber-100">
           PENDING
@@ -285,6 +321,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           {/* Map Section */}
           <div className="h-[180px] md:h-[220px] w-full shrink-0 rounded-lg overflow-hidden border border-slate-100">
             <DispatchMapView 
+              requestId={request.request_id}
               origin={request.pickup_location} 
               destination={request.dropoff_location} 
               current={request.current_lat && request.current_lng ? { lat: request.current_lat, lng: request.current_lng } : null}
@@ -432,6 +469,31 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                       )}
                     </div>
                   )}
+
+                  {/* Tracking Timeline */}
+                  <div className="pt-2">
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="timeline" className="border-none">
+                        <AccordionTrigger className="py-2 hover:no-underline group">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded bg-slate-50 flex items-center justify-center group-data-[state=open]:bg-primary/10 transition-colors">
+                              <Activity className={cn("h-3 w-3 text-slate-400 group-data-[state=open]:text-primary")} />
+                            </div>
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 group-data-[state=open]:text-primary">Movement Timeline</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-1">
+                          {loadingTimeline ? (
+                            <div className="py-4 flex justify-center">
+                              <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
+                            </div>
+                          ) : (
+                            <TimelineComponent events={timeline} />
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </div>
                 </div>
               </Card>
 
@@ -501,10 +563,24 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                 </>
               ) : isApproved && (
                 <div className="space-y-3">
-                  <h3 className="text-[8px] font-black text-slate-900 tracking-widest flex items-center gap-1.5 uppercase">
-                    <Bike className="h-2.5 w-2.5 text-primary" />
-                    Assignment
-                  </h3>
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-[8px] font-black text-slate-900 tracking-widest flex items-center gap-1.5 uppercase">
+                      <Bike className="h-2.5 w-2.5 text-primary" />
+                      Assignment
+                    </h3>
+
+                    {/* LAYER 2: Re-sequence Trigger (Only for Queued Active Tasks) */}
+                    {onManageRoute && request.assigned_rider_id && !isTerminal && request.delivery_status !== 'in_progress' && (
+                      <Button
+                        size="sm"
+                        onClick={() => onManageRoute(request.assigned_rider_id!)}
+                        className="h-6 px-2 bg-pink-500 hover:bg-pink-600 text-white text-[7px] font-black uppercase tracking-widest rounded shadow-sm flex items-center gap-1 border-none"
+                      >
+                        <Settings size={10} strokeWidth={3} />
+                        Manage Route
+                      </Button>
+                    )}
+                  </div>
                   
                   <Card className="p-3 rounded-lg border-none shadow-sm bg-white overflow-hidden relative group transition-all hover:shadow-md">
                     <div className="flex items-center gap-3 relative z-10">

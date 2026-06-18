@@ -5,7 +5,7 @@
 
 export const TERMINAL_STATUSES = ['completed', 'delivered', 'failed', 'cancelled', 'disapproved'];
 
-export type UIGroupStatus = 'pending' | 'active' | 'done' | 'failed' | 'declined' | 'queuing';
+export type UIGroupStatus = 'pending' | 'active' | 'done' | 'failed' | 'declined' | 'queuing' | 'revision';
 
 /**
  * Standardized logic for grouping technical database statuses 
@@ -41,12 +41,18 @@ export const getGroupedStatus = (
   }
 
   // 4. Active Operations (Approved but not terminal)
-  if (s === 'approved' || ['assigned', 'in_progress', 'arrived'].includes(ds)) {
+  // RESUBMISSION SPECIAL: pending requests marked as pending_review go here!
+  if (s === 'approved' || ['assigned', 'in_progress', 'arrived', 'pending_review'].includes(ds)) {
     return 'active';
   }
 
-  // 5. Awaiting Review (Includes Revisions)
-  if (s === 'returned_for_revision' || s === 'pending') {
+  // 5. In Revision (Hidden from Admin)
+  if (s === 'returned_for_revision') {
+    return 'revision';
+  }
+
+  // 6. Awaiting Review (Standard Pending)
+  if (s === 'pending') {
     return 'pending';
   }
 

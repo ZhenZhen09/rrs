@@ -90,6 +90,19 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   return api.put(`/api/notifications/read-all/${userId}`);
 };
 
+export const updateDutyStatus = async (userId: string, is_on_duty: boolean, reason?: string) => {
+  return api.post(`/api/users/${userId}/duty`, { is_on_duty, reason });
+};
+
+export const submitAttendance = async (userId: string, status: 'present' | 'absent' | 'on_leave', reason?: string) => {
+  return api.post(`/api/users/${userId}/attendance`, { status, reason });
+};
+
+export const getMyAttendance = async () => {
+  const res = await api.get('/api/users/me/attendance');
+  return res.data; // { status: 'absent' | 'present' | 'on_leave' | null }
+};
+
 export const updateLocationBackground = async (data: {
   riderId: string;
   lat: number;
@@ -98,6 +111,8 @@ export const updateLocationBackground = async (data: {
   heading?: number | null;
   accuracy?: number | null;
   timestamp?: number;
+  batteryLevel?: number;
+  networkType?: string;
 }) => {
   try {
     return await api.post('/api/users/location', data);

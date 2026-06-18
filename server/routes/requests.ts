@@ -8,7 +8,9 @@ import {
   approveRequestSchema, 
   disapproveRequestSchema,
   returnRequestSchema,
-  updateStatusSchema 
+  updateStatusSchema,
+  resequenceSchema,
+  patchLocationsSchema
 } from '../schemas/requestSchema';
 // @ts-ignore
 import webpush from 'web-push';
@@ -104,14 +106,15 @@ router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: Au
           
         -- Dispatch Console Tab Stats
         COUNT(CASE 
-          WHEN status IN ('pending', 'returned_for_revision')
+          WHEN status = 'pending' 
+          AND COALESCE(delivery_status, '') NOT IN ('pending_review', 'completed', 'delivered', 'failed', 'cancelled')
           THEN 1 END) as pending,
         COUNT(CASE 
-          WHEN status = 'approved' 
-          AND (delivery_status IS NULL OR delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          WHEN (status = 'approved' AND COALESCE(delivery_status, '') NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          OR delivery_status = 'pending_review'
           THEN 1 END) as active,
         COUNT(CASE 
-          WHEN delivery_status IN ('completed', 'delivered', 'failed', 'cancelled')
+          WHEN COALESCE(delivery_status, '') IN ('completed', 'delivered', 'failed', 'cancelled')
           OR status = 'disapproved'
           THEN 1 END) as done
       FROM delivery_requests
@@ -159,6 +162,8 @@ router.get('/', async (req, res) => {
     if (user.role === 'rider') {
       conditions.push('assigned_rider_id = ?');
       conditions.push("status = 'approved'");
+      // LAYER 1: Visibility Control - Block future tasks (using PH time UTC+8)
+      conditions.push('delivery_date <= DATE(CONVERT_TZ(NOW(), "+00:00", "+08:00"))');
       params.push(user.id);
     } else if (user.role === 'personnel') {
       conditions.push('(requester_department = ? OR requester_id = ?)');
@@ -186,20 +191,20 @@ router.get('/', async (req, res) => {
     const activeFirstOrder = `
       ORDER BY
         CASE
-          WHEN status = 'approved'
-           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          OR delivery_status = 'pending_review'
           THEN 0
           ELSE 1
         END ASC,
         CASE
-          WHEN status = 'approved'
-           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          OR delivery_status = 'pending_review'
           THEN delivery_date
           ELSE NULL
         END ASC,
         CASE
-          WHEN status = 'approved'
-           AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled')
+          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
+          OR delivery_status = 'pending_review'
           THEN time_window
           ELSE NULL
         END ASC,
@@ -237,9 +242,11 @@ router.get('/:id/tracking', async (req, res) => {
              u.current_lat AS rider_current_lat,
              u.current_lng AS rider_current_lng,
              u.updated_at AS rider_location_updated_at,
-             u.status AS rider_user_status
+             u.status AS rider_user_status,
+             u.is_on_duty AS rider_is_on_duty
       FROM delivery_requests dr
       LEFT JOIN users u ON u.id = dr.assigned_rider_id
+
       WHERE dr.request_id = ?
       AND (
         ? = 'admin' OR
@@ -303,12 +310,53 @@ router.get('/:id/tracking', async (req, res) => {
         is_request_specific: Boolean(requestCurrentLocation),
         is_fallback: isFallbackToHistory || (!requestCurrentLocation && Boolean(riderCurrentLocation)),
         rider_status: row.rider_user_status || null,
-        rider_is_online: riderIsOnline
+        rider_is_online: riderIsOnline,
+        rider_is_on_duty: Boolean(row.rider_is_on_duty)
       }
     });
   } catch (error) {
     console.error('[TRACKING] Secure query failed:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// PATCH-LOCATIONS endpoint (Admin only) - MUST BE BEFORE GET /:id to avoid collision
+router.put('/:id/patch-locations', authorize(['admin']), validate(patchLocationsSchema), async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { pickup, dropoff } = req.body;
+  
+  try {
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (pickup) {
+      updates.push('pickup_lat = ?, pickup_lng = ?');
+      params.push(pickup.lat, pickup.lng);
+    }
+    
+    if (dropoff) {
+      updates.push('dropoff_lat = ?, dropoff_lng = ?');
+      params.push(dropoff.lat, dropoff.lng);
+    }
+    
+    if (updates.length === 0) return res.status(400).json({ error: 'No coordinates provided' });
+    
+    params.push(id);
+    await pool.query(`UPDATE delivery_requests SET ${updates.join(', ')} WHERE request_id = ?`, params);
+    
+    await logAction({
+      actor_id: (req as any).user.id,
+      actor_role: (req as any).user.role,
+      action: 'PATCH_LOCATION',
+      resource_type: 'delivery_requests',
+      resource_id: id as string,
+      new_values: { pickup, dropoff }
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Patch location error:', error);
+    res.status(500).json({ error: 'Database update failed' });
   }
 });
 
@@ -366,6 +414,56 @@ router.get('/:id/status-history', async (req, res) => {
   } catch (error) {
     console.error('Status history error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// POST /api/requests/:id/deviation-resolve - Layer 2 Deviation Response
+router.post('/:id/deviation-resolve', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { approved, note } = req.body;
+    const io = req.app.get('io');
+
+    await connection.beginTransaction();
+
+    if (approved) {
+      // Logic: Move current task to end of sequence
+      const [[current]]: any = await connection.query("SELECT assigned_rider_id FROM delivery_requests WHERE request_id = ?", [id]);
+      const [all]: any = await connection.query(
+        "SELECT request_id FROM delivery_requests WHERE assigned_rider_id = ? AND delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved') ORDER BY queue_order ASC",
+        [current.assigned_rider_id]
+      );
+      
+      const sequence = all.map((r: any) => r.request_id).filter((rid: string) => rid !== id);
+      sequence.push(id); // Move skipped task to end
+
+      for (let i = 0; i < sequence.length; i++) {
+        await connection.query("UPDATE delivery_requests SET queue_order = ? WHERE request_id = ?", [i + 1, sequence[i]]);
+      }
+    }
+
+    // Timeline log
+    const eventId = `ev_dev_${Date.now()}`;
+    await connection.query(
+      "INSERT INTO movement_events (id, request_id, event_type, message) VALUES (?, ?, ?, ?)",
+      [eventId, id, 'deviation_resolved', `Admin ${approved ? 'APPROVED' : 'DECLINED'} sequence skip. Note: ${note || 'N/A'}`]
+    );
+
+    await connection.commit();
+    
+    // Notify Rider
+    const [[reqData]]: any = await connection.query("SELECT assigned_rider_id FROM delivery_requests WHERE request_id = ?", [id]);
+    io.to(reqData.assigned_rider_id).emit('requests-updated', { 
+      message: `Your deviation request for #${String(id).slice(-6).toUpperCase()} was ${approved ? 'APPROVED' : 'DECLINED'}.` 
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: 'Resolution failed' });
+  } finally {
+    connection.release();
   }
 });
 
@@ -468,7 +566,7 @@ router.put('/:id/cancel', async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to cancel this request.' });
     }
 
-    if (user.role === 'personnel' && request.status !== 'submitted_waiting') {
+    if (user.role === 'personnel' && request.status !== 'submitted_waiting' && request.status !== 'pending') {
       await conn.rollback();
       return res.status(400).json({ error: 'cancellation window has expired. Only pending requests can be cancelled.' });
     }
@@ -481,7 +579,7 @@ router.put('/:id/cancel', async (req, res) => {
     }
 
     await conn.query(`
-      UPDATE delivery_requests SET status = 'cancelled', delivery_status = 'cancelled', admin_remark = ? WHERE request_id = ?
+      UPDATE delivery_requests SET status = 'cancelled', admin_remark = ? WHERE request_id = ?
     `, [admin_remark || 'Cancelled by requester', id]);
 
     // Create notifications for Personnel and Rider (if assigned)
@@ -724,13 +822,12 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
     }
 
     const { status, requester_id } = rows[0];
-    if (status !== 'pending' && status !== 'submitted_waiting') {
+    if (status !== 'pending' && status !== 'submitted_waiting' && status !== 'returned_for_revision') {
       await conn.rollback();
-      return res.status(400).json({ 
-        error: `Cannot disapprove a request that is currently '${status}'. Only pending requests can be disapproved.` 
+      return res.status(400).json({
+        error: `Cannot disapprove a request that is currently '${status}'. Only pending requests can be disapproved.`
       });
     }
-
     await conn.query(`
       UPDATE delivery_requests SET status = 'disapproved', admin_remark = ? WHERE request_id = ?
     `, [admin_remark, id]);
@@ -785,13 +882,12 @@ router.put('/:id/return', authorize(['admin']), validate(returnRequestSchema), a
     }
 
     const { status, requester_id } = rows[0];
-    if (status !== 'pending' && status !== 'submitted_waiting') {
+    if (status !== 'pending' && status !== 'submitted_waiting' && status !== 'returned_for_revision') {
       await conn.rollback();
-      return res.status(400).json({ 
-        error: `Cannot return a request that is currently '${status}'. Only pending requests can be returned.` 
+      return res.status(400).json({
+        error: `Cannot return a request that is currently '${status}'. Only pending requests can be returned.`
       });
     }
-
     await conn.query(`
       UPDATE delivery_requests SET status = 'returned_for_revision', admin_remark = ? WHERE request_id = ?
     `, [admin_remark, id]);
@@ -875,7 +971,7 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
         pickup_contact_name = ?, pickup_contact_mobile = ?,
         recipient_name = ?, recipient_contact = ?,
         request_type = ?, urgency_level = ?, personnel_instructions = ?, on_behalf_of = ?,
-        status = 'pending', delivery_status = 'pending', 
+        status = 'pending', delivery_status = 'pending_review', 
         assigned_rider_id = NULL, assigned_rider_name = NULL,
         admin_remark = NULL, 
         created_at = NOW(), updated_at = NOW()
@@ -1117,6 +1213,252 @@ router.get('/:id/history', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// GET /api/requests/:id/timeline - Fetch movement timeline events
+router.get('/:id/timeline', authorize(['admin', 'personnel', 'rider']), async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+
+    // BOLA Check
+    const [rows]: any = await pool.query('SELECT requester_id, requester_department, assigned_rider_id, delivery_status, created_at, completed_at, updated_at FROM delivery_requests WHERE request_id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Request not found' });
+    
+    const request = rows[0];
+    const isAuthorized = user.role === 'admin' || 
+                       request.requester_id === user.id || 
+                       (user.department && request.requester_department === user.department) ||
+                       request.assigned_rider_id === user.id;
+
+    if (!isAuthorized) return res.status(403).json({ error: 'Forbidden' });
+
+    const terminalStatuses = ['completed', 'delivered', 'failed', 'cancelled', 'disapproved'];
+    const isTerminal = terminalStatuses.includes(request.delivery_status);
+
+    let events;
+    if (isTerminal) {
+      // TEMPORAL BOUNDING for "Done" tasks: Only show events directly attached to this specific task.
+      // We exclude global shift events (duty_on/off) from historical tasks to prevent duplicate clutter.
+      [events] = await pool.query(
+        `SELECT id, event_type, message, metadata, timestamp 
+         FROM movement_events 
+         WHERE request_id = ? 
+         ORDER BY timestamp ASC`,
+        [id]
+      );
+    } else {
+      // Standard query for Active tasks (shows current shift status + active job events)
+      [events] = await pool.query(
+        'SELECT id, event_type, message, metadata, timestamp FROM movement_events WHERE request_id = ? OR (rider_id = ? AND request_id IS NULL) ORDER BY timestamp ASC',
+        [id, request.assigned_rider_id]
+      );
+    }
+
+    res.json(events);
+  } catch (error) {
+    console.error('Timeline error:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+/**
+ * POST /api/requests/mass-update
+ * Batch reassign or reschedule requests (Conflict Resolution)
+ * Notifies both Rider and Personnel
+ */
+router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const { taskIds, action, value } = req.body;
+    if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'Task IDs are required' });
+    }
+
+    await conn.beginTransaction();
+
+    if (action === 'reassign' || action === 'approve') {
+      const riderId = value;
+      const { note, sequence } = req.body;
+      const [riderRows] = await conn.query('SELECT name FROM users WHERE id = ?', [riderId]) as any[];
+      if (riderRows.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Rider not found' });
+      }
+      const riderName = riderRows[0].name;
+
+      for (const id of taskIds) {
+        await conn.query(`
+          UPDATE delivery_requests 
+          SET assigned_rider_id = ?, 
+              assigned_rider_name = ?, 
+              status = 'approved', 
+              delivery_status = CASE 
+                WHEN delivery_status IN ('in_progress', 'arrived', 'picked_up', 'arrived_at_pickup', 'arrived_at_dropoff') THEN delivery_status
+                ELSE 'assigned'
+              END,
+              admin_remark = ?, 
+              approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE request_id = ?
+        `, [riderId, riderName, note || null, id]);
+
+        const shortId = String(id).slice(-6).toUpperCase();
+        
+        // 1. Notify Rider
+        const riderNotifId = `notif_${Date.now()}_mass_r_${id}_${Math.random().toString(36).substring(2, 7)}`;
+        await conn.query(
+          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+          [riderNotifId, riderId, `Task #${shortId} assigned.`, 'new_assignment', id]
+        );
+
+        // 2. Timeline Event
+        const eventId = `ev_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        await conn.query(
+          "INSERT INTO movement_events (id, request_id, rider_id, event_type, message) VALUES (?, ?, ?, ?, ?)",
+          [eventId, id, riderId, 'assignment', `Batch Approved.`]
+        );
+      }
+
+      // LAYER 2: Preserve Global Sequence
+      // After updating the batch, we must ensure the entire sequence order is persisted for ALL tasks in the rider's queue
+      if (Array.isArray(sequence)) {
+        for (let i = 0; i < sequence.length; i++) {
+          await conn.query(
+            "UPDATE delivery_requests SET queue_order = ? WHERE request_id = ?",
+            [i + 1, sequence[i]]
+          );
+        }
+      }
+    } else if (action === 'reschedule') {
+      const newDate = value; // YYYY-MM-DD
+      
+      // Fetch details for notifications
+      const [details]: any = await conn.query(
+        'SELECT request_id, requester_id FROM delivery_requests WHERE request_id IN (?)',
+        [taskIds]
+      );
+
+      await conn.query(`
+        UPDATE delivery_requests 
+        SET delivery_date = ?, assigned_rider_id = NULL, assigned_rider_name = NULL, status = 'pending', delivery_status = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE request_id IN (?)
+      `, [newDate, taskIds]);
+
+      for (const row of details) {
+        const id = row.request_id;
+        const shortId = String(id).slice(-6).toUpperCase();
+        const persNotifId = `notif_${Date.now()}_mass_s_${id}_${Math.random().toString(36).substring(2, 7)}`;
+        await conn.query(
+          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
+          [persNotifId, row.requester_id, `Your request #${shortId} has been rescheduled to ${newDate}. Please check your dashboard.`, 'info', id]
+        );
+      }
+    } else {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    await conn.commit();
+    res.json({ success: true, message: `Successfully updated ${taskIds.length} tasks` });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Mass update error:', error);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /api/requests/:id/deviation - Layer 2 Rider Deviation Request
+router.post('/:id/deviation', authorize(['rider']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, photoUrl, currentPos } = req.body;
+    const user = req.user!;
+    const io = req.app.get('io');
+
+    // 1. Verify ownership
+    const [rows]: any = await pool.query("SELECT assigned_rider_id FROM delivery_requests WHERE request_id = ?", [id]);
+    if (rows.length === 0 || rows[0].assigned_rider_id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // 2. Log the event
+    const eventId = `ev_dev_req_${Date.now()}`;
+    await pool.query(
+      "INSERT INTO movement_events (id, request_id, rider_id, event_type, message, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+      [eventId, id, user.id, 'deviation_requested', `Rider requested sequence skip: ${reason}`, JSON.stringify({ reason, photoUrl, sequencePos: currentPos, riderName: user.name, requestId: id })]
+    );
+
+    // 3. Notify Admins in real-time
+    io.to('admin-room').emit('notification-added', {
+      id: `notif_dev_${Date.now()}`,
+      message: `Rider ${String(user.name)} requested a sequence skip for #${String(id).slice(-6).toUpperCase()}`,
+      type: 'deviation_requested',
+      metadata: { riderId: user.id, riderName: user.name, requestId: id, reason, photoUrl, sequencePos: currentPos }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to submit deviation' });
+  }
+});
+
+router.post('/resequence', authorize(['admin']), validate(resequenceSchema), async (req: AuthRequest, res: Response) => {
+  const conn = await pool.getConnection();
+  try {
+    const { riderId, sequence, note } = req.body;
+    const user = req.user!;
+    await conn.beginTransaction();
+
+    // 1. Atomic sequence update
+    for (let i = 0; i < sequence.length; i++) {
+      await conn.query(
+        "UPDATE delivery_requests SET queue_order = ? WHERE request_id = ? AND assigned_rider_id = ?",
+        [i + 1, sequence[i], riderId]
+      );
+    }
+
+    // 2. Discipline Audit Log (Layer 4 integration)
+    const eventId = `ev_reseq_${Date.now()}`;
+    await conn.query(
+      "INSERT INTO movement_events (id, rider_id, event_type, message) VALUES (?, ?, ?, ?)",
+      [eventId, riderId, 'route_optimized', `Admin re-ordered sequence. Note: ${note || 'N/A'}`]
+    );
+
+    await conn.commit();
+
+    // 3. SYSTEM AUDIT LOG (Layer 3.2 Hardening)
+    logAction({
+      actor_id: user.id,
+      actor_role: user.role,
+      action: 'resequence_requests',
+      resource_type: 'rider_queue',
+      resource_id: riderId,
+      new_values: { sequence, note },
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent']
+    });
+
+    // 4. INSTANT SYNC: Notify Rider (Mobile) and Admin room
+    const io = req.app.get('io');
+    if (io) {
+      io.to(riderId).emit('requests-updated', { 
+        message: "📍 Route Updated: Admin has optimized your delivery sequence.",
+        type: 'route_optimization'
+      });
+      io.to('admin-room').emit('requests-updated');
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    if (conn) await conn.rollback();
+    console.error('Resequence error:', error);
+    res.status(500).json({ error: 'Database error during resequence' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

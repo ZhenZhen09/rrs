@@ -7,12 +7,17 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useLocation } from '@/context/LocationContext';
+import { AttendanceLockout } from '@/components/AttendanceLockout';
+import { useDashboard } from '@/hooks/data/useDashboard';
 import { getTasks } from '@/services/apiService';
 import { getRiderTaskCounts } from '@/utils/taskFilters';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user } = useAuth();
+  const { attendanceStatus } = useLocation();
+  const { handleLogout } = useDashboard();
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', user?.id],
@@ -22,6 +27,15 @@ export default function TabLayout() {
   });
 
   const counts = getRiderTaskCounts(tasks);
+
+  if (attendanceStatus === 'absent' || attendanceStatus === 'on_leave') {
+    return (
+      <AttendanceLockout 
+        status={attendanceStatus as any} 
+        onLogout={handleLogout} 
+      />
+    );
+  }
 
   return (
     <Tabs

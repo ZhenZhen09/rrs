@@ -216,19 +216,19 @@ const fetchChunkedDrivingRoute = async (points: LatLng[]): Promise<LatLng[]> => 
 };
 
 // Custom icons using Leaflet's divIcon with raw HTML strings for reliability
-const createRiderIcon = (rotation = 0, isOffline = false, status: TrackingStatus = 'LIVE') => {
+const createRiderIcon = (rotation = 0, isOffline = false, status: TrackingStatus = 'LIVE', isOnDuty = true) => {
   return L.divIcon({
     html: `
-      <div class="relative car-marker-shell ${isOffline ? 'grayscale opacity-60' : ''}" style="width: 64px; height: 64px;">
+      <div class="relative car-marker-shell ${isOffline ? 'grayscale opacity-60' : ''} ${!isOnDuty ? 'opacity-40' : ''}" style="width: 64px; height: 64px;">
         <div class="car-marker-body" style="transform: rotate(${rotation}deg);">
           <img
             src="${carTopViewIconUrl}"
             alt=""
             style="width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 10px 12px rgba(15,23,42,0.32));"
           />
-          ${status === 'LIVE' ? '<div class="absolute inset-0 bg-blue-500 rounded-full recovery-pulse -z-10"></div>' : ''}
+          ${status === 'LIVE' && isOnDuty ? '<div class="absolute inset-0 bg-blue-500 rounded-full recovery-pulse -z-10"></div>' : ''}
         </div>
-        ${!isOffline ? '<div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-20 -z-10"></div>' : ''}
+        ${!isOffline && isOnDuty ? '<div class="absolute inset-0 bg-blue-400 rounded-full animate-ping-custom opacity-20 -z-10"></div>' : ''}
       </div>
     `,
     className: "custom-map-icon smooth-marker-move",
@@ -279,6 +279,7 @@ interface LiveTrackingMapProps {
   containerClassName?: string;
   trackingStatus?: TrackingStatus;
   lastUpdateTs?: number;
+  isOnDuty?: boolean;
 }
 
 interface SearchResult {
@@ -359,6 +360,7 @@ export function LiveTrackingMap({
   containerClassName = "h-[600px]",
   trackingStatus = 'LIVE',
   lastUpdateTs = 0,
+  isOnDuty = true,
 }: LiveTrackingMapProps) {
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
@@ -1032,7 +1034,7 @@ export function LiveTrackingMap({
           <>
             <Marker
               position={displayCurrent}
-              icon={createRiderIcon(displayHeading, trackingStatus === 'OFFLINE' || trackingStatus === 'SIGNAL_LOST', trackingStatus)}
+              icon={createRiderIcon(displayHeading, trackingStatus === 'OFFLINE' || trackingStatus === 'SIGNAL_LOST', trackingStatus, isOnDuty)}
             >
               <Tooltip
                 permanent
@@ -1040,15 +1042,17 @@ export function LiveTrackingMap({
                 offset={[0, -40]}
                 className={cn(
                   "bg-white border-none shadow-xl text-[10px] font-black px-2 py-1 rounded-md",
+                  !isOnDuty ? "text-slate-400" :
                   trackingStatus === 'OFFLINE' ? "text-rose-500" : 
                   trackingStatus === 'SIGNAL_LOST' ? "text-amber-600" : 
                   trackingStatus === 'DELAYED' ? "text-amber-500" : "text-emerald-600"
                 )}
               >
                 {riderName || "Rider"} 
-                {trackingStatus === 'OFFLINE' && " (Offline)"}
-                {trackingStatus === 'SIGNAL_LOST' && " (Signal Lost)"}
-                {trackingStatus === 'DELAYED' && " (Delayed)"}
+                {!isOnDuty && " (Off Duty)"}
+                {isOnDuty && trackingStatus === 'OFFLINE' && " (Offline)"}
+                {isOnDuty && trackingStatus === 'SIGNAL_LOST' && " (Signal Lost)"}
+                {isOnDuty && trackingStatus === 'DELAYED' && " (Delayed)"}
               </Tooltip>
             </Marker>
           </>
@@ -1166,20 +1170,27 @@ export function LiveTrackingMap({
               {riderName?.substring(0, 1)}
             </div>
             <div className="flex-1 min-w-0 text-left">
-              <h3 className="font-bold text-slate-900 leading-none truncate mb-1">
-                {riderName || "Rider"}
-              </h3>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-bold text-slate-900 leading-none truncate">
+                  {riderName || "Rider"}
+                </h3>
+                {trackingStatus === 'OFFLINE' && lastUpdateTs > 0 && (
+                  <Badge variant="outline" className="bg-rose-50 text-[8px] px-1 h-3.5 text-rose-500 border-rose-100 font-black uppercase tracking-tighter">
+                    {formatDistanceToNow(lastUpdateTs).replace('about ', '')}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className={cn(
                   "flex h-2 w-2 rounded-full",
-                  trackingStatus === 'OFFLINE' ? "bg-rose-500" : 
-                  trackingStatus === 'SIGNAL_LOST' ? "bg-amber-500 animate-pulse" : 
-                  trackingStatus === 'DELAYED' ? "bg-amber-300" : 
+                  trackingStatus === 'OFFLINE' ? "bg-rose-500" :
+                  trackingStatus === 'SIGNAL_LOST' ? "bg-amber-500 animate-pulse" :
+                  trackingStatus === 'DELAYED' ? "bg-amber-300" :
                   "bg-[#00B14F] animate-pulse"
                 )} />
                 <p className="text-[10px] font-medium text-slate-500 truncate">
-                  {trackingStatus === 'OFFLINE' ? "Offline" : 
-                   trackingStatus === 'SIGNAL_LOST' ? "Signal Lost" : 
+                  {trackingStatus === 'OFFLINE' ? "Offline" :
+                   trackingStatus === 'SIGNAL_LOST' ? "Signal Lost" :
                    trackingStatus === 'DELAYED' ? "Delayed" : "Live Tracking Active"}
                 </p>
               </div>
@@ -1193,20 +1204,23 @@ export function LiveTrackingMap({
             >
               {trackingStatus === 'LIVE' ? "Real-time" : "Stale Data"}
             </Badge>
-          </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-left">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-left">
             <div className="flex items-center gap-2">
               <Clock className="text-slate-400" size={12} />
               <div className="truncate">
                 <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">
-                  Last Update
+                  {trackingStatus === 'OFFLINE' ? 'Last Seen' : 'Last Update'}
                 </p>
                 <p className="text-[10px] font-bold text-slate-700">
-                   {lastUpdateTs ? formatDistanceToNow(lastUpdateTs, { addSuffix: true }) : format(lastUpdate, "HH:mm:ss")}
+                   {trackingStatus === 'OFFLINE' 
+                     ? (lastUpdateTs ? formatDistanceToNow(lastUpdateTs, { addSuffix: true }) : 'Never')
+                     : (lastUpdateTs ? format(lastUpdateTs, "hh:mm:ss a") : format(lastUpdate, "hh:mm:ss a"))}
                 </p>
               </div>
             </div>
+
             <div className="flex items-center gap-2 text-left">
               <Activity className="text-slate-400" size={12} />
               <div className="truncate">

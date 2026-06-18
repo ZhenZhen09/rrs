@@ -21,7 +21,8 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!user || !token) {
+    // SECURITY: Only attempt connection if authenticated
+    if (!user) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -33,9 +34,12 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Connect to Socket.io server
+    // Note: 'token' might be undefined if it's stored in a secure cookie only.
+    // The server-side socket auth middleware already handles cookie fallback.
     const newSocket = io({
-      auth: { token },
-      transports: ['websocket']
+      auth: token ? { token } : undefined,
+      transports: ['websocket', 'polling'], // Allow polling fallback for better compatibility
+      withCredentials: true // ENSURE cookies are sent with the socket handshake
     });
 
     socketRef.current = newSocket;
@@ -81,6 +85,7 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
     });
 
     newSocket.on("rider-location-updated", (data: { riderId: string; lat: number; lng: number; heading?: number; timestamp: number }) => {
+      console.log('RealTime: Location update received:', data);
       setRiderLocations((prev) => ({
         ...prev,
         [data.riderId]: {

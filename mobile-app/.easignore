@@ -1,0 +1,16 @@
+# EAS Ignore - Exclude unrelated project directories
+../mobile-admin/
+../server/
+../src/
+../node_modules/
+../dist/
+../test-results/
+../tests/
+../scripts/
+../.playwright-mcp/
+node_modules/
+.expo/
+dist/
+android/
+ios/
+.gradle/

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useData as useGlobalData } from "../../context/DataContext";
 import { useRealTime } from "../../context/RealTimeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -55,6 +55,9 @@ import {
   isPendingRequest 
 } from "../../utils/statusMapping";
 
+import { EnhancedBatchApproveModal } from "../../components/Admin/EnhancedBatchApproveModal";
+import { DeviationApprovalModal } from "../../components/Admin/DeviationApprovalModal";
+
 export function DispatchConsole() {
   const { logout } = useAuth();
   const {
@@ -66,7 +69,7 @@ export function DispatchConsole() {
     refreshData, globalStats,
   } = useGlobalData();
 
-  const { riderLocations, riderPresence, lastSync } = useRealTime();
+  const { riderLocations, riderPresence, lastSync, socket } = useRealTime();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
@@ -81,8 +84,26 @@ export function DispatchConsole() {
   const [riders, setRiders] = useState<UserType[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState("newest");
+  const [sortBy, setSortBy] = useState("day-of-week");
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+
+  // Batch State
+  const [showBatchApprove, setShowBatchApprove] = useState(false);
+  const [showBatchReject, setShowBatchReject] = useState(false);
+  const [batchRejectType, setBatchRejectType] = useState<"return" | "cancel">("return");
+  const [batchNote, setBatchNote] = useState("");
+
+  // Deviation State
+  const [showDeviationModal, setShowDeviationModal] = useState(false);
+  const [deviationData, setDeviationData] = useState<any>(null);
+
+  // Intercept State
+  const [interceptData, setInterceptData] = useState<{
+    riderId: string;
+    requests: DeliveryRequest[];
+    note: string;
+    mode: 'approve' | 'manage';
+  } | null>(null);
 
   const onlineRiderCount = useMemo(() => {
     const onlineIds = new Set<string>();
@@ -100,174 +121,165 @@ export function DispatchConsole() {
     return onlineIds.size;
   }, [riderPresence, riders]);
 
-  // Fetch riders on mount
-  useEffect(() => {
-    const fetchRiders = async () => {
-      try {
-        const res = await fetch("/api/users/riders/live", { credentials: 'include' });
-        if (res.status === 401) {
-          logout();
-          return;
-        }
-        if (res.ok) {
-          const data = await res.json();
-          // The live endpoint returns only riders with online status
-          setRiders(data);
-        }
-      } catch (err) {
-        console.error("Failed to load riders", err);
+  // Fetch riders function
+  const fetchRiders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/users/riders/live", { credentials: 'include' });
+      if (res.status === 401) {
+        logout();
+        return;
       }
-    };
-    fetchRiders();
+      if (res.ok) {
+        const data = await res.json();
+        setRiders(data);
+      }
+    } catch (err) {
+      console.error("Failed to load riders", err);
+    }
   }, [logout]);
 
-  // Batch Modal States
-  const [showBatchApprove, setShowBatchApprove] = useState(false);
-  const [showBatchReject, setShowBatchReject] = useState(false);
-  const [batchRejectType, setBatchRejectType] = useState<"return" | "cancel">(
-    "return",
-  );
-  const [batchRiderId, setBatchRiderId] = useState("");
-  const [batchNote, setBatchNote] = useState("");
-  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  // Fetch riders on mount
+  useEffect(() => {
+    fetchRiders();
+  }, [fetchRiders]);
 
-  const REJECTION_REASONS = [
-    "Incomplete pickup/dropoff details",
-    "Incorrect document/item category",
-    "Restricted/Prohibited item",
-    "Invalid contact information",
-    "Rider unavailability for window",
-    "Area outside service boundary",
-    "Other (see note below)"
-  ];
+  // Reactive Riders List: Merge DB data with live socket presence
+  const reactiveRiders = useMemo(() => {
+    return riders.map(r => ({
+      ...r,
+      is_online: riderPresence[r.id] === 'online' || (r as any).is_online
+    }));
+  }, [riders, riderPresence]);
 
-  const filteredRequests = useMemo(() => {
-    if (!requests) return [];
+  // Listen for real-time attendance/duty/status changes to refresh the riders list
+  useEffect(() => {
+    if (!socket) return;
 
-    let filtered = requests.filter((r) => {
-      // Logic: Strictly exclude 'submitted_waiting' from Admin Console
-      // to respect the 60s personnel cancellation window.
-      if (filterTab === "pending") return isPendingRequest(r);
-      if (filterTab === "active") return isActiveRequest(r);
-      if (filterTab === "completed") return isTerminalRequest(r);
-      return true;
-    });
+    const handleUpdate = () => {
+      console.log('🔄 DispatchConsole: Real-time rider status update detected, refreshing list...');
+      fetchRiders();
+    };
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (r) =>
-          r.request_id.toLowerCase().includes(q) ||
-          r.recipient_name.toLowerCase().includes(q) ||
-          r.requester_name.toLowerCase().includes(q),
-      );
-    }
-
-    return filtered.sort((a, b) => {
-      const dateA = filterTab === "pending" ? a.created_at : a.updated_at;
-      const dateB = filterTab === "pending" ? b.created_at : b.updated_at;
-
-      if (sortBy === "newest")
-        return new Date(dateB).getTime() - new Date(dateA).getTime();
-      if (sortBy === "oldest")
-        return new Date(dateA).getTime() - new Date(dateB).getTime();
-      if (sortBy === "urgency" || sortBy === "priority") {
-        const priorityMap: Record<string, number> = {
-          Urgent: 3,
-          High: 2,
-          Medium: 1,
-          Low: 0,
-        };
-        return (
-          (priorityMap[b.urgency_level] || 0) -
-          (priorityMap[a.urgency_level] || 0)
-        );
+    socket.on('rider-status-updated', handleUpdate);
+    
+    socket.on('notification-added', (notif: any) => {
+      // Refresh if it's an attendance or duty related notification
+      if (notif.type === 'info' || notif.type === 'warning') {
+        handleUpdate();
       }
-      return 0;
+
+      // LAYER 2: Catch Deviation Requests
+      if (notif.type === 'deviation_requested') {
+        setDeviationData(notif.metadata);
+        setShowDeviationModal(true);
+        toast.warning(`SEQUENCE DEVIATION: ${notif.message}`, {
+          duration: 10000,
+          action: {
+            label: "Review Proof",
+            onClick: () => setShowDeviationModal(true)
+          }
+        });
+      }
     });
-  }, [requests, filterTab, searchQuery, sortBy]);
 
-  const selectedRequest = useMemo(
-    () => requests?.find((r) => r.request_id === selectedRequestId) || null,
-    [requests, selectedRequestId],
-  );
+    return () => {
+      socket.off('rider-status-updated', handleUpdate);
+      socket.off('notification-added');
+    };
+  }, [socket, fetchRiders]);
 
-  const stats = globalStats || { pending: 0, active: 0, done: 0 };
+  const handleBatchApprove = async (riderId: string, sequence: string[], note: string, overrideTaskIds?: string[]) => {
+    setIsSubmitting(true);
+    const taskIds = overrideTaskIds || selectedRequestIds;
+    try {
+      const res = await fetch("/api/requests/mass-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskIds,
+          action: 'approve',
+          value: riderId,
+          sequence,
+          note
+        }),
+      });
 
-  const handleRefresh = async (showToast = true) => {
-    setIsRefreshing(true);
-    await refreshData();
-    setIsRefreshing(false);
-    if (showToast) {
-      toast.success("Dashboard data synchronized");
+      if (!res.ok) throw new Error("Failed to process batch");
+
+      toast.success(`Successfully enforced sequence and assigned ${taskIds.length} tasks`);
+      setSelectedRequestIds([]);
+      setShowBatchApprove(false);
+      refreshData();
+    } catch (err) {
+      toast.error("Batch assignment failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // State Reconciliation (Phase 2.2): Trigger refresh on socket reconnect
-  useEffect(() => {
-    if (lastSync) {
-      console.log('🔄 DispatchConsole: Socket re-sync detected, refreshing data...');
-      // Use silent refresh for background sync to avoid toast spam
-      handleRefresh(false);
+  const handleInterceptConfirm = async (riderId: string, sequence: string[], note: string) => {
+    if (interceptData?.mode === 'manage') {
+      await handleActiveResequence(riderId, sequence, note);
+    } else {
+      // Pass sequence directly to avoid race condition with state update
+      await handleBatchApprove(riderId, sequence, note, sequence);
     }
-  }, [lastSync]);
+    setInterceptData(null);
+  };
 
-  // Enterprise Fix: Instant Status Synchronization
-  // We already have a global socket listener in DataContext.tsx that calls fetchRequests(),
-  // but we want the UI to feel "Instant".
-  useEffect(() => {
-    if (!lastSync) return;
-    
-    // The DataContext handles the toast and background fetch.
-    // Here we ensure the DispatchConsole's local derived state is fresh.
-    // Actually, DispatchConsole uses 'requests' from useGlobalData(),
-    // so it will update as soon as DataContext updates its state.
-  }, [lastSync]);
-
-  const handleBatchApprove = async () => {
-    if (!batchRiderId) {
-      toast.error("Please select a rider first");
-      return;
-    }
+  const handleActiveResequence = async (riderId: string, sequence: string[], note: string) => {
     setIsSubmitting(true);
     try {
-      await Promise.all(
-        selectedRequestIds.map((id) =>
-          approveRequest(id, batchRiderId, batchNote),
-        ),
-      );
-      toast.success(
-        `Successfully assigned ${selectedRequestIds.length} requests`,
-      );
+      const res = await fetch("/api/requests/resequence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          riderId,
+          sequence,
+          note: note || "Route re-ordered by Admin"
+        }),
+      });
+
+      if (!res.ok) throw new Error("Resequence failed");
+
+      toast.success("Route optimized and synchronized");
+      setInterceptData(null);
       setSelectedRequestIds([]);
-      setShowBatchApprove(false);
-      setBatchRiderId("");
-      setBatchNote("");
+      refreshData();
     } catch (err) {
-      toast.error("Some assignments failed");
+      toast.error("Failed to update active route");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResolveDeviation = async (approved: boolean, note: string) => {
+    try {
+      const res = await fetch(`/api/requests/${deviationData.requestId}/deviation-resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, note })
+      });
+      if (res.ok) {
+        refreshData();
+        setShowDeviationModal(false);
+      }
+    } catch (e) {
+      console.error("Deviation resolution failed", e);
     }
   };
 
   const handleBatchReject = async () => {
     setIsSubmitting(true);
     try {
-      const fullNote =
-        selectedReasons.length > 0
-          ? `${batchNote}\nReasons: ${selectedReasons.join(", ")}`
-          : batchNote;
-
       if (batchRejectType === "return") {
         await Promise.all(
-          selectedRequestIds.map((id) => returnForRevision(id, fullNote)),
+          selectedRequestIds.map((id) => returnForRevision(id, batchNote)),
         );
-        toast.success(
-          `Returned ${selectedRequestIds.length} requests for revision`,
-        );
+        toast.success(`Returned ${selectedRequestIds.length} requests for revision`);
       } else {
         await Promise.all(
-          selectedRequestIds.map((id) => disapproveRequest(id, fullNote)),
+          selectedRequestIds.map((id) => disapproveRequest(id, batchNote)),
         );
         toast.error(`Declined ${selectedRequestIds.length} requests`);
       }
@@ -275,7 +287,6 @@ export function DispatchConsole() {
       setSelectedRequestIds([]);
       setShowBatchReject(false);
       setBatchNote("");
-      setSelectedReasons([]);
     } catch (err) {
       toast.error("Action failed for some requests");
     } finally {
@@ -294,6 +305,108 @@ export function DispatchConsole() {
       setSelectedRequestIds([]);
     } else {
       setSelectedRequestIds(filteredRequests.map((r) => r.request_id));
+    }
+  };
+
+  const handleFilterChange = (newTab: "pending" | "active" | "completed") => {
+    setFilterTab(newTab);
+    if (newTab === 'completed') {
+      setSortBy('newest');
+    } else if (newTab === 'active') {
+      setSortBy('sequence');
+    } else {
+      setSortBy('day-of-week');
+    }
+    setSelectedRequestIds([]);
+  };
+
+  const filteredRequests = useMemo(() => {
+    if (!requests) return [];
+
+    let filtered = requests.filter((r) => {
+      if (filterTab === "pending") return isPendingRequest(r);
+      if (filterTab === "active") return isActiveRequest(r);
+      if (filterTab === "completed") return isTerminalRequest(r);
+      return true;
+    });
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (r) =>
+          r.request_id.toLowerCase().includes(q) ||
+          r.recipient_name.toLowerCase().includes(q) ||
+          r.requester_name.toLowerCase().includes(q),
+      );
+    }
+
+    const getUrgencyScore = (urgency: string = 'Medium') => {
+      const scores: Record<string, number> = {
+        'Urgent': 0,
+        'High': 1,
+        'Medium': 2,
+        'Low': 3
+      };
+      return scores[urgency] ?? 2;
+    };
+
+    return filtered.sort((a, b) => {
+      if (sortBy === "day-of-week") {
+        // For Active tab: follow enforced sequence (queue_order) first
+        if (filterTab === 'active') {
+          const riderA = a.assigned_rider_id || 'unassigned';
+          const riderB = b.assigned_rider_id || 'unassigned';
+          if (riderA !== riderB) return riderA.localeCompare(riderB);
+
+          // ENFORCE: Global Sequence Position must override Date for optimized routes
+          const orderA = a.queue_order && a.queue_order > 0 ? a.queue_order : 999;
+          const orderB = b.queue_order && b.queue_order > 0 ? b.queue_order : 999;
+          
+          if (orderA !== orderB) return orderA - orderB;
+        }
+
+        // Standard date sorting for everything else (or fallback)
+        const getDayIndex = (dateStr: string) => {
+          const date = new Date(dateStr);
+          const day = date.getDay(); // 0 = Sun
+          return day === 0 ? 7 : day; // Mon=1, ..., Sun=7
+        };
+        const dayA = getDayIndex(a.delivery_date);
+        const dayB = getDayIndex(b.delivery_date);
+        if (dayA !== dayB) return dayA - dayB;
+
+        // Secondary sort by time window
+        return (a.time_window || '').localeCompare(b.time_window || '');
+      }
+
+      if (sortBy === "urgency") {
+        return getUrgencyScore(a.urgency_level) - getUrgencyScore(b.urgency_level);
+      }
+
+      const dateA = filterTab === "pending" ? a.created_at : a.updated_at;
+      const dateB = filterTab === "pending" ? b.created_at : b.updated_at;
+
+      if (sortBy === "newest")
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      if (sortBy === "oldest")
+        return new Date(dateA).getTime() - new Date(dateB).getTime();
+      return 0;
+    });
+  }, [requests, filterTab, searchQuery, sortBy]);
+
+  const selectedRequest = useMemo(
+    () => requests?.find((r) => r.request_id === selectedRequestId) || null,
+    [requests, selectedRequestId],
+  );
+
+  const stats = globalStats || { pending: 0, active: 0, done: 0 };
+
+  const handleRefresh = async (showToast = true) => {
+    setIsRefreshing(true);
+    await refreshData();
+    setIsRefreshing(false);
+    if (showToast) {
+      toast.success("Dashboard data synchronized");
     }
   };
 
@@ -346,8 +459,7 @@ export function DispatchConsole() {
           <div className="bg-slate-900 text-white px-2.5 h-7 rounded-lg flex items-center gap-1.5 mr-1">
             <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[8px] font-black uppercase tracking-widest">
-              {onlineRiderCount} Active{" "}
-              {onlineRiderCount === 1 ? "Rider" : "Riders"}
+              {onlineRiderCount} Active Riders
             </span>
           </div>
 
@@ -387,7 +499,7 @@ export function DispatchConsole() {
                         onClick={() => setShowBatchApprove(true)}
                         className="h-6 px-3 rounded-md bg-pink-500 hover:bg-pink-600 text-white text-[8px] font-black uppercase tracking-widest shadow-md"
                       >
-                        Approve
+                        Approve & Enforce
                       </Button>
                       <Button
                         size="sm"
@@ -416,7 +528,7 @@ export function DispatchConsole() {
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 filter={filterTab}
-                onFilterChange={setFilterTab} counts={stats}
+                onFilterChange={handleFilterChange} counts={stats}
               />
             </div>
           </ResizablePanel>
@@ -436,17 +548,55 @@ export function DispatchConsole() {
                 >
                   <RequestDetailsPanel
                     request={selectedRequest}
-                    riders={riders}
+                    riders={reactiveRiders}
                     activeRequests={requests || []}
+                    onManageRoute={(riderId) => {
+                      // Trigger sequencer for existing tasks
+                      const activeTasks = (requests || []).filter(r => 
+                        r.assigned_rider_id === riderId && 
+                        isActiveRequest(r)
+                      );
+                      if (activeTasks.length > 0) {
+                        setInterceptData({
+                          riderId,
+                          requests: activeTasks,
+                          note: "", // No note needed for simple re-sequence
+                          mode: 'manage'
+                        });
+                      } else {
+                        toast.info("Rider has no active tasks to re-sequence.");
+                      }
+                    }}
                     onApprove={async (riderId, remark) => {
-                      setIsSubmitting(true);
-                      try {
-                        await approveRequest(selectedRequestId!, riderId, remark);
-                        toast.success("Request approved and assigned");
-                      } catch (err) {
-                        toast.error("Failed to approve request");
-                      } finally {
-                        setIsSubmitting(false);
+                      if (!selectedRequest) return;
+                      
+                      // Find existing active tasks for this rider
+                      const activeTasks = (requests || []).filter(r => 
+                        r.assigned_rider_id === riderId && 
+                        isActiveRequest(r) &&
+                        r.request_id !== selectedRequest.request_id
+                      );
+
+                      if (activeTasks.length > 0) {
+                        setInterceptData({
+                          riderId,
+                          requests: [...activeTasks, selectedRequest],
+                          note: remark,
+                          mode: 'approve'
+                        });
+                      } else {
+                        // Direct approval if no active tasks
+                        setIsSubmitting(true);
+                        try {
+                          await approveRequest(selectedRequest.request_id, riderId, remark);
+                          toast.success("Request approved and assigned");
+                          setSelectedRequestIds([]);
+                          refreshData();
+                        } catch (err) {
+                          toast.error("Failed to approve request");
+                        } finally {
+                          setIsSubmitting(false);
+                        }
                       }
                     }}
                     onDecline={async (remark) => {
@@ -454,6 +604,8 @@ export function DispatchConsole() {
                       try {
                         await disapproveRequest(selectedRequestId!, remark);
                         toast.error("Request declined");
+                        setSelectedRequestIds([]);
+                        refreshData();
                       } catch (err) {
                         toast.error("Failed to decline request");
                       } finally {
@@ -470,91 +622,34 @@ export function DispatchConsole() {
         </ResizablePanelGroup>
       </div>
 
-      {/* Batch Approval Dialog */}
-      <Dialog open={showBatchApprove} onOpenChange={setShowBatchApprove}>
-        <DialogContent className="max-w-md rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
-          <div className="p-8 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
-                <CheckCheck className="text-emerald-500 h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-[900] text-slate-900 tracking-tight">
-                  Batch Approval
-                </h3>
-                <p className="text-sm font-bold text-slate-400">
-                  Assigning {selectedRequestIds.length} requests
-                </p>
-              </div>
-            </div>
+      {/* Layer 2 Modals */}
+      <EnhancedBatchApproveModal
+        isOpen={showBatchApprove}
+        onClose={() => setShowBatchApprove(false)}
+        selectedRequests={requests.filter(r => selectedRequestIds.includes(r.request_id))}
+        riders={reactiveRiders}
+        onConfirm={handleBatchApprove}
+        isSubmitting={isSubmitting}
+      />
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Select Rider
-                </Label>
-                <div className="grid grid-cols-1 gap-2">
-                  {riders.map((rider) => (
-                    <button
-                      key={rider.id}
-                      onClick={() => setBatchRiderId(rider.id)}
-                      className={cn(
-                        "flex items-center justify-between p-4 rounded-2xl border-2 transition-all",
-                        batchRiderId === rider.id
-                          ? "border-emerald-500 bg-emerald-50/50 shadow-sm"
-                          : "border-slate-100 hover:border-slate-200",
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black">
-                          {rider.name.charAt(0)}
-                        </div>
-                        <span className="text-sm font-black text-slate-700">
-                          {rider.name}
-                        </span>
-                      </div>
-                      {batchRiderId === rider.id && (
-                        <CheckCircle2 className="text-emerald-500 h-5 w-5" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      {/* Single Approval Interceptor Modal */}
+      <EnhancedBatchApproveModal
+        isOpen={!!interceptData}
+        onClose={() => setInterceptData(null)}
+        selectedRequests={interceptData?.requests || []}
+        riders={reactiveRiders}
+        onConfirm={handleInterceptConfirm}
+        isSubmitting={isSubmitting}
+      />
 
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Admin Remark (Optional)
-                </Label>
-                <Textarea
-                  placeholder="Additional instructions..."
-                  className="rounded-2xl border-slate-100 bg-slate-50 font-bold text-sm min-h-[100px] resize-none"
-                  value={batchNote}
-                  onChange={(e) => setBatchNote(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="bg-slate-50 p-6 gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => setShowBatchApprove(false)}
-              className="rounded-2xl h-14 px-8 font-black uppercase tracking-widest text-xs text-slate-400"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBatchApprove}
-              disabled={!batchRiderId || isSubmitting}
-              className="flex-1 h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20"
-            >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Confirm & Assign
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deviationData && (
+        <DeviationApprovalModal
+          isOpen={showDeviationModal}
+          onClose={() => setShowDeviationModal(false)}
+          deviationData={deviationData}
+          onResolve={handleResolveDeviation}
+        />
+      )}
 
       {/* Batch Reject/Return Dialog */}
       <Dialog open={showBatchReject} onOpenChange={setShowBatchReject}>
@@ -583,59 +678,16 @@ export function DispatchConsole() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Reason for{" "}
-                  {batchRejectType === "return" ? "Revision" : "Rejection"}
-                </Label>
-                <div className="grid grid-cols-1 gap-1.5 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
-                  {REJECTION_REASONS.map((reason) => (
-                    <div
-                      key={reason}
-                      onClick={() => {
-                        setSelectedReasons((prev) =>
-                          prev.includes(reason)
-                            ? prev.filter((r) => r !== reason)
-                            : [...prev, reason],
-                        );
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 p-2.5 rounded-xl border-2 transition-all cursor-pointer",
-                        selectedReasons.includes(reason)
-                          ? "border-slate-900 bg-slate-900 text-white shadow-md"
-                          : "border-slate-100 hover:border-slate-200 bg-white",
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "w-3.5 h-3.5 rounded border flex items-center justify-center",
-                          selectedReasons.includes(reason)
-                            ? "bg-white border-white"
-                            : "border-slate-300",
-                        )}
-                      >
-                        {selectedReasons.includes(reason) && (
-                          <div className="w-1.5 h-1.5 rounded-sm bg-slate-900" />
-                        )}
-                      </div>
-                      <span className="text-[10px] font-bold">{reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Additional Note
-                </Label>
-                <Textarea
-                  placeholder="Explain your decision..."
-                  className="rounded-xl border-slate-100 bg-slate-50 font-bold text-xs min-h-[80px] resize-none p-3 shadow-none focus-visible:ring-0"
-                  value={batchNote}
-                  onChange={(e) => setBatchNote(e.target.value)}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                Note to Requesters
+              </Label>
+              <Textarea
+                placeholder="Explain your decision..."
+                className="rounded-xl border-slate-100 bg-slate-50 font-bold text-xs min-h-[80px] resize-none p-3 shadow-none focus-visible:ring-0"
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+              />
             </div>
           </div>
           <DialogFooter className="bg-slate-50 p-4 gap-2">
@@ -643,7 +695,6 @@ export function DispatchConsole() {
               variant="ghost"
               onClick={() => {
                 setShowBatchReject(false);
-                setSelectedReasons([]);
                 setBatchNote("");
               }}
               className="rounded-xl h-11 px-6 font-black uppercase tracking-widest text-[9px] text-slate-400"
@@ -652,9 +703,7 @@ export function DispatchConsole() {
             </Button>
             <Button
               onClick={handleBatchReject}
-              disabled={
-                isSubmitting || (selectedReasons.length === 0 && !batchNote)
-              }
+              disabled={isSubmitting || !batchNote}
               className={cn(
                 "flex-1 h-11 rounded-xl text-white font-black uppercase tracking-widest text-[9px] shadow-lg transition-all active:scale-95",
                 batchRejectType === "return"
@@ -739,4 +788,3 @@ export function DispatchConsole() {
     </div>
   );
 }
-// Global Stats Patch

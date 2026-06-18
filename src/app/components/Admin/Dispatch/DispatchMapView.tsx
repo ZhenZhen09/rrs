@@ -1,9 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Location } from '../../../types';
 import { Button } from '../../ui/button';
+import { MapPin, Loader2 } from 'lucide-react';
+import { useData } from '../../../context/DataContext';
 import carTopViewIconUrl from '../../../assets/car-top-view-marker.svg';
 
 // Custom Icons for Origin and Destination
@@ -39,6 +41,7 @@ const riderIcon = L.divIcon({
 });
 
 interface DispatchMapViewProps {
+  requestId: string;
   origin: Location;
   destination: Location;
   current?: { lat: number, lng: number } | null;
@@ -50,7 +53,7 @@ function MapCameraController({
   current,
   followMode,
   onUserInteraction,
-}: DispatchMapViewProps & {
+}: Omit<DispatchMapViewProps, 'requestId'> & {
   followMode: boolean;
   onUserInteraction: () => void;
 }) {
@@ -66,7 +69,7 @@ function MapCameraController({
   });
 
   useEffect(() => {
-    if (!origin || !destination || hasInitialFitRef.current) {
+    if (!origin?.lat || !destination?.lat || hasInitialFitRef.current) {
       return;
     }
 
@@ -111,12 +114,92 @@ function MapCameraController({
   return null;
 }
 
-export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destination, current }) => {
+export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ requestId, origin, destination, current }) => {
   const mapRef = useRef<L.Map | null>(null);
   const [followMode, setFollowMode] = React.useState(true);
+  
+  const { fetchWithAuth, refreshData } = useData();
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveredOrigin, setRecoveredOrigin] = useState<{lat: number, lng: number} | null>(null);
+  const [recoveredDest, setRecoveredDest] = useState<{lat: number, lng: number} | null>(null);
+
+  const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a";
+
+  // Safety: Guard against missing coordinates
+  const hasValidOrigin = origin && typeof origin.lat === 'number' && typeof origin.lng === 'number';
+  const hasValidDest = destination && typeof destination.lat === 'number' && typeof destination.lng === 'number';
+
+  // --- AUTO RECOVERY HOOK ---
+  useEffect(() => {
+    const recover = async () => {
+      if (hasValidOrigin && hasValidDest) return;
+      if (isRecovering) return;
+
+      setIsRecovering(true);
+      try {
+        let newOrigin = null;
+        let newDest = null;
+
+        if (!hasValidOrigin && origin.address) {
+          const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(origin.address)}&apiKey=${GEOAPIFY_KEY}`);
+          const data = await res.json();
+          if (data.features?.[0]) {
+            newOrigin = { lat: data.features[0].properties.lat, lng: data.features[0].properties.lon };
+            setRecoveredOrigin(newOrigin);
+          }
+        }
+
+        if (!hasValidDest && destination.address) {
+          const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(destination.address)}&apiKey=${GEOAPIFY_KEY}`);
+          const data = await res.json();
+          if (data.features?.[0]) {
+            newDest = { lat: data.features[0].properties.lat, lng: data.features[0].properties.lon };
+            setRecoveredDest(newDest);
+          }
+        }
+
+        // Persist to DB
+        if ((newOrigin || newDest) && requestId) {
+          await fetchWithAuth(`/api/requests/${requestId}/patch-locations`, {
+            method: 'PUT',
+            body: JSON.stringify({ pickup: newOrigin, dropoff: newDest })
+          });
+          refreshData(); // Sync global state
+        }
+      } catch (e) {
+        console.error("Recovery failed", e);
+      } finally {
+        setIsRecovering(false);
+      }
+    };
+
+    recover();
+  }, [origin.address, destination.address, hasValidOrigin, hasValidDest, requestId]);
+
+  const finalOrigin = recoveredOrigin || (hasValidOrigin ? { lat: Number(origin.lat), lng: Number(origin.lng) } : null);
+  const finalDest = recoveredDest || (hasValidDest ? { lat: Number(destination.lat), lng: Number(destination.lng) } : null);
+
+  if (!finalOrigin || !finalDest) {
+    return (
+      <div className="w-full h-full rounded-[2rem] bg-slate-50 border border-slate-100 flex flex-col items-center justify-center p-6 text-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+          {isRecovering ? <Loader2 className="h-6 w-6 text-pink-500 animate-spin" /> : <MapPin className="h-6 w-6 text-slate-400" />}
+        </div>
+        <div>
+          <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+            {isRecovering ? "Recovering Location..." : "Location Data Missing"}
+          </p>
+          <p className="text-[9px] font-bold text-slate-400 mt-1">
+            {isRecovering ? "Fetching coordinates from address data" : "Coordinates are required to render route visualization"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const polylinePositions: [number, number][] = [
-    [origin.lat, origin.lng],
-    [destination.lat, destination.lng]
+    [finalOrigin.lat, finalOrigin.lng],
+    [finalDest.lat, finalDest.lng]
   ];
 
   return (
@@ -148,7 +231,7 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
       `}} />
 
       <MapContainer 
-        center={[origin.lat, origin.lng]} 
+        center={[finalOrigin.lat, finalOrigin.lng]} 
         zoom={13} 
         ref={mapRef}
         style={{ height: '100%', width: '100%' }}
@@ -160,13 +243,13 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         />
         
         {/* Origin Marker */}
-        <Marker position={[origin.lat, origin.lng]} icon={originIcon} />
+        <Marker position={[finalOrigin.lat, finalOrigin.lng]} icon={originIcon} />
         
         {/* Destination Marker */}
-        <Marker position={[destination.lat, destination.lng]} icon={destinationIcon} />
+        <Marker position={[finalDest.lat, finalDest.lng]} icon={destinationIcon} />
         
         {/* Rider Marker */}
-        {current && (
+        {current && typeof current.lat === 'number' && typeof current.lng === 'number' && (
           <Marker position={[current.lat, current.lng]} icon={riderIcon} />
         )}
         
@@ -180,8 +263,8 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         />
         
         <MapCameraController
-          origin={origin}
-          destination={destination}
+          origin={finalOrigin as any}
+          destination={finalDest as any}
           current={current}
           followMode={followMode}
           onUserInteraction={() => setFollowMode(false)}
@@ -194,17 +277,17 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
           <div className="w-2 h-2 rounded-full bg-emerald-500" />
           <div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Origin</p>
-            <p className="text-[10px] font-bold text-slate-700 max-w-[150px] truncate">{origin.address}</p>
+            <p className="text-[10px] font-bold text-slate-700 max-w-[150px] truncate">{origin.address || 'Unknown Address'}</p>
           </div>
         </div>
         <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg border border-slate-100 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-rose-500" />
           <div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Destination</p>
-            <p className="text-[10px] font-bold text-slate-700 max-w-[150px] truncate">{destination.address}</p>
+            <p className="text-[10px] font-bold text-slate-700 max-w-[150px] truncate">{destination.address || 'Unknown Address'}</p>
           </div>
         </div>
-        {current && (
+        {current && typeof current.lat === 'number' && typeof current.lng === 'number' && (
           <div className="bg-blue-500 p-3 rounded-2xl shadow-lg border border-blue-400 flex items-center gap-3 animate-in fade-in slide-in-from-left-4">
             <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
             <div>
@@ -215,7 +298,7 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
         )}
       </div>
 
-      {current && (
+      {current && typeof current.lat === 'number' && typeof current.lng === 'number' && (
         <div className="absolute bottom-4 right-4 z-[400] flex flex-col items-end gap-2">
           <div className="rounded-full bg-white/95 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100">
             Follow {followMode ? 'On' : 'Off'}
@@ -243,3 +326,4 @@ export const DispatchMapView: React.FC<DispatchMapViewProps> = ({ origin, destin
     </div>
   );
 };
+

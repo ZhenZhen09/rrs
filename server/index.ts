@@ -22,7 +22,7 @@ import { pool } from './db';
 import { authenticate } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
 import { onlineRiders, updateRiderPresence, removeRiderPresence, cleanupOfflineRiders } from './presence';
-import { handleRiderLocationUpdate } from './locationTracking';
+import { handleRiderLocationUpdate, pruneTrackingState, riderLatestState } from './locationTracking';
 
 Bugsnag.start({
   apiKey: process.env.BUGSNAG_API_KEY || '37b188b8dd7ad62347e11722b1b9036f',
@@ -140,8 +140,7 @@ interface RequestPingState {
 }
 const requestPingState = new Map<string, RequestPingState>();
 
-const DISCONNECT_GRACE_PERIOD = 90000; 
-
+const DISCONNECT_GRACE_PERIOD = 30000;
 class RequestWatchdog {
   private io: Server;
   constructor(io: Server) { this.io = io; }
@@ -201,6 +200,36 @@ class RequestWatchdog {
          WHERE status = 'approved' AND delivery_status NOT IN ('completed', 'failed', 'disapproved')`
       );
       const activeRequests = rows as any[];
+
+      // Build a set of active request IDs for pruning
+      const activeRequestIds = new Set(activeRequests.map(r => r.request_id));
+
+      // --- TASK 3: PRUNE STALE MEMORY (Memory Leak Prevention) ---
+      // 1. Prune terminal requests from RAM
+      const terminalRequestIdsToPrune: string[] = [];
+      for (const [reqId] of requestPingState) {
+        if (!activeRequestIds.has(reqId)) {
+          terminalRequestIdsToPrune.push(reqId);
+          requestPingState.delete(reqId);
+        }
+      }
+
+      // 2. Prune offline riders (>30m) from RAM
+      const offlineRidersToPrune: string[] = [];
+      const RIDER_OFFLINE_PRUNE_MS = 30 * 60 * 1000; // 30 mins
+      for (const [riderId, state] of riderLatestState.entries()) {
+        if (!onlineRiders.has(riderId)) {
+           // If they are not online, and their last DB fix is older than 30 mins, prune them
+           if (state.latestDb && now - state.latestDb.timestamp > RIDER_OFFLINE_PRUNE_MS) {
+              offlineRidersToPrune.push(riderId);
+           }
+        }
+      }
+
+      if (terminalRequestIdsToPrune.length > 0 || offlineRidersToPrune.length > 0) {
+         pruneTrackingState(terminalRequestIdsToPrune, offlineRidersToPrune);
+         console.log(`🧹 Watchdog: Pruned memory for ${terminalRequestIdsToPrune.length} inactive requests and ${offlineRidersToPrune.length} offline riders.`);
+      }
 
       for (const req of activeRequests) {
         const state = requestPingState.get(req.request_id);
@@ -349,7 +378,7 @@ io.on('connection', (socket: any) => {
   });
 
   socket.on('update-location', async (data: any) => {
-    const { requestId, lat, lng, riderId, heading, accuracy, timestamp, isSimulation, isHeartbeat } = data;
+    const { requestId, lat, lng, riderId, heading, accuracy, timestamp, isSimulation, isHeartbeat, batteryLevel, networkType } = data;
     if (lat === undefined || lng === undefined || !riderId) return;
 
     // Security Practice: Prevent rider from spoofing location for another rider.
@@ -373,6 +402,8 @@ io.on('connection', (socket: any) => {
         timestamp,
         isSimulation,
         isHeartbeat,
+        batteryLevel,
+        networkType,
         riderName: data.riderName || 'Rider',
         verifyAssignment: true,
         presenceSocketId: socket.id,

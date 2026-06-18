@@ -1,18 +1,24 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { getRiderTaskTab } from '@/utils/taskFilters';
+import { getRiderTaskTab, isTaskLocked } from '@/utils/taskFilters';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useDashboard } from '@/hooks/data/useDashboard';
 import { NotificationModal } from '@/components/NotificationModal';
+import { useLocation } from '@/context/LocationContext';
+import { AttendanceGate } from '@/components/AttendanceGate';
+import { HandoverModal } from '@/components/HandoverModal';
 
 export default function TodayScreen() {
-  // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
+  const { isOnDuty, toggleDuty, attendanceStatus } = useLocation();
+  const [isToggling, setIsToggling] = React.useState(false);
+  const [showHandover, setShowHandover] = React.useState(false);
+
   const { 
     tasks: allTasks,
     loading,
@@ -28,7 +34,26 @@ export default function TodayScreen() {
     router
   } = useDashboard();
 
-  // Filter for today's active tasks
+  const handleToggleDuty = async () => {
+    const activeTaskCount = allTasks.filter(t => !['completed', 'delivered', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || t.status)).length;
+    
+    if (isOnDuty && activeTaskCount > 0) {
+      setShowHandover(true);
+      return;
+    }
+
+    setIsToggling(true);
+    await toggleDuty(!isOnDuty);
+    setIsToggling(false);
+  };
+
+  const handleHandoverConfirm = async (reason: string) => {
+    setIsToggling(true);
+    await toggleDuty(false, reason);
+    setIsToggling(false);
+    setShowHandover(false);
+  };
+
   const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'today');
   const tomorrowCount = allTasks.filter(req => getRiderTaskTab(req) === 'tomorrow').length;
   const futureCount = allTasks.filter(req => getRiderTaskTab(req) === 'future').length;
@@ -45,92 +70,149 @@ export default function TodayScreen() {
         unreadCount={unreadCount}
       />
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
-            colors={['#3B82F6']} // Brand Primary
-            tintColor={'#3B82F6'}
-          />
-        }
-      >
-        {loading && !refreshing ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : tasks.length === 0 ? (
-          <View style={styles.empty}>
-            <View style={styles.emptyIconContainer}>
-              <MaterialIcons name="fact-check" size={48} color="#94A3B8" />
-            </View>
-            <Text style={styles.emptyTitle}>All caught up for today!</Text>
-            <Text style={styles.emptyText}>
-              {tomorrowCount > 0 
-                ? `You have ${tomorrowCount} job(s) scheduled for Tomorrow. Check the 'Tomorrow' tab to see them.`
-                : futureCount > 0
-                ? `You have ${futureCount} upcoming jobs in the 'Future' tab.`
-                : "No tasks are assigned to you right now."}
-            </Text>
-            
-            {/* INTUITIVE PULL GUIDE */}
-            <View style={styles.pullGuide}>
-              <MaterialIcons name="arrow-downward" size={16} color="#CBD5E1" />
-              <Text style={styles.pullGuideText}>
-                Swipe down to sync
-              </Text>
-            </View>
+      <View style={styles.dutyBar}>
+        <View style={styles.dutyInfo}>
+          <View style={[styles.statusDot, { backgroundColor: isOnDuty ? '#10B981' : '#94A3B8' }]} />
+          <View>
+            <Text style={styles.dutyTitle}>{isOnDuty ? 'ONLINE' : 'OFFLINE'}</Text>
+            <Text style={styles.dutySub}>{isOnDuty ? 'You are visible to dispatch' : 'Go on-duty to see tasks'}</Text>
           </View>
-        ) : (
-          tasks.map((task, index) => (
-            <Card key={task.request_id} style={styles.card}>
-              <TouchableOpacity
-                testID={`today_task_card_${index}`}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/job/${task.request_id}`)}
-              >
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text style={styles.timeLabel}>PICKUP WINDOW</Text>
-                    <Text style={styles.timeWindow}>{task?.time_window || 'Not set'}</Text>
-                  </View>
-                  <Badge label={(task?.delivery_status || 'PENDING').toUpperCase()} status={task?.delivery_status === 'in_progress' ? 'warning' : 'info'} />
-                </View>
+        </View>
+        <TouchableOpacity 
+          activeOpacity={0.8}
+          disabled={isToggling}
+          onPress={handleToggleDuty}
+          style={[
+            styles.toggleContainer, 
+            { backgroundColor: isOnDuty ? '#10B981' : '#E2E8F0' }
+          ]}
+        >
+          {isToggling ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <View style={[
+              styles.toggleKnob, 
+              { alignSelf: isOnDuty ? 'flex-end' : 'flex-start' }
+            ]} />
+          )}
+        </TouchableOpacity>
+      </View>
 
-                <View style={styles.divider} />
-
-                <View style={styles.details}>
-                  <View style={styles.addressRow}>
-                    <View style={styles.addressIconColumn}>
-                      <View style={styles.dot} />
-                      <View style={styles.line} />
-                      <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+      {!isOnDuty ? (
+        <View style={styles.offDutyContainer}>
+          <View style={styles.offDutyIconCircle}>
+            <MaterialIcons name="power-settings-new" size={40} color="#94A3B8" />
+          </View>
+          <Text style={styles.offDutyTitle}>You are currently Off Duty</Text>
+          <Text style={styles.offDutyText}>
+            Switch to On Duty to start receiving and tracking delivery requests.
+          </Text>
+          <TouchableOpacity 
+            onPress={handleToggleDuty}
+            style={styles.onDutyButton}
+          >
+            <Text style={styles.onDutyButtonText}>Start Shift</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh} 
+              colors={['#3B82F6']} 
+              tintColor={'#3B82F6'}
+            />
+          }
+        >
+          {loading && !refreshing ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : tasks.length === 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIconContainer}>
+                <MaterialIcons name="fact-check" size={48} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>All caught up for today!</Text>
+              <Text style={styles.emptyText}>
+                {tomorrowCount > 0 
+                  ? `You have ${tomorrowCount} job(s) scheduled for Tomorrow. Check the 'Tomorrow' tab to see them.`
+                  : futureCount > 0
+                  ? `You have ${futureCount} upcoming jobs in the 'Future' tab.`
+                  : "No tasks are assigned to you right now."}
+              </Text>
+              <View style={styles.pullGuide}>
+                <MaterialIcons name="arrow-downward" size={16} color="#CBD5E1" />
+                <Text style={styles.pullGuideText}>Swipe down to sync</Text>
+              </View>
+            </View>
+          ) : (
+            tasks.sort((a, b) => {
+              const orderA = a.queue_order || 999;
+              const orderB = b.queue_order || 999;
+              if (orderA !== orderB) return orderA - orderB;
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            }).map((task, index) => {
+              const isLocked = isTaskLocked(task, allTasks);
+              return (
+                <Card key={task.request_id} style={[styles.card, isLocked && styles.lockedCard]}>
+                  <TouchableOpacity
+                    testID={`today_task_card_${index}`}
+                    activeOpacity={0.7}
+                    onPress={() => router.push(`/job/${task.request_id}`)}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View>
+                        <View style={styles.sequenceBadgeRow}>
+                          <View style={[styles.sequenceBadge, isLocked ? styles.queuedBadge : styles.nextBadge]}>
+                            <Text style={[styles.sequenceBadgeText, isLocked ? styles.queuedBadgeText : styles.activeBadgeText]}>
+                              {isLocked ? `QUEUED #${index + 1}` : 'NEXT TASK'}
+                            </Text>
+                          </View>
+                          {isLocked && <MaterialIcons name="lock" size={14} color="#B45309" />}
+                        </View>
+                        <Text style={styles.timeWindow}>{task?.time_window || 'Not set'}</Text>
+                      </View>
+                      <Badge label={(task?.delivery_status || 'PENDING').toUpperCase()} status={task?.delivery_status === 'in_progress' ? 'warning' : 'info'} />
                     </View>
-                    <View style={styles.addressTextColumn}>
-                      <Text style={styles.address} numberOfLines={1}>{task?.pickup_location?.address || 'Pickup address'}</Text>
-                      <Text style={[styles.address, { marginTop: verticalScale(12) }]} numberOfLines={1}>{task?.dropoff_location?.address || 'Dropoff address'}</Text>
-                    </View>
-                  </View>
-                </View>
 
-                <View style={styles.footer}>
-                   <View style={styles.riderInfo}>
-                      <MaterialIcons name="person" size={14} color="#64748B" />
-                      <Text style={styles.recipientName}>{task?.recipient_name || 'Recipient'}</Text>
-                   </View>
-                   <View style={styles.action}>
-                      <Text style={styles.actionText}>Start Task</Text>
-                      <MaterialIcons name="arrow-forward" size={14} color="#3B82F6" />
-                   </View>
-                </View>
-              </TouchableOpacity>
-            </Card>
-          ))
-        )}
-      </ScrollView>
+                    <View style={styles.divider} />
+
+                    <View style={styles.details}>
+                      <View style={styles.addressRow}>
+                        <View style={styles.addressIconColumn}>
+                          <View style={styles.dot} />
+                          <View style={styles.line} />
+                          <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+                        </View>
+                        <View style={styles.addressTextColumn}>
+                          <Text style={styles.address} numberOfLines={1}>{task?.pickup_location?.address || 'Pickup address'}</Text>
+                          <Text style={[styles.address, { marginTop: verticalScale(12) }]} numberOfLines={1}>{task?.dropoff_location?.address || 'Dropoff address'}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.footer}>
+                      <View style={styles.riderInfo}>
+                          <MaterialIcons name="person" size={14} color="#64748B" />
+                          <Text style={styles.recipientName}>{task?.recipient_name || 'Recipient'}</Text>
+                      </View>
+                      <View style={styles.action}>
+                          <Text style={[styles.actionText, isLocked && { color: '#94A3B8' }]}>{isLocked ? 'View Details' : 'Start Task'}</Text>
+                          <MaterialIcons name="arrow-forward" size={14} color={isLocked ? "#94A3B8" : "#3B82F6"} />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Card>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
 
       <NotificationModal 
         visible={isNotifOpen}
@@ -138,6 +220,15 @@ export default function TodayScreen() {
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
         onMarkAllRead={handleMarkAllRead}
+      />
+
+      <AttendanceGate />
+
+      <HandoverModal 
+        visible={showHandover}
+        onClose={() => setShowHandover(false)}
+        onConfirm={handleHandoverConfirm}
+        taskCount={allTasks.filter(t => !['completed', 'delivered', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || t.status)).length}
       />
     </SafeAreaView>
   );
@@ -147,6 +238,111 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  dutyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    marginHorizontal: scale(16),
+    marginTop: verticalScale(12),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(12),
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  dutyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(12),
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dutyTitle: {
+    fontSize: normalizeFontSize(12),
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  dutySub: {
+    fontSize: normalizeFontSize(10),
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  toggleContainer: {
+    width: scale(44),
+    height: scale(24),
+    borderRadius: 12,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleKnob: {
+    width: scale(20),
+    height: scale(20),
+    borderRadius: 10,
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  offDutyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: scale(40),
+  },
+  offDutyIconCircle: {
+    width: scale(80),
+    height: scale(80),
+    borderRadius: 40,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: verticalScale(20),
+  },
+  offDutyTitle: {
+    fontSize: normalizeFontSize(18),
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  offDutyText: {
+    fontSize: normalizeFontSize(14),
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: verticalScale(8),
+    lineHeight: 20,
+  },
+  onDutyButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: scale(32),
+    paddingVertical: verticalScale(14),
+    borderRadius: 14,
+    marginTop: verticalScale(24),
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  onDutyButtonText: {
+    fontSize: normalizeFontSize(14),
+    fontWeight: '900',
+    color: '#FFF',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   scrollContent: {
     padding: scale(16),
@@ -267,20 +463,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: verticalScale(8),
   },
-  syncButton: {
+  pullGuide: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(10),
-    borderRadius: 12,
-    gap: 8,
+    gap: 4,
+    marginTop: verticalScale(12),
   },
-  syncButtonText: {
+  pullGuideText: {
     fontSize: normalizeFontSize(12),
-    fontWeight: '800',
-    color: '#3B82F6',
+    color: '#CBD5E1',
+    fontWeight: '600',
+  },
+  // LAYER 2 STYLES
+  lockedCard: {
+    backgroundColor: '#FAFAFA',
+    opacity: 0.85,
+    borderColor: '#F1F5F9',
+  },
+  sequenceBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: verticalScale(4),
+  },
+  sequenceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  nextBadge: {
+    backgroundColor: '#ECFDF5',
+  },
+  queuedBadge: {
+    backgroundColor: '#FFFBEB',
+  },
+  sequenceBadgeText: {
+    fontSize: normalizeFontSize(8),
+    fontWeight: '900',
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+  },
+  activeBadgeText: {
+    color: '#059669',
+  },
+  queuedBadgeText: {
+    color: '#D97706',
   }
 });

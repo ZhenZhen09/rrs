@@ -23,7 +23,13 @@ const COOKIE_OPTIONS = {
 
 const generateTokens = async (user: any) => {
   const accessToken = jwt.sign(
-    { id: user.id, email: user.email, role: user.role, department: user.department },
+    { 
+      id: user.id, 
+      email: user.email, 
+      role: user.role, 
+      department: user.department,
+      is_on_duty: user.is_on_duty 
+    },
     getJwtSecret(),
     { expiresIn: '1h' }
   );

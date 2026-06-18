@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Linking, Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJobDetails, updateJobStatus } from '@/services/apiService';
+import { getJobDetails, updateJobStatus, getTasks } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
 import { useLocation } from '@/context/LocationContext';
 import { Job } from '@/types';
@@ -38,6 +38,52 @@ export const useJobDetails = () => {
     enabled: !!id,
     staleTime: 30000, // 30 seconds
   });
+
+  /**
+   * --- LAYER 2: SEQUENTIAL ENFORCEMENT ---
+   * Fetch all active tasks to check the sequence
+   */
+  const { data: allActiveTasks = [] } = useQuery<Job[]>({
+    queryKey: ['tasks', user?.id],
+    queryFn: getTasks,
+    enabled: !!user?.id,
+  });
+
+  const sequentialEnforcement = useMemo(() => {
+    if (!jobData || !allActiveTasks.length) return { isLocked: false, activeTask: null };
+
+    const currentStatus = jobData.delivery_status || '';
+    const isTerminal = ['completed', 'failed', 'cancelled', 'disapproved'].includes(currentStatus);
+    
+    // 0. If task is terminal (History), it's never locked
+    if (isTerminal) return { isLocked: false, activeTask: null };
+
+    // 1. Filter for "Active" tasks in the rider's queue
+    const activeTasks = allActiveTasks.filter(t => 
+      !['completed', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || '')
+    );
+
+    // 2. Sort by queue_order (Layer 2)
+    const sortedQueue = [...activeTasks].sort((a, b) => {
+      const orderA = a.queue_order || 999;
+      const orderB = b.queue_order || 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    const currentTaskInQueue = sortedQueue[0];
+    const isFirstInQueue = currentTaskInQueue?.request_id === id;
+
+    // 3. Exception: If the task is already "In Progress", it's effectively the active one
+    if (jobData.delivery_status === 'in_progress') return { isLocked: false, activeTask: jobData };
+
+    return {
+      isLocked: !isFirstInQueue,
+      activeTask: currentTaskInQueue,
+      queuePosition: sortedQueue.findIndex(t => t.request_id === id) + 1,
+      totalInQueue: sortedQueue.length
+    };
+  }, [jobData, allActiveTasks, id]);
 
   /**
    * --- SENIOR STATUS ALIGNMENT LOGIC ---
@@ -243,5 +289,6 @@ export const useJobDetails = () => {
     isStartingDelivery,
     fetchJobDetails,
     isSelfUpdated,
+    sequentialEnforcement,
   };
 };

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
 import { formatDisplayDate } from '@/utils/dateUtils';
-import { getRiderTaskTab } from '@/utils/taskFilters';
+import { getRiderTaskTab, isTaskLocked } from '@/utils/taskFilters';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -29,7 +29,14 @@ export default function OverdueScreen() {
     router
   } = useDashboard();
 
-  const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'overdue');
+  const tasks = allTasks
+    .filter(req => getRiderTaskTab(req) === 'overdue')
+    .sort((a, b) => {
+      const orderA = a.queue_order || 999;
+      const orderB = b.queue_order || 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -59,44 +66,65 @@ export default function OverdueScreen() {
             <Text style={styles.emptyText}>You have no overdue tasks.</Text>
           </View>
         ) : (
-          tasks.map((task, index) => (
-            <Card key={task.request_id} style={styles.card}>
-              <TouchableOpacity
-                testID={`overdue_task_card_${index}`}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/job/${task.request_id}`)}
-              >
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text style={styles.dateLabel}>SCHEDULED FOR</Text>
-                    <Text style={styles.dateText}>{task?.delivery_date ? formatDisplayDate(task.delivery_date) : 'N/A'}</Text>
+          tasks.map((task, index) => {
+            const isLocked = isTaskLocked(task, allTasks);
+            
+            return (
+              <Card key={task.request_id} style={[styles.card, isLocked && styles.lockedCard]}>
+                <TouchableOpacity
+                  testID={`overdue_task_card_${index}`}
+                  activeOpacity={0.7}
+                  disabled={isLocked}
+                  onPress={() => router.push(`/job/${task.request_id}`)}
+                >
+                  <View style={styles.cardHeader}>
+                    <View>
+                      <Text style={styles.dateLabel}>SCHEDULED FOR</Text>
+                      <Text style={styles.dateText}>{task?.delivery_date ? formatDisplayDate(task.delivery_date) : 'N/A'}</Text>
+                    </View>
+                    <Badge label="LATE" status="danger" />
                   </View>
-                  <Badge label="LATE" status="danger" />
-                </View>
 
-                <View style={styles.divider} />
+                  <View style={styles.divider} />
 
-                <View style={styles.details}>
-                  <View style={styles.locationRow}>
-                    <MaterialIcons name="location-on" size={16} color="#EF4444" />
-                    <Text style={styles.address} numberOfLines={1}>{task?.dropoff_location?.address || 'Address unavailable'}</Text>
+                  <View style={styles.details}>
+                    <View style={styles.locationRow}>
+                      <MaterialIcons name="location-on" size={16} color={isLocked ? "#94A3B8" : "#EF4444"} />
+                      <Text style={[styles.address, isLocked && styles.lockedText]} numberOfLines={1}>{task?.dropoff_location?.address || 'Address unavailable'}</Text>
+                    </View>
+                    <View style={styles.recipientRow}>
+                      <MaterialIcons name="person" size={16} color="#64748B" />
+                      <Text style={[styles.recipient, isLocked && styles.lockedText]}>{task?.recipient_name || 'No recipient'}</Text>
+                    </View>
                   </View>
-                  <View style={styles.recipientRow}>
-                    <MaterialIcons name="person" size={16} color="#64748B" />
-                    <Text style={styles.recipient}>{task?.recipient_name || 'No recipient'}</Text>
-                  </View>
-                </View>
 
-                <View style={styles.footer}>
-                  <Text style={styles.timeWindow}>{task?.time_window || 'No time set'}</Text>
-                  <View style={styles.action}>
-                    <Text style={styles.actionText}>View</Text>
-                    <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
+                  <View style={styles.footer}>
+                    <Text style={[styles.timeWindow, isLocked && styles.lockedText]}>{task?.time_window || 'No time set'}</Text>
+                    <View style={styles.action}>
+                      {isLocked ? (
+                        <>
+                          <MaterialIcons name="lock" size={14} color="#94A3B8" />
+                          <Text style={[styles.actionText, { color: '#94A3B8', marginLeft: 4 }]}>LOCKED</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.actionText}>View</Text>
+                          <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
+                        </>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            </Card>
-          ))
+
+                  {isLocked && (
+                    <View style={styles.lockOverlay}>
+                      <MaterialIcons name="lock" size={16} color="#94A3B8" />
+                      <Text style={styles.lockOverlayText}>FOLLOW SEQUENCE</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Card>
+            );
+          })
         )}
       </ScrollView>
 
@@ -125,6 +153,12 @@ const styles = StyleSheet.create({
     padding: moderateScale(16),
     borderLeftWidth: 4,
     borderLeftColor: '#EF4444',
+  },
+  lockedCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderLeftColor: '#94A3B8',
+    opacity: 0.8,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -172,6 +206,9 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginLeft: scale(8),
   },
+  lockedText: {
+    color: '#94A3B8',
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -194,6 +231,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#3B82F6',
     marginRight: scale(4),
+  },
+  lockOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: verticalScale(6),
+    borderRadius: moderateScale(8),
+    marginTop: verticalScale(12),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  lockOverlayText: {
+    fontSize: normalizeFontSize(10),
+    fontWeight: '900',
+    color: '#94A3B8',
+    marginLeft: scale(6),
+    letterSpacing: 1,
   },
   empty: {
     alignItems: 'center',

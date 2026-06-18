@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 
-const envPath = path.join(process.cwd(), '.env');
+const envPath = path.join(process.cwd(), 'server', '.env');
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
 }

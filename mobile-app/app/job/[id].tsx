@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { useJobDetails } from '@/hooks/data/useJobDetails';
 import { useLocation } from '@/context/LocationContext';
 
-import { LEAFLET_JS, LEAFLET_CSS } from './LeafletAssets';
+import { LEAFLET_JS, LEAFLET_CSS } from '@/constants/LeafletAssets';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,9 +31,13 @@ export default function JobDetailsScreen() {
     handleUpdateStatus,
     handleSubmitStatus,
     router,
+    isTracking,
     isStartingDelivery,
     isSelfUpdated,
+    sequentialEnforcement,
   } = useJobDetails();
+
+  const { isLocked: isSequentiallyLocked, activeTask, queuePosition, totalInQueue } = sequentialEnforcement;
 
   const { backgroundPermissionGranted, isSocketConnected, lastLocation, refreshCurrentLocation, simulateLocation } = useLocation();
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -844,29 +848,75 @@ export default function JobDetailsScreen() {
               <Text style={styles.oneLiner}><Text style={styles.boldLabel}>Urgency: </Text><Text style={{ color: '#EF4444', fontWeight: '800' }}>{job.urgency_level.toUpperCase()}</Text></Text>
 
               <View style={styles.classificationActionArea}>
-                {(['assigned', 'pending'].includes(job.delivery_status?.toLowerCase()) || isStartingDelivery) && (
-                  <TouchableOpacity
-                    testID="job_start_delivery_button"
-                    style={[styles.primaryBtn, isStartingDelivery && styles.primaryBtnLoading]}
-                    onPress={() => handleUpdateStatus('in_progress')}
-                    disabled={isStartingDelivery}
-                  >
-                    {isStartingDelivery ? (
-                      <View style={styles.loadingContent}>
-                        <ActivityIndicator color="white" />
-                        <Text style={styles.primaryBtnText}>STARTING DELIVERY...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.primaryBtnText}>DELIVERY START</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
+                {isSequentiallyLocked && !['completed', 'failed', 'cancelled'].includes(deliveryStatus || '') ? (
+                  <View style={styles.lockedContainer}>
+                    <View style={styles.lockedHeader}>
+                      <MaterialIcons name="lock" size={20} color="#F59E0B" />
+                      <Text style={styles.lockedTitle}>SEQUENTIAL LOCK ACTIVE</Text>
+                    </View>
+                    <Text style={styles.lockedText}>
+                      Admin has optimized your route. Please complete your current task first:
+                      {"\n"}
+                      <Text style={{ color: '#0F172A', fontWeight: '900' }}>
+                        #{activeTask?.request_id.slice(-8).toUpperCase()}
+                      </Text>
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.deviationBtn}
+                      onPress={() => {
+                        Alert.alert(
+                          "Request Deviation",
+                          "You are about to skip the assigned sequence. This requires Admin approval and a valid photo alibi (Traffic, Roadblock, etc.).",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Continue", onPress: () => {
+                              // Trigger deviation workflow
+                              Alert.alert("Notice", "Camera access requested for alibi proof.");
+                            }}
+                          ]
+                        );
+                      }}
+                    >
+                      <MaterialIcons name="alt-route" size={16} color="#64748B" />
+                      <Text style={styles.deviationBtnText}>REQUEST SEQUENCE SKIP</Text>
+                    </TouchableOpacity>
 
-                {job.delivery_status?.toLowerCase() === 'in_progress' && !isStartingDelivery && (
-                  <View style={styles.btnGroup}>
-                    <TouchableOpacity testID="job_complete_button" style={[styles.statusBtn, { backgroundColor: '#10B981' }]} onPress={() => handleUpdateStatus('completed')}><MaterialIcons name="check-circle" size={20} color="white" /><Text style={styles.btnLabel}>Complete</Text></TouchableOpacity>
-                    <TouchableOpacity testID="job_failed_button" style={[styles.statusBtn, { backgroundColor: '#EF4444' }]} onPress={() => handleUpdateStatus('failed')}><MaterialIcons name="error" size={20} color="white" /><Text style={styles.btnLabel}>Failed</Text></TouchableOpacity>
+                    {/* NEW: Scaled Down Back Button for Locked Tasks */}
+                    <TouchableOpacity 
+                      style={[styles.deviationBtn, { backgroundColor: '#64748B', borderColor: '#475569', marginTop: 12 }]} 
+                      onPress={() => router.replace('/(tabs)')}
+                    >
+                      <MaterialIcons name="arrow-back" size={14} color="white" />
+                      <Text style={[styles.deviationBtnText, { color: 'white' }]}>BACK TO TASKS</Text>
+                    </TouchableOpacity>
                   </View>
+                ) : (
+                  <>
+                    {(['assigned', 'pending'].includes(job.delivery_status?.toLowerCase()) || isStartingDelivery) && (
+                      <TouchableOpacity
+                        testID="job_start_delivery_button"
+                        style={[styles.primaryBtn, isStartingDelivery && styles.primaryBtnLoading]}
+                        onPress={() => handleUpdateStatus('in_progress')}
+                        disabled={isStartingDelivery}
+                      >
+                        {isStartingDelivery ? (
+                          <View style={styles.loadingContent}>
+                            <ActivityIndicator color="white" />
+                            <Text style={styles.primaryBtnText}>STARTING DELIVERY...</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.primaryBtnText}>DELIVERY START</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {job.delivery_status?.toLowerCase() === 'in_progress' && !isStartingDelivery && (
+                      <View style={styles.btnGroup}>
+                        <TouchableOpacity testID="job_complete_button" style={[styles.statusBtn, { backgroundColor: '#10B981' }]} onPress={() => handleUpdateStatus('completed')}><MaterialIcons name="check-circle" size={20} color="white" /><Text style={styles.btnLabel}>Complete</Text></TouchableOpacity>
+                        <TouchableOpacity testID="job_failed_button" style={[styles.statusBtn, { backgroundColor: '#EF4444' }]} onPress={() => handleUpdateStatus('failed')}><MaterialIcons name="error" size={20} color="white" /><Text style={styles.btnLabel}>Failed</Text></TouchableOpacity>
+                      </View>
+                    )}
+                  </>
                 )}
 
                 {(['completed', 'failed', 'cancelled'].includes(job.delivery_status?.toLowerCase())) && (
@@ -971,5 +1021,51 @@ const styles = StyleSheet.create({
   reasonTextSelected: { color: '#1D4ED8', fontWeight: '700' },
   input: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, fontSize: 14, color: '#0F172A', minHeight: 100, borderWidth: 1, borderColor: '#F1F5F9' },
   submitBtn: { height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 },
-  submitBtnText: { color: 'white', fontWeight: '800', fontSize: 15 }
+  submitBtnText: { color: 'white', fontWeight: '800', fontSize: 15 },
+  // LAYER 2 STYLES
+  lockedContainer: { 
+    backgroundColor: '#FFFBEB', 
+    borderWidth: 2, 
+    borderColor: '#FEF3C7', 
+    borderRadius: 24, 
+    padding: 20, 
+    alignItems: 'center' 
+  },
+  lockedHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    marginBottom: 12 
+  },
+  lockedTitle: { 
+    color: '#92400E', 
+    fontSize: 12, 
+    fontWeight: '900', 
+    letterSpacing: 1 
+  },
+  lockedText: { 
+    color: '#B45309', 
+    fontSize: 13, 
+    fontWeight: '600', 
+    textAlign: 'center', 
+    lineHeight: 20,
+    marginBottom: 20
+  },
+  deviationBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    borderRadius: 12, 
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  deviationBtnText: { 
+    color: '#64748B', 
+    fontSize: 10, 
+    fontWeight: '800', 
+    letterSpacing: 0.5 
+  }
 });

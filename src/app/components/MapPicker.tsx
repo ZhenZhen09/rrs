@@ -393,10 +393,14 @@ export function MapPickerContent({
   };
 
   const handleConfirm = () => {
+    const fullAddress = addressDetails.sub 
+      ? `${addressDetails.main}, ${addressDetails.sub}` 
+      : addressDetails.main;
+      
     onLocationSelect({
       lat: currentPos[0],
       lng: currentPos[1],
-      address: addressDetails.sub || "Selected Location",
+      address: fullAddress || "Selected Location",
       businessName: customAddressName,
       landmarks: landmarks,
     });

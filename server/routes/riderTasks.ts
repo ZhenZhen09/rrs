@@ -34,6 +34,13 @@ const formatRequestRow = (row: any) => ({
 router.get('/active', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+
+    // ON-DUTY LOCK: Riders can only see tasks if On Duty
+    const [userRows]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [user.id]);
+    if (userRows.length === 0 || !userRows[0].is_on_duty) {
+      return res.json({ data: [], meta: { offDuty: true } });
+    }
+
     const [rows] = await pool.query(`
       SELECT *
       FROM delivery_requests
@@ -53,6 +60,13 @@ router.get('/active', authorize(['rider']), async (req: AuthRequest, res: Respon
 router.get('/history', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+
+    // ON-DUTY LOCK
+    const [userRows]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [user.id]);
+    if (userRows.length === 0 || !userRows[0].is_on_duty) {
+      return res.json({ data: [], total: 0, offDuty: true });
+    }
+
     const page = Math.max(Number(req.query.page || 1), 1);
     const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 100);
     const offset = (page - 1) * limit;

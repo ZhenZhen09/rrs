@@ -12,13 +12,15 @@ import { cn } from '../../components/ui/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
-import { Truck, Users, BarChart3, LogOut, Bell, UserCog, Mail, Shield, Menu, CheckCheck, Palette, Calendar, MapPin } from 'lucide-react';
+import { Truck, Users, BarChart3, LogOut, Bell, UserCog, Mail, Shield, Menu, CheckCheck, Palette, Calendar, MapPin, ClipboardCheck } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { CalendarView } from './CalendarView';
 import { NotificationBell } from '../../components/Admin/NotificationBell';
 import { RiderMap } from './RiderMap';
+import { AttendanceDashboard } from './AttendanceDashboard';
+import { DevSimulator } from '../../components/Admin/DevSimulator';
 
-type AdminView = 'dispatch' | 'users' | 'analytics' | 'theme' | 'calendar' | 'rider-map';
+type AdminView = 'dispatch' | 'users' | 'analytics' | 'theme' | 'calendar' | 'rider-map' | 'attendance';
 
 export function AdminLayout() {
   const { user, logout } = useAuth();
@@ -89,6 +91,14 @@ export function AdminLayout() {
           >
             <MapPin size={14} />
             <span className="text-[11px]">Rider Map</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('attendance')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg font-bold transition-all ${currentView === 'attendance' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <ClipboardCheck size={14} />
+            <span className="text-[11px]">Attendance</span>
           </button>
 
           <p className="px-3 text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mt-4">Settings</p>
@@ -211,6 +221,16 @@ export function AdminLayout() {
                         </button>
                       </SheetTrigger>
 
+                      <SheetTrigger asChild>
+                        <button
+                          onClick={() => setCurrentView('attendance')}
+                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all ${currentView === 'attendance' ? 'bg-primary text-white' : 'text-slate-400'}`}
+                        >
+                          <ClipboardCheck size={14} />
+                          <span className="text-xs">Attendance</span>
+                        </button>
+                      </SheetTrigger>
+
                       <p className="px-2 text-[7px] font-black text-slate-500 uppercase tracking-widest mb-2 mt-4">Settings</p>
                       
                       <SheetTrigger asChild>
@@ -233,7 +253,7 @@ export function AdminLayout() {
               {/* Desktop Header Title */}
               <div className="hidden md:block">
                 <h1 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                   System / <span className="text-slate-900">{currentView === 'calendar' ? 'Task Schedule' : currentView === 'users' ? 'User Accounts' : currentView === 'analytics' ? 'Analytics' : 'Themes'}</span>
+                   System / <span className="text-slate-900">{currentView === 'calendar' ? 'Task Schedule' : currentView === 'users' ? 'User Accounts' : currentView === 'analytics' ? 'Analytics' : currentView === 'attendance' ? 'Rider Attendance' : 'Themes'}</span>
                 </h1>
               </div>
 
@@ -276,7 +296,7 @@ export function AdminLayout() {
         )}
 
         {/* Scrollable View Area */}
-        <main className={cn("flex-1 min-h-0", (currentView === 'dispatch' || currentView === 'calendar' || currentView === 'rider-map') ? "overflow-hidden" : "overflow-y-auto")}>
+        <main className={cn("flex-1 min-h-0", (currentView === 'dispatch' || currentView === 'calendar' || currentView === 'rider-map' || currentView === 'attendance') ? "overflow-hidden" : "overflow-y-auto")}>
           {currentView === 'dispatch' && <DispatchConsole />}
           
           {currentView === 'calendar' && <CalendarView />}
@@ -288,8 +308,12 @@ export function AdminLayout() {
           {currentView === 'theme' && <ThemeSelection />}
 
           {currentView === 'rider-map' && <RiderMap />}
+
+          {currentView === 'attendance' && <AttendanceDashboard />}
         </main>
       </div>
+
+      <DevSimulator />
 
       {/* Shared Profile Dialog */}
       <Dialog open={showProfile} onOpenChange={setShowProfile}>

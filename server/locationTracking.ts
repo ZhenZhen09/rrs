@@ -44,11 +44,36 @@ interface LocationUpdateInput {
   refreshPresence?: boolean;
   io?: Server | null;
   requestPingState?: Map<string, RequestPingState>;
+  batteryLevel?: number;
+  networkType?: string;
 }
 
-const riderLatestState = new Map<string, LocationState>();
-const requestLatestState = new Map<string, LocationState>();
-const suspectRiderPoints = new Map<string, { lat: number; lng: number; timestamp: number }>();
+export const riderLatestState = new Map<string, LocationState>();
+export const requestLatestState = new Map<string, LocationState>();
+export const suspectRiderPoints = new Map<string, { lat: number; lng: number; timestamp: number }>();
+
+// GEOFENCING CONFIG
+const GEOFENCE_RADIUS_M = 100;
+const IDLE_TIME_MS = 10 * 60 * 1000; // 10 minutes
+const IDLE_DISTANCE_M = 20;
+
+// Track geofence status per request to avoid duplicate events
+export const requestGeofenceState = new Map<string, { arrived_pickup: boolean, arrived_dropoff: boolean, last_active: number, last_lat: number, last_lng: number }>();
+
+export const pruneTrackingState = (finishedRequestIds: string[], offlineRiderIds: string[]) => {
+  for (const reqId of finishedRequestIds) {
+    requestLatestState.delete(reqId);
+    requestGeofenceState.delete(reqId);
+    // requestPingState is handled outside or we can assume it's passed around, but let's export that one too.
+    // wait, where is requestPingState defined? It is created in `handleRiderLocationUpdate` or passed down.
+    // Let me check.
+  }
+
+  for (const riderId of offlineRiderIds) {
+    riderLatestState.delete(riderId);
+    suspectRiderPoints.delete(riderId);
+  }
+};
 
 // HARDENING CONSTANTS (Slice 1)
 const MAX_PHYSICAL_SPEED_KMPH = 5000;
@@ -142,6 +167,15 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
     if (refreshPresence) {
       touchRiderPresence(riderId, presenceSocketId, io || null);
     }
+    
+    // HEALTH UPDATE (Presence-only): Even without GPS, update battery/signal
+    if (input.batteryLevel !== undefined || input.networkType) {
+      pool.query(
+        "UPDATE users SET last_battery_level = ?, last_signal_strength = ?, updated_at = NOW() WHERE id = ?",
+        [input.batteryLevel ?? null, input.networkType || null, riderId]
+      ).catch(e => console.error('[Location] Health-only update failed:', e));
+    }
+
     return { fleetLocationUpdated: false, requestTrackingUpdated: false, reason: 'heartbeat_presence_only' };
   }
 
@@ -171,13 +205,21 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
     };
   }
 
-  // 1. PHYSICAL JUMP CHECK (Slice 1 Hardening)
+  // PHYSICAL JUMP CHECK (Slice 1 Hardening)
   const riderState = riderLatestState.get(riderId);
   const lastFix = riderState?.latestDb;
 
   // Use device timestamp for physics to avoid issues with batched network updates
   // For simulations, ALWAYS use server 'now' to ensure UI freshness (Live status)
   const physicsTimestamp = isSimulation ? now : (timestamp || now);
+
+  // ALWAYS update health metrics if provided, even if GPS is stationary
+  if (input.batteryLevel !== undefined || input.networkType) {
+    pool.query(
+      "UPDATE users SET last_battery_level = ?, last_signal_strength = ?, updated_at = NOW() WHERE id = ?",
+      [input.batteryLevel ?? null, input.networkType || null, riderId]
+    ).catch(e => console.error('[Location] Real-time health update failed:', e));
+  }
 
   // 2. TIMESTAMP ORDERING PROTECTION (Senior Requirement)
   // Bypassed for simulations as they often jump around during testing.
@@ -262,6 +304,7 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
 
   let fleetLocationUpdated = false;
   if (shouldWriteLatest(riderState, physicsTimestamp)) {
+    // Persist position update
     await pool.query(
       "UPDATE users SET status = 'active', current_lat = ?, current_lng = ?, updated_at = ? WHERE id = ?",
       [lat, lng, dbTimestamp, riderId],
@@ -374,6 +417,95 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
     latestDb: writeLatest ? { lat, lng, timestamp: physicsTimestamp } : requestState?.latestDb,
     history: writeHistory ? { lat, lng, timestamp: physicsTimestamp } : requestState?.history,
   });
+
+  // --- GEOFENCING & IDLE LOGIC ---
+  let gState = requestGeofenceState.get(effectiveRequestId);
+  if (!gState) {
+    gState = { arrived_pickup: false, arrived_dropoff: false, last_active: physicsTimestamp, last_lat: lat, last_lng: lng };
+    requestGeofenceState.set(effectiveRequestId, gState);
+  }
+
+  const distToPickup = getDistance(lat, lng, Number(request.pickup_lat), Number(request.pickup_lng));
+  const distToDropoff = getDistance(lat, lng, Number(request.dropoff_lat), Number(request.dropoff_lng));
+
+  // --- LAYER 3: PRIORITY GAP WATCHDOG ---
+  // If rider is near a High-Weight task but headed elsewhere, alert Admin.
+  try {
+    const [allActive]: any = await pool.query(
+      "SELECT request_id, requester_department, pickup_lat, pickup_lng, urgency_level FROM delivery_requests WHERE assigned_rider_id = ? AND delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')",
+      [riderId]
+    );
+
+    for (const other of allActive) {
+      if (other.request_id === effectiveRequestId) continue;
+
+      const otherDept = other.requester_department;
+      const isHighPriority = otherDept === 'Finance' || otherDept === 'Regulatory' || other.urgency_level === 'Urgent';
+      
+      if (isHighPriority) {
+        const distToHighPriority = getDistance(lat, lng, Number(other.pickup_lat), Number(other.pickup_lng));
+        
+        // Gap Trigger: Within 1km of High-Priority but working on something else
+        if (distToHighPriority <= 1000) {
+          const currentTargetDist = request.delivery_status === 'in_progress' ? distToDropoff : distToPickup;
+          
+          if (currentTargetDist > 1500) {
+            if (io) {
+              io.to('admin-room').emit('notification-added', {
+                id: `gap_${Date.now()}_${riderId}`,
+                message: `⚠️ PRIORITY GAP: Rider ${riderName} is within ${Math.round(distToHighPriority)}m of a ${otherDept} task (#${other.request_id.slice(-6).toUpperCase()}) but is continuing toward a further target.`,
+                type: 'warning',
+                metadata: { type: 'priority_gap', riderId, riderName, highPriorityRequestId: other.request_id, distance: distToHighPriority }
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Watchdog] Priority Gap Check failed:', e);
+  }
+
+  // 1. Arrived Pickup
+  if (!gState.arrived_pickup && distToPickup <= GEOFENCE_RADIUS_M) {
+    gState.arrived_pickup = true;
+    const eventId = `move_${Date.now()}_ap_${Math.random().toString(36).substring(7)}`;
+    await pool.query(
+      'INSERT INTO movement_events (id, request_id, rider_id, event_type, message, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+      [eventId, effectiveRequestId, riderId, 'arrived_pickup', 'Rider arrived at pickup location (Auto-detected)', JSON.stringify({ distance: Math.round(distToPickup) })]
+    );
+    if (io) io.to('admin-room').to(`job_${effectiveRequestId}`).emit('timeline-update', { requestId: effectiveRequestId });
+  }
+
+  // 2. Arrived Dropoff
+  if (!gState.arrived_dropoff && distToDropoff <= GEOFENCE_RADIUS_M) {
+    gState.arrived_dropoff = true;
+    const eventId = `move_${Date.now()}_ad_${Math.random().toString(36).substring(7)}`;
+    await pool.query(
+      'INSERT INTO movement_events (id, request_id, rider_id, event_type, message, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+      [eventId, effectiveRequestId, riderId, 'arrived_dropoff', 'Rider arrived at destination (Auto-detected)', JSON.stringify({ distance: Math.round(distToDropoff) })]
+    );
+    if (io) io.to('admin-room').to(`job_${effectiveRequestId}`).emit('timeline-update', { requestId: effectiveRequestId });
+  }
+
+  // 3. Idle Detection
+  const timeSinceLastActive = physicsTimestamp - gState.last_active;
+  const distSinceLastActive = getDistance(lat, lng, gState.last_lat, gState.last_lng);
+
+  if (timeSinceLastActive >= IDLE_TIME_MS) {
+    if (distSinceLastActive < IDLE_DISTANCE_M && distToPickup > GEOFENCE_RADIUS_M && distToDropoff > GEOFENCE_RADIUS_M) {
+      const eventId = `move_${Date.now()}_idle_${Math.random().toString(36).substring(7)}`;
+      await pool.query(
+        'INSERT INTO movement_events (id, request_id, rider_id, event_type, message, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+        [eventId, effectiveRequestId, riderId, 'idle_alert', 'Rider has been stationary for over 10 minutes', JSON.stringify({ idle_duration_min: 10 })]
+      );
+      if (io) io.to('admin-room').to(`job_${effectiveRequestId}`).emit('timeline-update', { requestId: effectiveRequestId });
+    }
+    // Reset idle tracker
+    gState.last_active = physicsTimestamp;
+    gState.last_lat = lat;
+    gState.last_lng = lng;
+  }
 
   return {
     fleetLocationUpdated,
