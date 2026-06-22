@@ -1,49 +1,49 @@
-import { createBrowserRouter, Navigate } from 'react-router';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { LiveTrackingDashboard } from './pages/LiveTrackingDashboard';
-import { MapPickerPage } from './pages/MapPickerPage';
+import { createBrowserRouter, Navigate } from "react-router";
+import { Login } from "./pages/Login";
+import { Dashboard } from "./pages/Dashboard";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LiveTrackingDashboard } from "./pages/LiveTrackingDashboard";
+import { MapPickerPage } from "./pages/MapPickerPage";
 
 export const router = createBrowserRouter([
   {
-    path: '/',
+    path: "/",
     element: <Login />,
   },
   {
-    path: '/admin/dashboard',
+    path: "/admin/dashboard",
     element: (
-      <ProtectedRoute allowedRoles={['admin']}>
+      <ProtectedRoute allowedRoles={["admin"]}>
         <Dashboard />
       </ProtectedRoute>
     ),
   },
   {
-    path: '/admin/tracking/:id',
+    path: "/admin/tracking/:id",
     element: (
-      <ProtectedRoute allowedRoles={['admin', 'personnel']}>
+      <ProtectedRoute allowedRoles={["admin", "personnel"]}>
         <LiveTrackingDashboard />
       </ProtectedRoute>
     ),
   },
   {
-    path: '/personnel/dashboard',
+    path: "/personnel/dashboard",
     element: (
-      <ProtectedRoute allowedRoles={['personnel']}>
+      <ProtectedRoute allowedRoles={["personnel"]}>
         <Dashboard />
       </ProtectedRoute>
     ),
   },
   {
-    path: '/rider/dashboard',
+    path: "/rider/dashboard",
     element: (
-      <ProtectedRoute allowedRoles={['rider']}>
+      <ProtectedRoute allowedRoles={["rider"]}>
         <Dashboard />
       </ProtectedRoute>
     ),
   },
   {
-    path: '/dashboard',
+    path: "/dashboard",
     element: (
       <ProtectedRoute>
         <Dashboard />
@@ -51,15 +51,15 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/map-picker',
+    path: "/map-picker",
     element: (
-      <ProtectedRoute allowedRoles={['personnel', 'admin']}>
+      <ProtectedRoute allowedRoles={["personnel", "admin"]}>
         <MapPickerPage />
       </ProtectedRoute>
     ),
   },
   {
-    path: '*',
+    path: "*",
     element: <Navigate to="/" replace />,
   },
 ]);

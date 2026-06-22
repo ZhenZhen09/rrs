@@ -18,7 +18,6 @@ import { CalendarView } from './CalendarView';
 import { NotificationBell } from '../../components/Admin/NotificationBell';
 import { RiderMap } from './RiderMap';
 import { AttendanceDashboard } from './AttendanceDashboard';
-import { DevSimulator } from '../../components/Admin/DevSimulator';
 
 type AdminView = 'dispatch' | 'users' | 'analytics' | 'theme' | 'calendar' | 'rider-map' | 'attendance';
 
@@ -313,7 +312,6 @@ export function AdminLayout() {
         </main>
       </div>
 
-      <DevSimulator />
 
       {/* Shared Profile Dialog */}
       <Dialog open={showProfile} onOpenChange={setShowProfile}>

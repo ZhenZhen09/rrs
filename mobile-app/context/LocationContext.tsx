@@ -13,6 +13,7 @@ import * as Battery from 'expo-battery';
 import * as Network from 'expo-network';
 import { updateLocationBackground, updateDutyStatus, submitAttendance, getMyAttendance } from '@/services/apiService';
 import { Alert } from 'react-native';
+import { RouteOptimizedModal } from '@/components/RouteOptimizedModal';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const STORAGE_USER_ID = '@rider_id';
@@ -40,6 +41,8 @@ type LocationState = {
   locationPermission: Location.PermissionStatus | null;
   backgroundPermissionGranted: boolean;
   isSocketConnected: boolean;
+  routeOptimizedMessage: string | null;
+  setRouteOptimizedMessage: (msg: string | null) => void;
   startTracking: (requestId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
   toggleDuty: (status: boolean, reason?: string) => Promise<boolean>;
@@ -227,6 +230,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [backgroundPermissionGranted, setBackgroundPermissionGranted] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [lastLocation, setLastLocation] = useState<LocationState['lastLocation']>(null);
+  const [routeOptimizedMessage, setRouteOptimizedMessage] = useState<string | null>(null);
   const lastLocationRef = useRef<LocationState['lastLocation']>(null);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const activeRequestId = useRef<string | null>(null);
@@ -650,8 +654,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     socket.on('requests-updated', (data: any) => {
       // LAYER 2: Instant Route Optimization Sync
       if (data?.message) {
-        // Show an in-app alert for route changes
-        Alert.alert("📍 Route Optimized", data.message);
+        // Show the professional in-app modal for route changes
+        setRouteOptimizedMessage(data.message);
       }
       refreshRiderData(data);
     });
@@ -803,6 +807,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       locationPermission, 
       backgroundPermissionGranted,
       isSocketConnected,
+      routeOptimizedMessage,
+      setRouteOptimizedMessage,
       startTracking,
       stopTracking,
       toggleDuty,
@@ -812,6 +818,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       simulateLocation
     }}>
       {children}
+      <RouteOptimizedModal 
+        visible={!!routeOptimizedMessage}
+        onClose={() => setRouteOptimizedMessage(null)}
+        message={routeOptimizedMessage || undefined}
+      />
     </LocationContext.Provider>
   );
 }

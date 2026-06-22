@@ -185,10 +185,13 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
 
     if (user.id !== id) return res.status(403).json({ error: 'Forbidden' });
 
-    // New Handover Rule: Block going off-duty if active tasks exist UNLESS a reason is provided
+    // New Handover Rule: Block going off-duty if active tasks (today, overdue, or in-progress) exist UNLESS a reason is provided
     if (is_on_duty === false) {
       const [activeTasks]: any = await pool.query(
-        "SELECT request_id FROM delivery_requests WHERE assigned_rider_id = ? AND delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')",
+        `SELECT request_id FROM delivery_requests 
+         WHERE assigned_rider_id = ? 
+         AND delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')
+         AND (delivery_date <= CURDATE() OR delivery_status = 'in_progress')`,
         [id]
       );
       

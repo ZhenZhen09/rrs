@@ -13,11 +13,13 @@ import { NotificationModal } from '@/components/NotificationModal';
 import { useLocation } from '@/context/LocationContext';
 import { AttendanceGate } from '@/components/AttendanceGate';
 import { HandoverModal } from '@/components/HandoverModal';
+import { ShiftEndModal } from '@/components/ShiftEndModal';
 
 export default function TodayScreen() {
   const { isOnDuty, toggleDuty, attendanceStatus } = useLocation();
   const [isToggling, setIsToggling] = React.useState(false);
   const [showHandover, setShowHandover] = React.useState(false);
+  const [showShiftEnd, setShowShiftEnd] = React.useState(false);
 
   const { 
     tasks: allTasks,
@@ -34,24 +36,42 @@ export default function TodayScreen() {
     router
   } = useDashboard();
 
+  const activeTaskCount = React.useMemo(() => {
+    return allTasks.filter(t => {
+      const tab = getRiderTaskTab(t);
+      return tab === 'today' || tab === 'overdue' || t.delivery_status === 'in_progress';
+    }).length;
+  }, [allTasks]);
+
   const handleToggleDuty = async () => {
-    const activeTaskCount = allTasks.filter(t => !['completed', 'delivered', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || t.status)).length;
-    
-    if (isOnDuty && activeTaskCount > 0) {
-      setShowHandover(true);
+    if (isOnDuty) {
+      if (activeTaskCount > 0) {
+        setShowHandover(true);
+      } else {
+        setShowShiftEnd(true);
+      }
       return;
     }
 
     setIsToggling(true);
-    await toggleDuty(!isOnDuty);
+    await toggleDuty(true);
     setIsToggling(false);
+  };
+
+  const handleShiftEndConfirm = async () => {
+    setIsToggling(true);
+    await toggleDuty(false);
+    setIsToggling(false);
+    setShowShiftEnd(false);
   };
 
   const handleHandoverConfirm = async (reason: string) => {
     setIsToggling(true);
-    await toggleDuty(false, reason);
+    const success = await toggleDuty(false, reason);
     setIsToggling(false);
-    setShowHandover(false);
+    if (success) {
+      setShowHandover(false);
+    }
   };
 
   const tasks = allTasks.filter(req => getRiderTaskTab(req) === 'today');
@@ -228,7 +248,13 @@ export default function TodayScreen() {
         visible={showHandover}
         onClose={() => setShowHandover(false)}
         onConfirm={handleHandoverConfirm}
-        taskCount={allTasks.filter(t => !['completed', 'delivered', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || t.status)).length}
+        taskCount={activeTaskCount}
+      />
+
+      <ShiftEndModal 
+        visible={showShiftEnd}
+        onClose={() => setShowShiftEnd(false)}
+        onConfirm={handleShiftEndConfirm}
       />
     </SafeAreaView>
   );
