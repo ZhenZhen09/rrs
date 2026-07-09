@@ -716,12 +716,18 @@ export function AnalyticsHub() {
                         const startIndex = (currentPage - 1) * itemsPerPage;
                         const paginatedData = sortedData.slice(startIndex, startIndex + itemsPerPage);
                         return paginatedData.map((row, idx) => {
-                          let statusActor = row.delivery_status || 'pending';
+                          let statusActor = String(row.delivery_status || 'pending').toLowerCase();
+                          let topStatus = String(row.status || '').toLowerCase();
+                          
+                          if (topStatus === 'cancelled') statusActor = 'cancelled';
+                          else if (topStatus === 'disapproved') statusActor = 'disapproved';
+                          else if (topStatus === 'returned_for_revision') statusActor = 'action required';
+
                           let cleanNote = row.rider_remark || '';
                           
                           if (String(cleanNote).includes('[Admin update by')) {
                             statusActor = `${statusActor} (Admin)`;
-                          } else if (row.assigned_rider_name) {
+                          } else if (row.assigned_rider_name && statusActor !== 'cancelled' && statusActor !== 'disapproved') {
                             statusActor = `${statusActor} (Rider: ${row.assigned_rider_name})`;
                           }
 
