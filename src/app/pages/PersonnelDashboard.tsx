@@ -190,6 +190,8 @@ export function PersonnelDashboard() {
   const { requests, submitRequest, resubmitRequest, cancelRequest } = useData();
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedRequestForCancel, setSelectedRequestForCancel] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
 
@@ -1045,6 +1047,44 @@ export function PersonnelDashboard() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Pro Max Cancel Request Modal */}
+        <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+          <DialogContent className="rounded-[2.5rem] border-none shadow-[0_20px_60px_-15px_rgba(225,29,72,0.15)] p-10 max-w-md text-center bg-white">
+            <div className="w-20 h-20 bg-rose-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 text-rose-500 shadow-inner ring-4 ring-rose-50/50">
+              <AlertTriangle size={36} strokeWidth={2.5} />
+            </div>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-[900] text-slate-900 text-center tracking-tight">
+                Cancel Request
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 font-medium text-center pt-3 leading-relaxed text-sm">
+                Are you sure you want to permanently cancel this request? This action cannot be undone and will be marked as a <span className="font-[900] text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded ml-1">Failed</span> task in the system.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-4 mt-8">
+              <Button
+                variant="outline"
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 h-14 rounded-2xl border-slate-200 hover:bg-slate-50 text-slate-600 font-[900] uppercase tracking-widest text-[10px] transition-all"
+              >
+                Keep Request
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedRequestForCancel) {
+                    cancelRequest(selectedRequestForCancel);
+                    setShowCancelModal(false);
+                    setSelectedRequestForCancel(null);
+                  }
+                }}
+                className="flex-1 h-14 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-[900] uppercase tracking-widest text-[10px] shadow-lg shadow-rose-500/20 transition-all active:scale-95"
+              >
+                Yes, Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* NEW PERFORMANCE MINI-STRIP */}
@@ -1384,13 +1424,25 @@ export function PersonnelDashboard() {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={() => handleEditRequest(request)}
-                    className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3"
-                  >
-                    <RotateCcw size={16} />
-                    Edit & Resubmit
-                  </Button>
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      onClick={() => handleEditRequest(request)}
+                      className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3"
+                    >
+                      <RotateCcw size={16} />
+                      Edit & Resubmit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedRequestForCancel(request.request_id);
+                        setShowCancelModal(true);
+                      }}
+                      className="w-full h-12 rounded-xl border-rose-100 text-rose-500 hover:bg-rose-50 hover:text-rose-600 font-bold text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      Cancel Request
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

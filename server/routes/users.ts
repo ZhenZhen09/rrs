@@ -6,8 +6,22 @@ import { onlineRiders } from '../presence';
 import { AuthRequest, authorize } from '../middleware/auth';
 import fs from 'fs';
 import { handleRiderLocationUpdate } from '../locationTracking';
+import { recordConnectivityLog } from '../services/connectivityLogger';
 
 const router = Router();
+const PH_TODAY_SQL = "DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))";
+const PH_NOW_SQL = "CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')";
+
+const getPhilippineDateString = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+};
 
 // Get all users (Admin only)
 router.get('/', authorize(['admin']), async (req: AuthRequest, res: Response) => {
@@ -56,7 +70,7 @@ router.get('/riders/live', authorize(['admin', 'personnel']), async (req: AuthRe
              MAX(dr.delivery_status) as delivery_status, 
              MAX(dr.pickup_address) as pickup_address, 
              MAX(dr.time_window) as time_window,
-             (SELECT status FROM attendance_logs WHERE rider_id = u.id AND date = CURDATE() LIMIT 1) as attendance_status
+             (SELECT status FROM attendance_logs WHERE rider_id = u.id AND date = ${PH_TODAY_SQL} LIMIT 1) as attendance_status
       FROM users u
       LEFT JOIN delivery_requests dr ON u.id = dr.assigned_rider_id 
         AND dr.delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')
@@ -79,7 +93,7 @@ router.get('/riders/live', authorize(['admin', 'personnel']), async (req: AuthRe
 // GET /attendance/daily (Admin only)
 router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   try {
-    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const date = (req.query.date as string | undefined) || getPhilippineDateString();
     const [rows]: any = await pool.query(`
       SELECT u.id as rider_id, u.name as rider_name, u.email as rider_email,
              al.status, al.reason, al.check_in_time, al.off_duty_time, al.created_at,
@@ -114,7 +128,7 @@ router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, r
 router.get('/me/attendance', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
     const [rows]: any = await pool.query(
-      'SELECT status, reason FROM attendance_logs WHERE rider_id = ? AND date = CURDATE() LIMIT 1',
+      `SELECT status, reason FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL} LIMIT 1`,
       [req.user!.id]
     );
     res.json(rows[0] || { status: null });
@@ -139,7 +153,9 @@ router.post('/:id/attendance', authorize(['rider']), async (req: AuthRequest, re
     const attendanceId = `att_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     await pool.query(
-      'INSERT INTO attendance_logs (id, rider_id, date, status, reason, check_in_time) VALUES (?, ?, CURDATE(), ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE status = ?, reason = ?, check_in_time = IF(status != ?, CURRENT_TIMESTAMP, check_in_time)',
+      `INSERT INTO attendance_logs (id, rider_id, date, status, reason, check_in_time)
+       VALUES (?, ?, ${PH_TODAY_SQL}, ?, ?, ${PH_NOW_SQL})
+       ON DUPLICATE KEY UPDATE status = ?, reason = ?, check_in_time = IF(status != ?, ${PH_NOW_SQL}, check_in_time)`,
       [attendanceId, id, status, reason || null, status, reason || null, status]
     );
 
@@ -191,7 +207,7 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
         `SELECT request_id FROM delivery_requests 
          WHERE assigned_rider_id = ? 
          AND delivery_status NOT IN ('completed', 'failed', 'cancelled', 'disapproved')
-         AND (delivery_date <= CURDATE() OR delivery_status = 'in_progress')`,
+         AND (delivery_date <= ${PH_TODAY_SQL} OR delivery_status = 'in_progress')`,
         [id]
       );
       
@@ -223,12 +239,13 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
       // SUPERPOWERED FIX: Clear off_duty_time when coming back to duty.
       // This "heals" the record and removes false conflicts from the Admin Dashboard.
       await pool.query(
-        'UPDATE attendance_logs SET off_duty_time = NULL WHERE rider_id = ? AND date = CURDATE()',
+        `UPDATE attendance_logs SET off_duty_time = NULL WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`,
         [id]
       ).catch(e => console.error('[HealAttendance] Failed to clear off_duty_time:', e));
 
       await pool.query(
-        'INSERT IGNORE INTO attendance_logs (id, rider_id, date, status, check_in_time) VALUES (?, ?, CURDATE(), \'present\', CURRENT_TIMESTAMP)',
+        `INSERT IGNORE INTO attendance_logs (id, rider_id, date, status, check_in_time)
+         VALUES (?, ?, ${PH_TODAY_SQL}, 'present', ${PH_NOW_SQL})`,
         [attendanceId, id]
       ).catch(e => console.error('[FailsafeAttendance] Failed:', e));
     }
@@ -236,7 +253,7 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
     // SHIFT END LOGGING: If toggling OFF, update attendance_logs for today
     if (is_on_duty === false) {
       await pool.query(
-        'UPDATE attendance_logs SET off_duty_time = NOW() WHERE rider_id = ? AND date = CURDATE()',
+        `UPDATE attendance_logs SET off_duty_time = ${PH_NOW_SQL} WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`,
         [id]
       ).catch(e => console.error('[ShiftEnd] Failed to log off_duty_time:', e));
     }
@@ -245,7 +262,8 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
     try {
       const eventId = `move_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       await pool.query(
-        'INSERT INTO movement_events (id, rider_id, event_type, message, metadata) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO movement_events (id, rider_id, event_type, message, metadata, timestamp)
+         VALUES (?, ?, ?, ?, ?, ${PH_NOW_SQL})`,
         [
           eventId, 
           id, 
@@ -254,6 +272,13 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
           reason ? JSON.stringify({ handover_reason: reason }) : null
         ]
       );
+      await recordConnectivityLog({
+        riderId: String(id),
+        riderName: user.name,
+        eventType: is_on_duty ? 'duty_on' : 'duty_off',
+        isOnDuty: Boolean(is_on_duty),
+        metadata: reason ? { handover_reason: reason } : null,
+      });
     } catch (logErr) {
       console.error('Failed to log movement event:', logErr);
     }
@@ -272,7 +297,7 @@ router.post('/dev/simulate-reset', async (req: AuthRequest, res: Response) => {
 
   try {
     console.log('🚀 DEV: Resetting today\'s attendance logs...');
-    await pool.query('DELETE FROM attendance_logs WHERE date = CURDATE()');
+    await pool.query(`DELETE FROM attendance_logs WHERE date = ${PH_TODAY_SQL}`);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Reset failed' });
@@ -303,7 +328,7 @@ router.post('/dev/simulate-sweep', async (req: AuthRequest, res: Response) => {
     for (const rider of riders) {
       await pool.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [rider.id]);
       await pool.query(
-        'UPDATE attendance_logs SET off_duty_time = NOW() WHERE rider_id = ? AND date = CURDATE()',
+        `UPDATE attendance_logs SET off_duty_time = ${PH_NOW_SQL} WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`,
         [rider.id]
       ).catch(e => console.error('[SimSweep] Failed to log off_duty_time:', e));
 
@@ -325,7 +350,7 @@ router.delete('/attendance/:riderId', authorize(['admin']), async (req: AuthRequ
     const { riderId } = req.params;
     const io = req.app.get('io');
     
-    await pool.query('DELETE FROM attendance_logs WHERE rider_id = ? AND date = CURDATE()', [riderId]);
+    await pool.query(`DELETE FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`, [riderId]);
     
     // Notify the mobile app to refresh instantly
     io.to(riderId).emit('attendance-cleared', { message: 'Your absence has been cleared by Admin. You can now start your shift.' });

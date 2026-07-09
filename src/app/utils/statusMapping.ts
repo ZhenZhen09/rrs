@@ -41,8 +41,7 @@ export const getGroupedStatus = (
   }
 
   // 4. Active Operations (Approved but not terminal)
-  // RESUBMISSION SPECIAL: pending requests marked as pending_review go here!
-  if (s === 'approved' || ['assigned', 'in_progress', 'arrived', 'pending_review'].includes(ds)) {
+  if (s === 'approved' || ['assigned', 'in_progress', 'arrived'].includes(ds)) {
     return 'active';
   }
 

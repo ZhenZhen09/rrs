@@ -17,11 +17,39 @@ import {
   MoreVertical,
   ShieldAlert
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { cn } from '../../components/ui/utils';
 import { toast } from 'sonner';
 import { ConflictResolutionModal } from '../../components/Admin/ConflictResolutionModal';
 import { useRealTime } from '../../context/RealTimeContext';
+
+const getPhilippineDateString = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+};
+
+const parsePhilippineDateTime = (value: string | null) => {
+  if (!value) return null;
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const withOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}+08:00`;
+  const date = new Date(withOffset);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatPhilippineTime = (value: string | null) => {
+  const date = parsePhilippineDateTime(value);
+  if (!date) return '--:--';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
 
 interface AttendanceRecord {
   rider_id: string;
@@ -39,7 +67,7 @@ interface AttendanceRecord {
 
 export const AttendanceDashboard: React.FC = () => {
   const { socket } = useRealTime();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getPhilippineDateString);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,8 +78,11 @@ export const AttendanceDashboard: React.FC = () => {
 
   const calculateDuration = (start: string | null, end: string | null) => {
     if (!start || !end) return null;
-    const startTime = new Date(start).getTime();
-    const endTime = new Date(end).getTime();
+    const startDate = parsePhilippineDateTime(start);
+    const endDate = parsePhilippineDateTime(end);
+    if (!startDate || !endDate) return null;
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime();
     const diffMs = endTime - startTime;
     if (diffMs <= 0) return '0m';
     
@@ -325,7 +356,7 @@ export const AttendanceDashboard: React.FC = () => {
                           <div className="flex items-center gap-2 text-slate-600">
                             <Clock size={12} className="text-slate-300" />
                             <span className="text-xs font-bold tracking-tight">
-                              {record.check_in_time ? format(new Date(record.check_in_time), 'h:mm a') : '--:--'}
+                              {formatPhilippineTime(record.check_in_time)}
                             </span>
                           </div>
                         </td>
@@ -333,7 +364,7 @@ export const AttendanceDashboard: React.FC = () => {
                           <div className="flex items-center gap-2 text-slate-600">
                             <Clock size={12} className="text-slate-300" />
                             <span className="text-xs font-bold tracking-tight">
-                              {record.off_duty_time ? format(new Date(record.off_duty_time), 'h:mm a') : '--:--'}
+                              {formatPhilippineTime(record.off_duty_time || null)}
                             </span>
                           </div>
                         </td>

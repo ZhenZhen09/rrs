@@ -60,6 +60,16 @@ interface CalendarFilters {
 
 type ViewMode = 'month' | 'week';
 
+function getCalendarExportActionBy(request: any) {
+  const status = getGroupedStatus(request.status, request.delivery_status);
+  const adminUpdated = typeof request.rider_remark === 'string' && request.rider_remark.includes('[Admin update by');
+
+  if (status === 'declined') return 'Declined by Admin';
+  if (status === 'failed') return adminUpdated ? 'Declined by Admin' : 'Declined by Rider';
+  if (status === 'done') return adminUpdated ? 'Done by Admin' : 'Done by Rider';
+  return '';
+}
+
 // Helper: Technical Status Legend
 function StatusIndicator({ color, label }: { color: string, label: string }) {
   return (
@@ -130,7 +140,7 @@ export function CalendarView() {
   // Logic: Export
   const handleExportCSV = () => {
     if (filteredRequests.length === 0) return;
-    const headers = ['ID', 'Requester', 'Department', 'Date', 'Window', 'Destination', 'Status'];
+    const headers = ['ID', 'Requester', 'Department', 'Date', 'Window', 'Destination', 'Status', 'Action By'];
     const rows = filteredRequests.map(r => [
       r.request_id,
       r.requester_name,
@@ -138,7 +148,8 @@ export function CalendarView() {
       r.delivery_date,
       r.time_window,
       `"${r.dropoff_location?.address?.replace(/"/g, '""') || 'N/A'}"`,
-      getGroupedStatus(r.status, r.delivery_status).toUpperCase()
+      getGroupedStatus(r.status, r.delivery_status).toUpperCase(),
+      getCalendarExportActionBy(r)
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

@@ -23,6 +23,7 @@ import { authenticate } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
 import { onlineRiders, updateRiderPresence, removeRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate, pruneTrackingState, riderLatestState } from './locationTracking';
+import { getLatestOfflineIncident, recordConnectivityLog } from './services/connectivityLogger';
 
 Bugsnag.start({
   apiKey: process.env.BUGSNAG_API_KEY || '37b188b8dd7ad62347e11722b1b9036f',
@@ -195,9 +196,12 @@ class RequestWatchdog {
 
       // --- TASK 2: MONITOR ACTIVE SHIPMENTS ---
       const [rows] = await pool.execute(
-        `SELECT request_id, assigned_rider_id, requester_id, delivery_status, current_lat, current_lng, updated_at
-         FROM delivery_requests
-         WHERE status = 'approved' AND delivery_status NOT IN ('completed', 'failed', 'disapproved')`
+        `SELECT dr.request_id, dr.assigned_rider_id, dr.requester_id, dr.delivery_status,
+                dr.current_lat, dr.current_lng, dr.updated_at,
+                u.name as rider_name, u.is_on_duty, u.last_battery_level, u.last_signal_strength
+         FROM delivery_requests dr
+         LEFT JOIN users u ON u.id = dr.assigned_rider_id
+         WHERE dr.status = 'approved' AND dr.delivery_status NOT IN ('completed', 'failed', 'disapproved')`
       );
       const activeRequests = rows as any[];
 
@@ -269,6 +273,55 @@ class RequestWatchdog {
           }
           
           await pool.execute('UPDATE delivery_requests SET exceptions = ? WHERE request_id = ?', [JSON.stringify(newExceptionsList), req.request_id]);
+
+          const hadSignalLost = oldExceptionsList.includes('signal_lost');
+          const hasSignalLost = newExceptionsList.includes('signal_lost');
+          if (!hadSignalLost && hasSignalLost && req.delivery_status === 'in_progress' && req.assigned_rider_id) {
+            await recordConnectivityLog({
+              riderId: req.assigned_rider_id,
+              riderName: req.rider_name,
+              requestId: req.request_id,
+              eventType: 'offline_in_progress',
+              deliveryStatus: req.delivery_status,
+              isOnDuty: Boolean(req.is_on_duty),
+              lat: req.current_lat,
+              lng: req.current_lng,
+              locationRecordedAt: req.updated_at,
+              batteryLevel: req.last_battery_level,
+              networkType: req.last_signal_strength,
+              metadata: {
+                source: 'request_watchdog',
+                exception: 'signal_lost',
+              },
+            });
+          }
+
+          if (hadSignalLost && !hasSignalLost && req.assigned_rider_id) {
+            const offlineIncident = await getLatestOfflineIncident(req.assigned_rider_id, req.request_id);
+            const offlineAt = offlineIncident?.event_time ? new Date(offlineIncident.event_time).getTime() : null;
+            const durationSeconds = offlineAt && Number.isFinite(offlineAt)
+              ? Math.max(0, Math.round((now - offlineAt) / 1000))
+              : null;
+
+            await recordConnectivityLog({
+              riderId: req.assigned_rider_id,
+              riderName: req.rider_name,
+              requestId: req.request_id,
+              eventType: 'online_restored',
+              deliveryStatus: req.delivery_status,
+              isOnDuty: Boolean(req.is_on_duty),
+              lat: req.current_lat,
+              lng: req.current_lng,
+              locationRecordedAt: req.updated_at,
+              batteryLevel: req.last_battery_level,
+              networkType: req.last_signal_strength,
+              durationSeconds,
+              metadata: {
+                source: 'request_watchdog',
+                cleared_exception: 'signal_lost',
+              },
+            });
+          }
           
           const event = newExceptionsList.length > 0 ? 'exception-detected' : 'exception-cleared';
           

@@ -566,9 +566,9 @@ router.put('/:id/cancel', async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to cancel this request.' });
     }
 
-    if (user.role === 'personnel' && request.status !== 'submitted_waiting' && request.status !== 'pending') {
+    if (user.role === 'personnel' && request.status !== 'submitted_waiting' && request.status !== 'pending' && request.status !== 'returned_for_revision') {
       await conn.rollback();
-      return res.status(400).json({ error: 'cancellation window has expired. Only pending requests can be cancelled.' });
+      return res.status(400).json({ error: 'Cancellation window has expired. Only pending or action-required requests can be cancelled.' });
     }
 
     // TERMINAL LOCK: Block cancellation for terminal jobs
@@ -579,8 +579,8 @@ router.put('/:id/cancel', async (req, res) => {
     }
 
     await conn.query(`
-      UPDATE delivery_requests SET status = 'cancelled', admin_remark = ? WHERE request_id = ?
-    `, [admin_remark || 'Cancelled by requester', id]);
+      UPDATE delivery_requests SET status = 'failed', delivery_status = 'failed', admin_remark = ? WHERE request_id = ?
+    `, [admin_remark || `failed (${user.name})`, id]);
 
     // Create notifications for Personnel and Rider (if assigned)
     const requesterId = request.requester_id;
@@ -971,7 +971,7 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
         pickup_contact_name = ?, pickup_contact_mobile = ?,
         recipient_name = ?, recipient_contact = ?,
         request_type = ?, urgency_level = ?, personnel_instructions = ?, on_behalf_of = ?,
-        status = 'pending', delivery_status = 'pending_review', 
+        status = 'pending', delivery_status = 'pending', 
         assigned_rider_id = NULL, assigned_rider_name = NULL,
         admin_remark = NULL, 
         created_at = NOW(), updated_at = NOW()
@@ -991,7 +991,7 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
     const io = req.app.get('io');
     if (io) {
       // TARGETED WHISPERING: Only notify Admins and the specific requester.
-      io.to('admin-room').to(user.id).emit('request-updated', { request_id: id, status: 'pending' });
+      io.to('admin-room').to(user.id).emit('request-updated', { request_id: id, status: 'pending', delivery_status: 'pending' });
 
       // Notify admins
       const [admins]: any = await pool.query('SELECT id FROM users WHERE role = "admin"');
