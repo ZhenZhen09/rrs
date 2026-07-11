@@ -579,8 +579,8 @@ router.put('/:id/cancel', async (req, res) => {
     }
 
     await conn.query(`
-      UPDATE delivery_requests SET status = 'failed', delivery_status = 'failed', admin_remark = ? WHERE request_id = ?
-    `, [admin_remark || `failed (${user.name})`, id]);
+      UPDATE delivery_requests SET status = 'cancelled', delivery_status = 'cancelled', admin_remark = ? WHERE request_id = ?
+    `, [admin_remark || `cancelled (${user.name})`, id]);
 
     // Create notifications for Personnel and Rider (if assigned)
     const requesterId = request.requester_id;

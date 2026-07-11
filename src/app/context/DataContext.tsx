@@ -676,7 +676,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const cancelRequest = async (requestId: string, adminRemark?: string) => {
     const previousRequests = [...requests];
     pendingOptimisticIds.current.add(requestId);
-    setRequests((prev) => prev.filter((r) => r.request_id !== requestId));
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.request_id === requestId
+          ? { ...r, status: "cancelled" as any, delivery_status: "cancelled" as any, is_optimistic: true }
+          : r
+      )
+    );
     try {
       const response = await fetchWithAuth(
         `${API_URL}/requests/${requestId}/cancel`,

@@ -14,13 +14,14 @@ async function run() {
     port: parseInt(process.env.DB_PORT || '3306', 10),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: 'defaultdb_test',
+    database: process.env.DB_NAME || 'defaultdb_test',
     waitForConnections: true,
     connectionLimit: 2,
   });
 
   try {
-    console.log('Creating rider_connectivity_logs in defaultdb_test...');
+    const dbName = process.env.DB_NAME || 'defaultdb_test';
+    console.log(`Creating rider_connectivity_logs in ${dbName}...`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rider_connectivity_logs (
         id VARCHAR(64) PRIMARY KEY,
@@ -57,7 +58,7 @@ async function run() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    console.log('rider_connectivity_logs is ready in defaultdb_test.');
+    console.log(`rider_connectivity_logs is ready in ${dbName}.`);
   } catch (err) {
     console.error('Migration failed:', err.message);
     process.exitCode = 1;

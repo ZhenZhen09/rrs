@@ -229,7 +229,8 @@ router.get('/summary-stats', async (req, res) => {
         SUM(CASE WHEN delivery_status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN delivery_status = 'in_transit' THEN 1 ELSE 0 END) as in_transit,
         SUM(CASE WHEN delivery_status = 'pending' OR delivery_status = 'assigned' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN delivery_status = 'failed' THEN 1 ELSE 0 END) as failed
+        SUM(CASE WHEN delivery_status = 'failed' THEN 1 ELSE 0 END) as failed,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
       FROM delivery_requests
       WHERE ${filter}
     `) as any[];

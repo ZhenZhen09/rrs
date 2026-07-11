@@ -413,6 +413,7 @@ export function AnalyticsHub() {
 
   const completionRate = summaryStats.counts.total > 0 ? ((summaryStats.counts.completed / summaryStats.counts.total) * 100).toFixed(1) : "0";
   const failRate = summaryStats.counts.total > 0 ? ((summaryStats.counts.failed / summaryStats.counts.total) * 100).toFixed(1) : "0";
+  const cancelRate = summaryStats.counts.total > 0 ? ((summaryStats.counts.cancelled / summaryStats.counts.total) * 100).toFixed(1) : "0";
 
   return (
     <div className="bg-[#F1F5F9] min-h-screen p-3 md:p-6 font-sans text-slate-900 selection:bg-[#00B14F]/30 relative overflow-hidden">
@@ -475,7 +476,7 @@ export function AnalyticsHub() {
 
         {activeTab === 'main' ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-bottom-4 fade-in duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 fade-in duration-700">
               <div className="group relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 rounded-[24px] p-8 border border-emerald-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
                 <div className="absolute -right-6 -top-6 text-emerald-500/5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
                   <CheckCircle size={140} strokeWidth={1} />
@@ -500,6 +501,20 @@ export function AnalyticsHub() {
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                   <span className="text-[9px] font-black tracking-widest text-slate-600 uppercase">
                     {summaryStats.counts.failed} of {summaryStats.counts.total} Total
+                  </span>
+                </div>
+              </div>
+              
+              <div className="group relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-amber-50/30 rounded-[24px] p-8 border border-amber-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
+                <div className="absolute -right-6 -top-6 text-amber-500/5 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
+                  <AlertCircle size={140} strokeWidth={1} />
+                </div>
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-3 relative z-10">Cancelled Requests</h3>
+                <div className="text-7xl font-black tracking-tighter text-slate-800 relative z-10">{summaryStats.counts.cancelled || 0}</div>
+                <div className="mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-amber-100/50 relative z-10 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span className="text-[9px] font-black tracking-widest text-slate-600 uppercase">
+                    {cancelRate}% of Total
                   </span>
                 </div>
               </div>
