@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { moderateScale, verticalScale } from '../../utils/responsive';
+import { COLORS, RADIUS, TYPOGRAPHY } from '../../constants/Theme';
 
 interface LiveActivityCardProps {
   job: {
@@ -85,7 +86,7 @@ export function LiveActivityCard({ job }: LiveActivityCardProps) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <FontAwesome5 name="biking" size={12} color="#10B981" />
+          <FontAwesome5 name="biking" size={12} color={COLORS.success} />
           <Text style={styles.logoText}>RIDER ACTIVE LIVE</Text>
         </View>
         <View style={styles.liveIndicatorContainer}>
@@ -125,7 +126,7 @@ export function LiveActivityCard({ job }: LiveActivityCardProps) {
         <View style={[styles.node, styles.pickupNode, progress >= 0.2 && styles.activeNode]} />
         {/* Sliding Bike Marker */}
         <View style={[styles.bikeMarker, { left: `${progress * 100 - 4}%` }]}>
-          <FontAwesome5 name={statusIcon} size={13} color="#FFFFFF" />
+          <FontAwesome5 name={statusIcon} size={13} color={COLORS.surface} />
         </View>
         {/* Node B (Dropoff) */}
         <View style={[styles.node, styles.dropoffNode, progress >= 0.9 && styles.activeNode]} />
@@ -134,14 +135,14 @@ export function LiveActivityCard({ job }: LiveActivityCardProps) {
       {/* Footer Controls */}
       <View style={styles.footer}>
         <View style={styles.footerInfo}>
-          <MaterialIcons name="location-on" size={14} color="#94A3B8" />
+          <MaterialIcons name="location-on" size={14} color={COLORS.muted} />
           <Text style={styles.destinationText} numberOfLines={1}>
             {job.location}
           </Text>
         </View>
         <View style={styles.actionArrow}>
           <Text style={styles.tapText}>Tap to Map</Text>
-          <MaterialIcons name="chevron-right" size={18} color="#10B981" />
+          <MaterialIcons name="chevron-right" size={18} color={COLORS.success} />
         </View>
       </View>
     </TouchableOpacity>
@@ -150,12 +151,12 @@ export function LiveActivityCard({ job }: LiveActivityCardProps) {
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: '#0F172A', // Slate-900
-    borderRadius: 24,
+    backgroundColor: COLORS.primary, 
+    borderRadius: RADIUS.card,
     padding: moderateScale(20),
     marginBottom: verticalScale(20),
     borderWidth: 1,
-    borderColor: '#1E293B', // Slate-800
+    borderColor: '#1E293B', 
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
     left: '10%',
     right: '10%',
     height: 1.5,
-    backgroundColor: '#10B981', // Glowing Green
+    backgroundColor: COLORS.success,
     opacity: 0.7,
   },
   header: {
@@ -185,8 +186,8 @@ const styles = StyleSheet.create({
   },
   logoText: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#10B981',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    color: COLORS.success,
     marginLeft: moderateScale(6),
     letterSpacing: 1,
   },
@@ -196,19 +197,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
     paddingHorizontal: moderateScale(8),
     paddingVertical: verticalScale(4),
-    borderRadius: 8,
+    borderRadius: RADIUS.sm,
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: COLORS.success,
     marginRight: moderateScale(6),
   },
   liveText: {
     fontSize: 9,
-    fontWeight: '900',
-    color: '#10B981',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    color: COLORS.success,
     letterSpacing: 0.5,
   },
   riderRow: {
@@ -227,18 +228,18 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
   avatarText: {
-    color: '#FFFFFF',
+    color: COLORS.onPrimary,
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
   },
   riderDetails: {
     marginLeft: moderateScale(12),
     flex: 1,
   },
   riderName: {
-    color: '#FFFFFF',
+    color: COLORS.onPrimary,
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     letterSpacing: -0.2,
   },
   vehicleInfo: {
@@ -247,9 +248,9 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(4),
   },
   vehicleModel: {
-    color: '#94A3B8',
+    color: COLORS.muted,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   plateBadge: {
     backgroundColor: '#334155',
@@ -261,9 +262,9 @@ const styles = StyleSheet.create({
     borderColor: '#475569',
   },
   plateText: {
-    color: '#F8FAFC',
+    color: COLORS.surface,
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.monoBold,
     letterSpacing: 0.2,
   },
   statusRow: {
@@ -273,14 +274,14 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(10),
   },
   statusMessage: {
-    color: '#FFFFFF',
+    color: COLORS.onPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
   },
   etaText: {
-    color: '#94A3B8',
+    color: COLORS.muted,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.monoMedium,
   },
   progressContainer: {
     height: verticalScale(24),
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#10B981',
+    backgroundColor: COLORS.success,
     borderRadius: 2,
   },
   node: {
@@ -306,26 +307,20 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#1E293B',
     borderWidth: 2,
-    borderColor: '#0F172A',
+    borderColor: COLORS.primary,
   },
-  pickupNode: {
-    left: 0,
-  },
-  dropoffNode: {
-    right: 0,
-  },
-  activeNode: {
-    backgroundColor: '#10B981',
-  },
+  pickupNode: { left: 0 },
+  dropoffNode: { right: 0 },
+  activeNode: { backgroundColor: COLORS.success },
   bikeMarker: {
     position: 'absolute',
     width: moderateScale(22),
     height: moderateScale(22),
     borderRadius: 11,
-    backgroundColor: '#10B981',
+    backgroundColor: COLORS.success,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#10B981',
+    shadowColor: COLORS.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -347,9 +342,9 @@ const styles = StyleSheet.create({
     marginRight: moderateScale(12),
   },
   destinationText: {
-    color: '#94A3B8',
+    color: COLORS.muted,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     marginLeft: moderateScale(6),
     flex: 1,
   },
@@ -358,9 +353,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tapText: {
-    color: '#10B981',
+    color: COLORS.success,
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     marginRight: moderateScale(2),
   },
 });

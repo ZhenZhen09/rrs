@@ -1,0 +1,2970 @@
+{
+  "nodes": [
+    {
+      "id": "mobile_admin_expo_types_router_d_routes",
+      "label": "__routes",
+      "file_type": "code",
+      "source_file": "mobile-admin/.expo/types/router.d.ts",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_app_index_index",
+      "label": "Index",
+      "file_type": "code",
+      "source_file": "mobile-admin/app/index.tsx",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_dispatch_trackingmap_latlng",
+      "label": "LatLng",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/Dispatch/TrackingMap.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_dispatch_trackingmap_ridermaplocation",
+      "label": "RiderMapLocation",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/Dispatch/TrackingMap.tsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_ui_badge_badgeprops",
+      "label": "BadgeProps",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/UI/Badge.tsx",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_ui_badge_badge",
+      "label": "Badge",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/UI/Badge.tsx",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_ui_fleetpulsemap_fleetrider",
+      "label": "FleetRider",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/UI/FleetPulseMap.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_ui_fleetpulsemap_fleetlocation",
+      "label": "FleetLocation",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/UI/FleetPulseMap.tsx",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_components_ui_fleetpulsemap_fleetjob",
+      "label": "FleetJob",
+      "file_type": "code",
+      "source_file": "mobile-admin/components/UI/FleetPulseMap.tsx",
+      "source_location": "L20",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_context_realtimecontext_riderlocation",
+      "label": "RiderLocation",
+      "file_type": "code",
+      "source_file": "mobile-admin/context/RealTimeContext.tsx",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_context_realtimecontext_presencestatus",
+      "label": "PresenceStatus",
+      "file_type": "code",
+      "source_file": "mobile-admin/context/RealTimeContext.tsx",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_context_realtimecontext_realtimetoast",
+      "label": "RealTimeToast",
+      "file_type": "code",
+      "source_file": "mobile-admin/context/RealTimeContext.tsx",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_utils_responsive_normalizefontsize",
+      "label": "normalizeFontSize",
+      "file_type": "code",
+      "source_file": "mobile-admin/utils/responsive.ts",
+      "source_location": "L33",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_admin_utils_statusmapping_uigroupstatus",
+      "label": "UIGroupStatus",
+      "file_type": "code",
+      "source_file": "mobile-admin/utils/statusMapping.ts",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_expo_types_router_d_routes",
+      "label": "__routes",
+      "file_type": "code",
+      "source_file": "mobile-app/.expo/types/router.d.ts",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_app_modal_modalscreen",
+      "label": "ModalScreen",
+      "file_type": "code",
+      "source_file": "mobile-app/app/modal.tsx",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_external_link_externallink",
+      "label": "ExternalLink",
+      "file_type": "code",
+      "source_file": "mobile-app/components/external-link.tsx",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_haptic_tab_haptictab",
+      "label": "HapticTab",
+      "file_type": "code",
+      "source_file": "mobile-app/components/haptic-tab.tsx",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_hello_wave_hellowave",
+      "label": "HelloWave",
+      "file_type": "code",
+      "source_file": "mobile-app/components/hello-wave.tsx",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_parallax_scroll_view_parallaxscrollview",
+      "label": "ParallaxScrollView",
+      "file_type": "code",
+      "source_file": "mobile-app/components/parallax-scroll-view.tsx",
+      "source_location": "L21",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_themed_text_themedtextprops",
+      "label": "ThemedTextProps",
+      "file_type": "code",
+      "source_file": "mobile-app/components/themed-text.tsx",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_themed_text_themedtext",
+      "label": "ThemedText",
+      "file_type": "code",
+      "source_file": "mobile-app/components/themed-text.tsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_themed_view_themedviewprops",
+      "label": "ThemedViewProps",
+      "file_type": "code",
+      "source_file": "mobile-app/components/themed-view.tsx",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_themed_view_themedview",
+      "label": "ThemedView",
+      "file_type": "code",
+      "source_file": "mobile-app/components/themed-view.tsx",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_badge_badgeprops",
+      "label": "BadgeProps",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Badge.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_badge_badge",
+      "label": "Badge",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Badge.tsx",
+      "source_location": "L13",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_button_buttonprops",
+      "label": "ButtonProps",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Button.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_button_button",
+      "label": "Button",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Button.tsx",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_card_cardprops",
+      "label": "CardProps",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Card.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_card_card",
+      "label": "Card",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/Card.tsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_icon_symbol_ios_iconsymbol",
+      "label": "IconSymbol",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/icon-symbol.ios.tsx",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_components_ui_icon_symbol_iconsymbol",
+      "label": "IconSymbol",
+      "file_type": "code",
+      "source_file": "mobile-app/components/ui/icon-symbol.tsx",
+      "source_location": "L32",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_context_authcontext_useauth",
+      "label": "useAuth",
+      "file_type": "code",
+      "source_file": "mobile-app/context/AuthContext.tsx",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_context_authcontext_authprovider",
+      "label": "AuthProvider",
+      "file_type": "code",
+      "source_file": "mobile-app/context/AuthContext.tsx",
+      "source_location": "L31",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_context_locationcontext_locationprovider",
+      "label": "LocationProvider",
+      "file_type": "code",
+      "source_file": "mobile-app/context/LocationContext.tsx",
+      "source_location": "L222",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_hooks_data_usejobdetails_jobsyncstatus",
+      "label": "JobSyncStatus",
+      "file_type": "code",
+      "source_file": "mobile-app/hooks/data/useJobDetails.ts",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_hooks_use_color_scheme_web_usecolorscheme",
+      "label": "useColorScheme",
+      "file_type": "code",
+      "source_file": "mobile-app/hooks/use-color-scheme.web.ts",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_hooks_use_push_notifications_usepushnotifications",
+      "label": "usePushNotifications",
+      "file_type": "code",
+      "source_file": "mobile-app/hooks/use-push-notifications.ts",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "label": "useThemeColor",
+      "file_type": "code",
+      "source_file": "mobile-app/hooks/use-theme-color.ts",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_services_syncqueue_queueitem",
+      "label": "QueueItem",
+      "file_type": "code",
+      "source_file": "mobile-app/services/syncQueue.ts",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_types_index_job",
+      "label": "Job",
+      "file_type": "code",
+      "source_file": "mobile-app/types/index.ts",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_utils_maputils_getroadsnappedpath",
+      "label": "getRoadSnappedPath",
+      "file_type": "code",
+      "source_file": "mobile-app/utils/mapUtils.ts",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_utils_maputils_snappointtopath",
+      "label": "snapPointToPath",
+      "file_type": "code",
+      "source_file": "mobile-app/utils/mapUtils.ts",
+      "source_location": "L61",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_utils_responsive_normalizefontsize",
+      "label": "normalizeFontSize",
+      "file_type": "code",
+      "source_file": "mobile-app/utils/responsive.ts",
+      "source_location": "L33",
+      "_origin": "ast"
+    },
+    {
+      "id": "mobile_app_utils_taskfilters_ridertasktab",
+      "label": "RiderTaskTab",
+      "file_type": "code",
+      "source_file": "mobile-app/utils/taskFilters.ts",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "server_locationtracking_getdistance",
+      "label": "getDistance",
+      "file_type": "code",
+      "source_file": "server/locationTracking.ts",
+      "source_location": "L81",
+      "_origin": "ast"
+    },
+    {
+      "id": "server_locationtracking_handleriderlocationupdate",
+      "label": "handleRiderLocationUpdate",
+      "file_type": "code",
+      "source_file": "server/locationTracking.ts",
+      "source_location": "L149",
+      "_origin": "ast"
+    },
+    {
+      "id": "server_middleware_auth_authrequest",
+      "label": "AuthRequest",
+      "file_type": "code",
+      "source_file": "server/middleware/auth.ts",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "server_services_auditlogger_auditlogentry",
+      "label": "AuditLogEntry",
+      "file_type": "code",
+      "source_file": "server/services/auditLogger.ts",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_app_app",
+      "label": "App",
+      "file_type": "code",
+      "source_file": "src/app/App.tsx",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_livetrackingmap_trackingstatus",
+      "label": "TrackingStatus",
+      "file_type": "code",
+      "source_file": "src/app/components/LiveTrackingMap.tsx",
+      "source_location": "L34",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_mappicker_mappickerprops",
+      "label": "MapPickerProps",
+      "file_type": "code",
+      "source_file": "src/app/components/MapPicker.tsx",
+      "source_location": "L55",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_passwordstrengthmeter_passwordstrengthmeter",
+      "label": "PasswordStrengthMeter",
+      "file_type": "code",
+      "source_file": "src/app/components/PasswordStrengthMeter.tsx",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_protectedroute_protectedroute",
+      "label": "ProtectedRoute",
+      "file_type": "code",
+      "source_file": "src/app/components/ProtectedRoute.tsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_quickstartguide_quickstartguide",
+      "label": "QuickStartGuide",
+      "file_type": "code",
+      "source_file": "src/app/components/QuickStartGuide.tsx",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_systeminfo_systeminfo",
+      "label": "SystemInfo",
+      "file_type": "code",
+      "source_file": "src/app/components/SystemInfo.tsx",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_figma_imagewithfallback_imagewithfallback",
+      "label": "ImageWithFallback",
+      "file_type": "code",
+      "source_file": "src/app/components/figma/ImageWithFallback.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_ui_button_buttonprops",
+      "label": "ButtonProps",
+      "file_type": "code",
+      "source_file": "src/app/components/ui/button.tsx",
+      "source_location": "L37",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_ui_chart_chartconfig",
+      "label": "ChartConfig",
+      "file_type": "code",
+      "source_file": "src/app/components/ui/chart.tsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_ui_use_mobile_useismobile",
+      "label": "useIsMobile",
+      "file_type": "code",
+      "source_file": "src/app/components/ui/use-mobile.ts",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_components_ui_utils_cn",
+      "label": "cn",
+      "file_type": "code",
+      "source_file": "src/app/components/ui/utils.ts",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_authcontext_authprovider",
+      "label": "AuthProvider",
+      "file_type": "code",
+      "source_file": "src/app/context/AuthContext.tsx",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_authcontext_useauth",
+      "label": "useAuth",
+      "file_type": "code",
+      "source_file": "src/app/context/AuthContext.tsx",
+      "source_location": "L123",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_datacontext_dataprovider",
+      "label": "DataProvider",
+      "file_type": "code",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L61",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_realtimecontext_realtimeprovider",
+      "label": "RealTimeProvider",
+      "file_type": "code",
+      "source_file": "src/app/context/RealTimeContext.tsx",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_realtimecontext_userealtime",
+      "label": "useRealTime",
+      "file_type": "code",
+      "source_file": "src/app/context/RealTimeContext.tsx",
+      "source_location": "L124",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_themecontext_themeprovider",
+      "label": "ThemeProvider",
+      "file_type": "code",
+      "source_file": "src/app/context/ThemeContext.tsx",
+      "source_location": "L124",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_context_themecontext_usetheme",
+      "label": "useTheme",
+      "file_type": "code",
+      "source_file": "src/app/context/ThemeContext.tsx",
+      "source_location": "L154",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_pages_livetrackingdashboard_trackingstatus",
+      "label": "TrackingStatus",
+      "file_type": "code",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_pages_livetrackingdashboard_syncphase",
+      "label": "SyncPhase",
+      "file_type": "code",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_pages_mappickerpage_mappickerpage",
+      "label": "MapPickerPage",
+      "file_type": "code",
+      "source_file": "src/app/pages/MapPickerPage.tsx",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_userrole",
+      "label": "UserRole",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L2",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_user",
+      "label": "User",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_requeststatus",
+      "label": "RequestStatus",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_deliverystatus",
+      "label": "DeliveryStatus",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_requesttype",
+      "label": "RequestType",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L20",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_categorystyle",
+      "label": "CategoryStyle",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L98",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_urgencylevel",
+      "label": "UrgencyLevel",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L141",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_location",
+      "label": "Location",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L144",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_deliveryrequest",
+      "label": "DeliveryRequest",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L153",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_types_index_notification",
+      "label": "Notification",
+      "file_type": "code",
+      "source_file": "src/app/types/index.ts",
+      "source_location": "L199",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_utils_statusmapping_uigroupstatus",
+      "label": "UIGroupStatus",
+      "file_type": "code",
+      "source_file": "src/app/utils/statusMapping.ts",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_unit_dashboard_audit_test_trackingstatus",
+      "label": "TrackingStatus",
+      "file_type": "code",
+      "source_file": "tests/unit/dashboard-audit.test.ts",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_unit_dashboard_audit_test_auditisonline",
+      "label": "auditIsOnline",
+      "file_type": "code",
+      "source_file": "tests/unit/dashboard-audit.test.ts",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_unit_dashboard_audit_test_audittrackingstatus",
+      "label": "auditTrackingStatus",
+      "file_type": "code",
+      "source_file": "tests/unit/dashboard-audit.test.ts",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_unit_tracking_status_test_trackingstatus",
+      "label": "TrackingStatus",
+      "file_type": "code",
+      "source_file": "tests/unit/tracking-status.test.ts",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_unit_tracking_status_test_resolvetrackingstatus",
+      "label": "resolveTrackingStatus",
+      "file_type": "code",
+      "source_file": "tests/unit/tracking-status.test.ts",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_utils_session_manager_savesession",
+      "label": "saveSession",
+      "file_type": "code",
+      "source_file": "tests/utils/session-manager.ts",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "tests_utils_session_manager_loadsession",
+      "label": "loadSession",
+      "file_type": "code",
+      "source_file": "tests/utils/session-manager.ts",
+      "source_location": "L13",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "mobile_admin_app_tabs_calendar",
+      "target": "mobile_admin_utils_statusmapping_uigroupstatus",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/app/(tabs)/calendar.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_app_tabs_index",
+      "target": "mobile_admin_components_ui_fleetpulsemap_fleetrider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/app/(tabs)/index.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_app_tabs_index",
+      "target": "mobile_admin_components_ui_fleetpulsemap_fleetjob",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/app/(tabs)/index.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_app_job_id",
+      "target": "mobile_admin_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/app/job/[id].tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_components_dispatch_premiumjobcard",
+      "target": "mobile_admin_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/components/Dispatch/PremiumJobCard.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_components_dispatch_premiumjobcard",
+      "target": "mobile_admin_utils_statusmapping_uigroupstatus",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/components/Dispatch/PremiumJobCard.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_layout",
+      "target": "mobile_app_components_haptic_tab_haptictab",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/_layout.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_layout",
+      "target": "mobile_app_components_ui_icon_symbol_iconsymbol",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/_layout.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_layout",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/_layout.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_history",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/history.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_history",
+      "target": "mobile_app_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/history.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_history",
+      "target": "mobile_app_components_ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/history.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_index",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/index.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_index",
+      "target": "mobile_app_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/index.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_index",
+      "target": "mobile_app_components_ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/index.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_overdue",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/overdue.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_overdue",
+      "target": "mobile_app_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/overdue.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_overdue",
+      "target": "mobile_app_components_ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/overdue.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_tabs_tomorrow",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/(tabs)/tomorrow.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_layout",
+      "target": "mobile_app_context_authcontext_authprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/_layout.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_layout",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/_layout.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_layout",
+      "target": "mobile_app_context_locationcontext_locationprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/_layout.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_job_id",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/job/[id].tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_job_id",
+      "target": "mobile_app_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/job/[id].tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_job_id",
+      "target": "mobile_app_components_ui_button_button",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/job/[id].tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_login",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/login.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_login",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/login.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_modal",
+      "target": "mobile_app_components_themed_text_themedtext",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/modal.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_app_modal",
+      "target": "mobile_app_components_themed_view_themedview",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/modal.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_attendancegate",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/AttendanceGate.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_attendancelockout",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/AttendanceLockout.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_handovermodal",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/HandoverModal.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_notificationmodal",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/NotificationModal.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_routeoptimizedmodal",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/RouteOptimizedModal.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_screenheader",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ScreenHeader.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_screenheader",
+      "target": "mobile_app_components_ui_badge_badge",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ScreenHeader.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_shiftendmodal",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ShiftEndModal.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_tacticalbriefing_radarbriefing",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/TacticalBriefing/RadarBriefing.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_tacticalbriefing_radarbriefing",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/TacticalBriefing/RadarBriefing.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_parallax_scroll_view",
+      "target": "mobile_app_components_themed_view_themedview",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/parallax-scroll-view.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_parallax_scroll_view",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/parallax-scroll-view.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_themed_text",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/themed-text.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_themed_view",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/themed-view.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_badge",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/Badge.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_bugsnagfallback",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/BugsnagFallback.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_button",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/Button.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_card",
+      "target": "mobile_app_hooks_use_theme_color_usethemecolor",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/Card.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_passwordresetoverlay",
+      "target": "mobile_app_utils_responsive_normalizefontsize",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/PasswordResetOverlay.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_skeletoncard",
+      "target": "mobile_app_components_ui_card_card",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/SkeletonCard.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_collapsible",
+      "target": "mobile_app_components_themed_text_themedtext",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/collapsible.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_collapsible",
+      "target": "mobile_app_components_themed_view_themedview",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/collapsible.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_components_ui_collapsible",
+      "target": "mobile_app_components_ui_icon_symbol_iconsymbol",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/ui/collapsible.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_context_locationcontext",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/context/LocationContext.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_hooks_data_usedashboard",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/hooks/data/useDashboard.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_hooks_data_usedashboard",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/hooks/data/useDashboard.ts",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_hooks_data_usedashboard",
+      "target": "mobile_app_hooks_use_push_notifications_usepushnotifications",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/hooks/data/useDashboard.ts",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_hooks_data_usejobdetails",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/hooks/data/useJobDetails.ts",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_hooks_data_usejobdetails",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/hooks/data/useJobDetails.ts",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_services_apiservice",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/services/apiService.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_data_boundaries_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/data-boundaries.test.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_enterprise_business_rules_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/enterprise-business-rules.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_rider_job_audit_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/rider-job-audit.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_rider_midnight_logic_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/rider-midnight-logic.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_tab_matrix_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/tab-matrix.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_tests_taskfilters_test",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/__tests__/taskFilters.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_app_utils_taskfilters",
+      "target": "mobile_app_types_index_job",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/utils/taskFilters.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "server_index",
+      "target": "server_locationtracking_handleriderlocationupdate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/index.ts",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "server_middleware_idempotency",
+      "target": "server_middleware_auth_authrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/middleware/idempotency.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "server_routes_notifications",
+      "target": "server_middleware_auth_authrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/notifications.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "server_routes_requests",
+      "target": "server_middleware_auth_authrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/requests.ts",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "server_routes_ridertasks",
+      "target": "server_middleware_auth_authrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/riderTasks.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "server_routes_users",
+      "target": "server_middleware_auth_authrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/users.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "server_routes_users",
+      "target": "server_locationtracking_handleriderlocationupdate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/users.ts",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_app",
+      "target": "src_app_context_authcontext_authprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/App.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_app",
+      "target": "src_app_context_datacontext_dataprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/App.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_app",
+      "target": "src_app_context_realtimecontext_realtimeprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/App.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_app",
+      "target": "src_app_context_themecontext_themeprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/App.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_conflictresolutionmodal",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/ConflictResolutionModal.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_conflictresolutionmodal",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/ConflictResolutionModal.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_devsimulator",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/DevSimulator.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_deviationapprovalmodal",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/DeviationApprovalModal.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_dispatchmapview",
+      "target": "src_app_types_index_location",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/DispatchMapView.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestcard",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestCard.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestcard",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestCard.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestdetailspanel",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestdetailspanel",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestdetailspanel",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestlist",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestList.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_requestlist",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestList.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_riderselectionlist",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RiderSelectionList.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_riderselectionlist",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RiderSelectionList.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_riderselectionlist",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RiderSelectionList.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_dispatch_timelinecomponent",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/TimelineComponent.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_enhancedbatchapprovemodal",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/EnhancedBatchApproveModal.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_notificationbell",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/NotificationBell.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_admin_operationalintegrityview",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/OperationalIntegrityView.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_livetrackingmap",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/LiveTrackingMap.tsx",
+      "source_location": "L32",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_mappicker",
+      "target": "src_app_types_index_location",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/MapPicker.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_passwordresetoverlay",
+      "target": "src_app_components_passwordstrengthmeter_passwordstrengthmeter",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/PasswordResetOverlay.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_protectedroute",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ProtectedRoute.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_protectedroute",
+      "target": "src_app_types_index_userrole",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ProtectedRoute.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_quickstartguide",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/QuickStartGuide.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_categorypicker",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/CategoryPicker.tsx",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_categorypicker",
+      "target": "src_app_types_index_requesttype",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/CategoryPicker.tsx",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_accordion",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/accordion.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_alert_dialog",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/alert-dialog.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_alert",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/alert.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_avatar",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/avatar.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_badge",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/badge.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_breadcrumb",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/breadcrumb.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_button",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/button.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_calendar",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/calendar.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_card",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/card.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_carousel",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/carousel.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_chart",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/chart.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_checkbox",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/checkbox.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_command",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/command.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_context_menu",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/context-menu.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_dialog",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/dialog.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_drawer",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/drawer.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_dropdown_menu",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/dropdown-menu.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_form",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/form.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_hover_card",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/hover-card.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_input_otp",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/input-otp.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_input",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/input.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_label",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/label.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_menubar",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/menubar.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_navigation_menu",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/navigation-menu.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_pagination",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/pagination.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_popover",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/popover.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_progress",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/progress.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_radio_group",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/radio-group.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_resizable",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/resizable.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_scroll_area",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/scroll-area.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_select",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/select.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_separator",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/separator.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_sheet",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/sheet.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_sidebar",
+      "target": "src_app_components_ui_use_mobile_useismobile",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/sidebar.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_sidebar",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/sidebar.tsx",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_skeleton",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/skeleton.tsx",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_slider",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/slider.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_switch",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/switch.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_table",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/table.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_tabs",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/tabs.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_textarea",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/textarea.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_toggle_group",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/toggle-group.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_toggle",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/toggle.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_ui_tooltip",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/tooltip.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_authcontext",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/AuthContext.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_datacontext",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_datacontext",
+      "target": "src_app_types_index_notification",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_datacontext",
+      "target": "src_app_types_index_deliverystatus",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_datacontext",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_datacontext",
+      "target": "src_app_context_realtimecontext_userealtime",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_context_realtimecontext",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/RealTimeContext.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_data_mockdata",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/data/mockData.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_data_mockdata",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/data/mockData.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_data_mockdata",
+      "target": "src_app_types_index_notification",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/data/mockData.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_adminlayout",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AdminLayout.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_adminlayout",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AdminLayout.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_adminpendingtab",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AdminPendingTab.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_adminpendingtab",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AdminPendingTab.tsx",
+      "source_location": "L7",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_analyticshub",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AnalyticsHub.tsx",
+      "source_location": "L44",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_attendancedashboard",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AttendanceDashboard.tsx",
+      "source_location": "L20",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_attendancedashboard",
+      "target": "src_app_context_realtimecontext_userealtime",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AttendanceDashboard.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_calendarview",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/CalendarView.tsx",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_calendarview",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/CalendarView.tsx",
+      "source_location": "L37",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_dispatchconsole",
+      "target": "src_app_context_realtimecontext_userealtime",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/DispatchConsole.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_dispatchconsole",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/DispatchConsole.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_dispatchconsole",
+      "target": "src_app_types_index_user",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/DispatchConsole.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_dispatchconsole",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/DispatchConsole.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_dispatchconsole",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/DispatchConsole.tsx",
+      "source_location": "L33",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_ridermap",
+      "target": "src_app_context_realtimecontext_userealtime",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/RiderMap.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_ridermap",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/RiderMap.tsx",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_themeselection",
+      "target": "src_app_context_themecontext_usetheme",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/ThemeSelection.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_themeselection",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/ThemeSelection.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_usermanagement",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/UserManagement.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_usermanagement",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/UserManagement.tsx",
+      "source_location": "L68",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_tests_rider_map_transparency_test",
+      "target": "src_app_context_realtimecontext_realtimeprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/__tests__/rider-map-transparency.test.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_admin_tests_rider_map_transparency_test",
+      "target": "src_app_context_authcontext_authprovider",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/__tests__/rider-map-transparency.test.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_dashboard",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Dashboard.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_dashboard",
+      "target": "src_app_components_quickstartguide_quickstartguide",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Dashboard.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_livetrackingdashboard",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_livetrackingdashboard",
+      "target": "src_app_context_realtimecontext_userealtime",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_livetrackingdashboard",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_login",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Login.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_mappickerpage",
+      "target": "src_app_types_index_location",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/MapPickerPage.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_personneldashboard",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/PersonnelDashboard.tsx",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_personneldashboard",
+      "target": "src_app_types_index_location",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/PersonnelDashboard.tsx",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_personneldashboard",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/PersonnelDashboard.tsx",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_personneldashboard",
+      "target": "src_app_types_index_requesttype",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/PersonnelDashboard.tsx",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_personneldashboard",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/PersonnelDashboard.tsx",
+      "source_location": "L105",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_riderdashboard",
+      "target": "src_app_context_authcontext_useauth",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/RiderDashboard.tsx",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_riderdashboard",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/RiderDashboard.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_pages_riderdashboard",
+      "target": "src_app_types_index_deliverystatus",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/RiderDashboard.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_routes",
+      "target": "src_app_components_protectedroute_protectedroute",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/routes.tsx",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_routes",
+      "target": "src_app_pages_mappickerpage_mappickerpage",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/routes.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_utils_categoryutils",
+      "target": "src_app_types_index_requesttype",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/utils/categoryUtils.tsx",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "src_main",
+      "target": "src_app_app_app",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/main.tsx",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_hybrid_e2e_lifecycle_spec",
+      "target": "tests_utils_session_manager_savesession",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/hybrid-e2e-lifecycle.spec.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_location_tracking_validation_spec",
+      "target": "tests_utils_session_manager_loadsession",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/location-tracking-validation.spec.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_utils_session_manager_test",
+      "target": "tests_utils_session_manager_savesession",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/utils/session-manager.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "tests_utils_session_manager_test",
+      "target": "tests_utils_session_manager_loadsession",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/utils/session-manager.test.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_mobile_app_app_layout_rootlayoutnav",
+      "target": "mobile_app_context_authcontext_useauth",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/app/_layout.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_ui_input_otp_inputotp",
+      "target": "src_app_components_ui_utils_cn",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/input-otp.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_mobile_admin_components_dispatch_premiumjobcard_premiumjobcardprops",
+      "target": "mobile_admin_utils_statusmapping_uigroupstatus",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/components/Dispatch/PremiumJobCard.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_admin_components_dispatch_trackingmap_ridermaplocation",
+      "target": "mobile_admin_components_dispatch_trackingmap_latlng",
+      "relation": "inherits",
+      "context": "type",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-admin/components/Dispatch/TrackingMap.tsx",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_mobile_app_components_tacticalbriefing_radarbriefing_props",
+      "target": "mobile_app_types_index_job",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "mobile-app/components/TacticalBriefing/RadarBriefing.tsx",
+      "source_location": "L15",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_dispatchmapview_dispatchmapviewprops",
+      "target": "src_app_types_index_location",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/DispatchMapView.tsx",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_requestcard_requestcardprops",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestCard.tsx",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_requestdetailspanel_requestdetailspanelprops",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx",
+      "source_location": "L54",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_requestdetailspanel_requestdetailspanelprops",
+      "target": "src_app_types_index_user",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx",
+      "source_location": "L55",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_requestlist_requestlistprops",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RequestList.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_riderselectionlist_ridertype",
+      "target": "src_app_types_index_user",
+      "relation": "inherits",
+      "context": "type",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RiderSelectionList.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_admin_dispatch_riderselectionlist_riderselectionlistprops",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/Admin/Dispatch/RiderSelectionList.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "src_app_components_mappicker_mappickerprops",
+      "target": "src_app_types_index_location",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/MapPicker.tsx",
+      "source_location": "L58",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_protectedroute_protectedrouteprops",
+      "target": "src_app_types_index_userrole",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ProtectedRoute.tsx",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_components_ui_categorypicker_categorypickerprops",
+      "target": "src_app_types_index_requesttype",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/components/ui/CategoryPicker.tsx",
+      "source_location": "L84",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_context_authcontext_authcontexttype",
+      "target": "src_app_types_index_user",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/AuthContext.tsx",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_context_datacontext_datacontexttype",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_context_datacontext_datacontexttype",
+      "target": "src_app_types_index_notification",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_context_datacontext_datacontexttype",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "generic_arg",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L19",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_context_datacontext_datacontexttype",
+      "target": "src_app_types_index_deliverystatus",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/context/DataContext.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_pages_admin_adminpendingtab_adminpendingtabprops",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/Admin/AdminPendingTab.tsx",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "c_users_63938_desktop_angel_production_rider_scheduling_system_src_app_pages_livetrackingdashboard_trackingpayload",
+      "target": "src_app_types_index_deliveryrequest",
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/pages/LiveTrackingDashboard.tsx",
+      "source_location": "L25",
+      "weight": 1.0
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

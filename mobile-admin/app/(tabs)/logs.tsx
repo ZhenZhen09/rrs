@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
   },
   title: { 
     fontSize: TYPOGRAPHY.size['2xl'], 
-    fontWeight: '900' as any, 
+    fontFamily: TYPOGRAPHY.fontFamily.bold, 
     color: COLORS.primary, 
     marginBottom: verticalScale(16), 
     letterSpacing: -0.5 
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9' 
   },
   filterBtnActive: { backgroundColor: COLORS.primary },
-  filterText: { fontSize: 13, fontWeight: '700' as any, color: COLORS.secondary },
+  filterText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary },
   filterTextActive: { color: '#FFFFFF' },
   scrollContent: { padding: moderateScale(20) },
   inboxItem: {
@@ -553,24 +553,24 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 14,
     color: COLORS.primary,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   boldText: {
-    fontWeight: '800' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: '#0F172A',
   },
   timeText: {
     fontSize: 11,
     color: COLORS.muted,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   messagePreview: {
     fontSize: 13,
     color: COLORS.secondary,
-    fontWeight: '500' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   unreadPreviewText: {
-    fontWeight: '800' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: '#1E293B',
   },
   statusCol: {
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(12),
     color: COLORS.secondary,
     fontSize: 14,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   
   // Modal layout
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 15,
-    fontWeight: '700' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.primary,
     marginLeft: moderateScale(2),
   },
@@ -628,13 +628,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: '950' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.primary,
   },
   headerSubtitle: {
     fontSize: 11,
     color: COLORS.muted,
-    fontWeight: '700' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     marginTop: verticalScale(1),
   },
   headerSpacer: {
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   },
   chatDivider: {
     fontSize: 10,
-    fontWeight: '800' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.muted,
     textAlign: 'center',
     marginVertical: verticalScale(18),
@@ -684,13 +684,13 @@ const styles = StyleSheet.create({
   incomingText: {
     fontSize: 14,
     color: COLORS.primary,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     lineHeight: 20,
   },
   seenReceipt: {
     fontSize: 10,
     color: COLORS.muted,
-    fontWeight: '700' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     marginTop: verticalScale(4),
     marginLeft: moderateScale(4),
   },
@@ -713,13 +713,13 @@ const styles = StyleSheet.create({
   outgoingText: {
     fontSize: 14,
     color: '#FFFFFF',
-    fontWeight: '650' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     lineHeight: 20,
   },
   outgoingTime: {
     fontSize: 10,
     color: COLORS.muted,
-    fontWeight: '700' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     marginTop: verticalScale(4),
     marginRight: moderateScale(4),
   },
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: moderateScale(16),
     fontSize: 14,
     color: COLORS.primary,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   sendButton: {
     width: moderateScale(40),

@@ -1,8 +1,9 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
+import { COLORS, TYPOGRAPHY } from '../../constants/Theme';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -14,19 +15,19 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      tabBarActiveTintColor: '#1E293B',
-      tabBarInactiveTintColor: '#94A3B8',
+      tabBarActiveTintColor: COLORS.primary,
+      tabBarInactiveTintColor: COLORS.muted,
       tabBarStyle: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: COLORS.surface,
         borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
+        borderTopColor: COLORS.border,
         height: safeTabHeight,
         paddingBottom: safeBottomPadding,
         paddingTop: 8,
       },
       tabBarLabelStyle: {
         fontSize: 10,
-        fontWeight: '700',
+        fontFamily: TYPOGRAPHY.fontFamily.bold,
       }
     }}>
       <Tabs.Screen
@@ -43,37 +44,40 @@ export default function TabsLayout() {
         options={{
           title: 'Dispatch',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="settings-input-component" size={size} color={color} />
+            <MaterialIcons name="local-shipping" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="calendar"
+        name="map"
         options={{
-          title: 'Calendar',
+          title: 'Map',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="calendar-today" size={size} color={color} />
+            <MaterialIcons name="map" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="analytics"
+        name="personnel"
         options={{
-          title: 'Analytics',
+          title: 'Personnel',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="bar-chart" size={size} color={color} />
+            <MaterialIcons name="people" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="logs"
+        name="attendance"
         options={{
-          title: 'Logs',
+          title: 'Attendance',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="list-alt" size={size} color={color} />
+            <MaterialIcons name="access-time" size={size} color={color} />
           ),
         }}
       />
+      <Tabs.Screen name="analytics" options={{ href: null }} />
+      <Tabs.Screen name="logs" options={{ href: null }} />
+      <Tabs.Screen name="calendar" options={{ href: null }} />
     </Tabs>
   );
 }

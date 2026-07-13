@@ -475,12 +475,12 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: '900',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.primary,
   },
   yearTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     color: COLORS.muted,
   },
   headerActions: {
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.secondary,
     textTransform: 'uppercase',
   },
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     width: 40,
     textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.muted,
   },
   calendarGrid: {
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: TYPOGRAPHY.size.base - 1,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     color: COLORS.primary,
   },
   selectedDayText: {
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
   },
   todayText: {
     color: COLORS.accentBlue,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
   },
   outsideMonthText: {
     color: COLORS.muted,
@@ -611,12 +611,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.primary,
   },
   seeAllText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.accentBlue,
   },
   scheduleList: {
@@ -646,18 +646,18 @@ const styles = StyleSheet.create({
   },
   scheduleTime: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.secondary,
   },
   scheduleStatus: {
     fontSize: TYPOGRAPHY.size.xs - 2,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.muted,
     textTransform: 'uppercase',
   },
   scheduleTitle: {
     fontSize: TYPOGRAPHY.size.base - 1,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.primary,
     marginBottom: 8,
   },
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   },
   riderName: {
     fontSize: TYPOGRAPHY.size.sm - 1,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     color: COLORS.secondary,
   },
   emptyContainer: {
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
   emptyText: {
     color: COLORS.muted,
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
@@ -694,13 +694,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: verticalScale(24),
   },
-  modalTitle: { fontSize: TYPOGRAPHY.size.xl, fontWeight: '900' as any, color: COLORS.primary },
+  modalTitle: { fontSize: TYPOGRAPHY.size.xl, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary },
   modalJobInfo: { marginBottom: verticalScale(24) },
-  modalJobId: { fontSize: TYPOGRAPHY.size.sm, fontWeight: '800' as any, color: COLORS.accentBlue, textTransform: 'uppercase' },
-  modalCustomer: { fontSize: TYPOGRAPHY.size['2xl'], fontWeight: '900' as any, color: COLORS.primary, marginTop: verticalScale(4) },
+  modalJobId: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.accentBlue, textTransform: 'uppercase' },
+  modalCustomer: { fontSize: TYPOGRAPHY.size['2xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: verticalScale(4) },
   modalSectionTitle: { 
     fontSize: TYPOGRAPHY.size.xs, 
-    fontWeight: '900' as any, 
+    fontFamily: TYPOGRAPHY.fontFamily.bold, 
     color: COLORS.secondary, 
     marginBottom: verticalScale(16), 
     textTransform: 'uppercase' 
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   instructionTextInput: {
     fontSize: TYPOGRAPHY.size.sm,
     color: COLORS.primary,
-    fontWeight: '600' as any,
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     lineHeight: 20,
     textAlignVertical: 'top',
   },
@@ -740,10 +740,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     backgroundColor: '#EEF2FF',
   },
-  riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontWeight: '700' as any, color: COLORS.secondary, marginLeft: moderateScale(12) },
+  riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, marginLeft: moderateScale(12) },
   selectedRiderOptionText: { color: COLORS.primary },
   emptyRiders: { padding: moderateScale(20), alignItems: 'center' },
-  emptyRidersText: { color: COLORS.muted, fontWeight: '600' as any },
+  emptyRidersText: { color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium },
   confirmDispatchButton: {
     backgroundColor: COLORS.primary,
     padding: moderateScale(18),
@@ -755,6 +755,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.muted,
     opacity: 0.6,
   },
-  confirmDispatchText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.base, fontWeight: '800' as any },
+  confirmDispatchText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold },
 });
 

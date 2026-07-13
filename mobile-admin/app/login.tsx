@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import { COLORS, TYPOGRAPHY, RADIUS } from '../constants/Theme';
 
 export default function AdminLoginScreen() {
   const router = useRouter();
@@ -19,7 +20,6 @@ export default function AdminLoginScreen() {
       const compatible = await LocalAuthentication.hasHardwareAsync();
       setIsBiometricSupported(compatible);
       
-      // Auto-trigger biometric if enabled and we have a saved user
       if (biometricEnabled && compatible) {
         handleBiometricLogin();
       }
@@ -34,10 +34,6 @@ export default function AdminLoginScreen() {
       });
 
       if (result.success) {
-        // In a real enterprise app, we'd use expo-secure-store to retrieve 
-        // a refresh token or similar. For this slice, we verify the biometric 
-        // and if success, we assume the session is valid or prompt for PW once.
-        // For now, let's assume we redirect to tabs if they were already authenticated.
         const storedToken = await AsyncStorage.getItem('authToken');
         if (storedToken) {
            router.replace('/(tabs)');
@@ -59,7 +55,6 @@ export default function AdminLoginScreen() {
     try {
       const result = await login(email, password);
       if (result.success) {
-        // Suggest enabling biometric after successful login if supported
         if (isBiometricSupported && !biometricEnabled) {
           Alert.alert(
             'Enable Biometric?',
@@ -88,7 +83,7 @@ export default function AdminLoginScreen() {
         <View style={styles.content}>
           <View style={styles.headerContainer}>
             <View style={styles.logoWrapper}>
-              <MaterialIcons name="admin-panel-settings" size={40} color="#FFFFFF" />
+              <MaterialIcons name="admin-panel-settings" size={40} color={COLORS.onPrimary} />
             </View>
             <Text style={styles.title}>Admin Control</Text>
             <Text style={styles.subtitle}>System Management Portal</Text>
@@ -99,7 +94,7 @@ export default function AdminLoginScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Admin Email</Text>
                 <View style={styles.inputWrapper}>
-                  <MaterialIcons name="alternate-email" size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <MaterialIcons name="alternate-email" size={20} color={COLORS.muted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="admin@company.com"
@@ -115,7 +110,7 @@ export default function AdminLoginScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={styles.inputWrapper}>
-                  <MaterialIcons name="lock-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <MaterialIcons name="lock-outline" size={20} color={COLORS.muted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="••••••••"
@@ -134,11 +129,11 @@ export default function AdminLoginScreen() {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={COLORS.onPrimary} />
                 ) : (
                   <>
                     <Text style={styles.primaryButtonText}>Login</Text>
-                    <MaterialIcons name="login" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                    <MaterialIcons name="login" size={20} color={COLORS.onPrimary} style={{ marginLeft: 8 }} />
                   </>
                 )}
               </TouchableOpacity>
@@ -150,7 +145,7 @@ export default function AdminLoginScreen() {
                   activeOpacity={0.7}
                   disabled={isLoading}
                 >
-                  <MaterialIcons name="fingerprint" size={32} color="#1E293B" />
+                  <MaterialIcons name="fingerprint" size={32} color={COLORS.primary} />
                   <Text style={styles.biometricText}>Quick Login</Text>
                 </TouchableOpacity>
               )}
@@ -163,20 +158,29 @@ export default function AdminLoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   keyboardView: { flex: 1 },
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   headerContainer: { alignItems: 'center', marginBottom: 32 },
   logoWrapper: {
     width: 70, height: 70, borderRadius: 35,
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.primary,
     justifyContent: 'center', alignItems: 'center', marginBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '800', color: '#1E293B' },
-  subtitle: { fontSize: 14, color: '#64748B', marginTop: 4 },
+  title: { 
+    fontSize: TYPOGRAPHY.size['2xl'], 
+    fontFamily: TYPOGRAPHY.fontFamily.bold, 
+    color: COLORS.primary 
+  },
+  subtitle: { 
+    fontSize: TYPOGRAPHY.size.sm, 
+    fontFamily: TYPOGRAPHY.fontFamily.regular,
+    color: COLORS.secondary, 
+    marginTop: 4 
+  },
   formContainer: {
-    backgroundColor: '#FFFFFF', borderRadius: 28, padding: 24,
-    borderWidth: 1, borderColor: '#E2E8F0', minHeight: 400,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: 24,
+    borderWidth: 1, borderColor: COLORS.border, minHeight: 400,
     overflow: 'hidden',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20 },
@@ -185,19 +189,25 @@ const styles = StyleSheet.create({
   },
   stepWrapper: { width: '100%' },
   inputGroup: { marginBottom: 24 },
-  label: { fontSize: 12, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' },
+  label: { 
+    fontSize: TYPOGRAPHY.size.xs, 
+    fontFamily: TYPOGRAPHY.fontFamily.bold, 
+    color: COLORS.foreground, 
+    marginBottom: 8, 
+    textTransform: 'uppercase' 
+  },
   inputWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC',
-    borderWidth: 1.5, borderColor: '#F1F5F9', borderRadius: 16, paddingHorizontal: 16, height: 56,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background,
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingHorizontal: 16, height: 56,
   },
   inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 16, color: '#0F172A', fontWeight: '600' },
+  input: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.regular, color: COLORS.foreground },
   primaryButton: {
-    backgroundColor: '#1E293B', height: 56, borderRadius: 16,
+    backgroundColor: COLORS.accent, height: 56, borderRadius: RADIUS.button,
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     marginTop: 8,
   },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  primaryButtonText: { color: COLORS.onPrimary, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold },
   disabledButton: { opacity: 0.7 },
   biometricButton: {
     marginTop: 24,
@@ -207,9 +217,9 @@ const styles = StyleSheet.create({
   },
   biometricText: {
     marginTop: 8,
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    color: COLORS.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

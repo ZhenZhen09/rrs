@@ -1,0 +1,11 @@
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\docs\superpowers\specs\2026-06-16-location-auto-recovery.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\docs\superpowers\specs\2026-06-16-privacy-location-duty-gating.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\docs\superpowers\specs\2026-06-18-memory-leak-and-analytics-design.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\gcp_setup.txt
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\guidelines\Guidelines.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\guidelines\personnel-portal-functional-test-cases.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\improvements-rrs.txt
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\index.html
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\mobile-admin\.expo\README.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\mobile-app\.expo\README.md
+C:\Users\63938\Desktop\Angel\production\rider-scheduling-system\mobile-app\README.md

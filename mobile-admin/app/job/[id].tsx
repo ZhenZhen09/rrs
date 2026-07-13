@@ -479,7 +479,7 @@ export default function JobTrackingScreen() {
                 <View style={styles.deliveryInfoRow}>
                   <MaterialIcons name="access-time" size={16} color={COLORS.muted} />
                   <Text style={styles.deliveryTimeText}>
-                    Finished at: <Text style={{ fontWeight: '700', color: COLORS.primary }}>{formatTimestamp(job.completed_at || job.updated_at)}</Text>
+                    Finished at: <Text style={{ fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary }}>{formatTimestamp(job.completed_at || job.updated_at)}</Text>
                   </Text>
                 </View>
 
@@ -600,7 +600,7 @@ export default function JobTrackingScreen() {
 
       {isSubmitting && (
         <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+          <ActivityIndicator size="large" color={COLORS.onPrimary} />
         </View>
       )}
     </View>
@@ -608,62 +608,62 @@ export default function JobTrackingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   mapContainer: { flex: 1 },
   header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', padding: 20, zIndex: 10 },
-  backButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
-  headerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, height: 40, borderRadius: 20, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  backButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  headerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 16, height: 40, borderRadius: 20, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
   pulseDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  liveText: { fontSize: 10, fontWeight: '900', color: COLORS.primary, letterSpacing: 1 },
-  bottomCard: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: Platform.OS === 'ios' ? 40 : 24, elevation: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.15, shadowRadius: 20, height: EXPANDED_HEIGHT, zIndex: 100 },
+  liveText: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 1 },
+  bottomCard: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: Platform.OS === 'ios' ? 40 : 24, elevation: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.15, shadowRadius: 20, height: EXPANDED_HEIGHT, zIndex: 100 },
   clickableHeader: { width: '100%', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16 },
-  handle: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  handle: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  customerLabel: { fontSize: 10, fontWeight: '800', color: COLORS.muted, letterSpacing: 0.5 },
-  customerName: { fontSize: 24, fontWeight: '900', color: COLORS.primary, marginTop: 2 },
+  customerLabel: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.muted, letterSpacing: 0.5 },
+  customerName: { fontSize: 24, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: 2 },
   drawerContent: { flex: 1 },
   detailsGrid: { marginTop: 10 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, gap: 12 },
-  iconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  infoLabel: { fontSize: 9, fontWeight: '800', color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  infoValue: { fontSize: 14, fontWeight: '700', color: COLORS.primary, marginTop: 1 },
-  infoSubValue: { fontSize: 11, fontWeight: '600', color: COLORS.secondary, marginTop: 2, fontStyle: 'italic' },
+  iconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' },
+  infoLabel: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoValue: { fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: 1 },
+  infoSubValue: { fontSize: 11, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, marginTop: 2, fontStyle: 'italic' },
   row: { flexDirection: 'row', gap: 10 },
-  adminNoteCard: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: COLORS.primary, marginBottom: 20 },
+  adminNoteCard: { backgroundColor: COLORS.background, padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: COLORS.primary, marginBottom: 20 },
   adminNoteHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  adminNoteTitle: { fontSize: 9, fontWeight: '900', color: COLORS.primary, letterSpacing: 0.5 },
-  adminNoteText: { fontSize: 13, fontWeight: '600', color: COLORS.secondary, lineHeight: 18 },
-  riderCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', padding: 16, borderRadius: 20, marginBottom: 24 },
+  adminNoteTitle: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 0.5 },
+  adminNoteText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, lineHeight: 18 },
+  riderCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, padding: 16, borderRadius: 20, marginBottom: 24 },
   riderAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  riderLabel: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 0.5 },
-  riderName: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginTop: 1 },
-  timestamp: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.4)', position: 'absolute', right: 16, bottom: 16 },
+  riderLabel: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: 'rgba(255,255,255,0.5)', letterSpacing: 0.5 },
+  riderName: { fontSize: 15, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.onPrimary, marginTop: 1 },
+  timestamp: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: 'rgba(255,255,255,0.4)', position: 'absolute', right: 16, bottom: 16 },
   actionBar: { gap: 12, marginTop: 10 },
   actionButton: { height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  completeButton: { backgroundColor: '#10B981' },
-  failedButton: { backgroundColor: '#EF4444' },
-  actionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  completeButton: { backgroundColor: COLORS.success },
+  failedButton: { backgroundColor: COLORS.danger },
+  actionText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, letterSpacing: 1 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 24, width: '100%', elevation: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: COLORS.primary, marginBottom: 8 },
-  modalSubtitle: { fontSize: 14, fontWeight: '600', color: COLORS.secondary, marginBottom: 16 },
-  remarkInput: { backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, height: 100, textAlignVertical: 'top', fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 20 },
+  modalContent: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 24, width: '100%', elevation: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
+  modalTitle: { fontSize: 20, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginBottom: 8 },
+  modalSubtitle: { fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, marginBottom: 16 },
+  remarkInput: { backgroundColor: COLORS.background, borderRadius: 12, padding: 12, height: 100, textAlignVertical: 'top', fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.primary, marginBottom: 20 },
   modalButtons: { flexDirection: 'row', gap: 12 },
   modalButton: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  cancelButton: { backgroundColor: '#E2E8F0' },
+  cancelButton: { backgroundColor: COLORS.border },
   confirmButton: { backgroundColor: COLORS.primary },
-  modalButtonText: { fontSize: 13, fontWeight: '900', color: COLORS.primary, letterSpacing: 0.5 },
+  modalButtonText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 0.5 },
   
   deliveryDetailsCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.background,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     marginBottom: 24,
   },
   deliveryDetailsHeader: {
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
   },
   deliveryDetailsTitle: {
     fontSize: 16,
-    fontWeight: '900',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     letterSpacing: 1,
   },
   deliveryInfoRow: {
@@ -686,23 +686,23 @@ const styles = StyleSheet.create({
   deliveryTimeText: {
     fontSize: 13,
     color: COLORS.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
   },
   remarkSeparator: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     marginVertical: 14,
   },
   remarkLabel: {
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
     color: COLORS.muted,
     letterSpacing: 0.8,
     marginBottom: 6,
   },
   remarkText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
     color: COLORS.primary,
     lineHeight: 20,
   }
