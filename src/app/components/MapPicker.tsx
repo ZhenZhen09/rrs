@@ -465,10 +465,11 @@ export function MapPickerContent({
           zoom={16}
           style={{ height: "100%", width: "100%" }}
           zoomControl={false}
-          attributionControl={false}
+          attributionControl={true}
         >
           <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            referrerPolicy="strict-origin-when-cross-origin"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
           <FixMapSize watch={isExpanded} />

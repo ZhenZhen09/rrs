@@ -44,7 +44,9 @@ if (bugsnagMiddleware) {
 // Standard Security Practice: Use Helmet to set secure HTTP headers (CSP, HSTS, etc.)
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for now to avoid breaking Leaflet/External maps
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  // OSM tile requests must identify the site without exposing page paths or queries.
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
 const allowedOrigins = [
