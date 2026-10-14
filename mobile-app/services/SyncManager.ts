@@ -1,5 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { processQueue } from './syncQueue';
+import { flushLocationOutbox } from './locationSyncService';
 
 /**
  * Enterprise Sync Manager (Phase 1.2)
@@ -40,6 +41,7 @@ export const triggerSync = async () => {
     const state = await NetInfo.fetch();
     if (state.isConnected && state.isInternetReachable) {
       await processQueue();
+      await flushLocationOutbox('network_recovered');
     }
   } catch (err) {
     console.error('[SyncManager] Sync failed:', err);

@@ -6,7 +6,6 @@ import { getTasks, getHistoryTasks, getNotifications, markNotificationAsRead, ma
 import { useAuth } from '@/context/AuthContext';
 import { Job } from '@/types';
 import { getLocalDateStr } from '@/utils/dateUtils';
-import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 export const useDashboard = () => {
   const { user, logout } = useAuth();
@@ -14,12 +13,13 @@ export const useDashboard = () => {
   const queryClient = useQueryClient();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const { notification: currentPushNotification } = usePushNotifications(user?.id);
   
   // Use TanStack Query for Tasks
   const {
     data: tasks = [],
     isLoading: tasksLoading,
+    isFetching: tasksFetching,
+    error: tasksError,
     refetch: refetchTasks,
     isRefetching: refreshing,
   } = useQuery({
@@ -50,7 +50,10 @@ export const useDashboard = () => {
     enabled: !!user?.id,
   });
 
-  const loading = tasksLoading || historyLoading || notifsLoading;
+  // A screen should only replace its content with skeletons for the first task
+  // load. History and notifications refresh independently and must not cause
+  // the Today task list to flicker.
+  const loading = tasksLoading;
 
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
@@ -91,14 +94,6 @@ export const useDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    if (currentPushNotification) {
-      refetchTasks();
-      refetchHistoryTasks();
-      refetchNotifs();
-    }
-  }, [currentPushNotification, refetchTasks, refetchHistoryTasks, refetchNotifs]);
-
   // --- SENIOR NOTE: Socket logic has been moved to LocationContext (Global Scope) ---
   // This hook now relies on global query invalidation for reactivity.
 
@@ -112,7 +107,12 @@ export const useDashboard = () => {
     user,
     loading,
     tasks,
+    tasksLoading,
+    tasksFetching,
+    tasksError,
+    retryTasks: refetchTasks,
     historyTasks,
+    historyLoading,
     error: null,
     isMenuOpen,
     setIsMenuOpen,

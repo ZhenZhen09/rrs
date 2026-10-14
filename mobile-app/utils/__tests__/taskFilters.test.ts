@@ -1,4 +1,4 @@
-import { getRiderTaskCounts, getRiderTaskTab } from '../taskFilters';
+import { getRiderTaskCounts, getRiderTaskSequenceLabel, getRiderTaskTab, getRiderTasksForTab, isTaskLocked } from '../taskFilters';
 import { Job } from '@/types';
 
 const makeJob = (overrides: Partial<Job>): Job => ({
@@ -53,9 +53,57 @@ describe('taskFilters', () => {
       makeJob({ request_id: 'overdue', delivery_date: '2026-05-24' }),
       makeJob({ request_id: 'today', delivery_date: '2026-05-25', time_window: '09:00 - 10:00' }),
       makeJob({ request_id: 'tomorrow', delivery_date: '2026-05-26' }),
+      makeJob({ request_id: 'future', delivery_date: '2026-06-10' }),
       makeJob({ request_id: 'done', delivery_date: '2026-05-25', delivery_status: 'completed' }),
     ], today);
 
-    expect(counts).toEqual({ today: 1, overdue: 1 });
+    expect(counts).toEqual({ today: 1, overdue: 1, upcoming: 2 });
+  });
+
+  it('shows server-marked overdue work even when delivery status is missing', () => {
+    expect(getRiderTaskTab(makeJob({ delivery_status: undefined, is_overdue: true }), today)).toBe('overdue');
+  });
+
+  it('labels each task using its position across all active tabs', () => {
+    const tasks = [
+      makeJob({ request_id: 'today', delivery_date: '2026-05-25', queue_order: 2 }),
+      makeJob({ request_id: 'upcoming', delivery_date: '2026-05-26', queue_order: 3 }),
+      makeJob({ request_id: 'overdue', delivery_date: '2026-05-24', queue_order: 1 }),
+      makeJob({ request_id: 'future', delivery_date: '2026-06-10', queue_order: 4 }),
+      makeJob({ request_id: 'completed', delivery_status: 'completed', queue_order: 5 }),
+    ];
+
+    expect(getRiderTaskSequenceLabel(tasks[0], tasks)).toBe('STOP 2 OF 4');
+    expect(getRiderTaskSequenceLabel(tasks[1], tasks)).toBe('STOP 3 OF 4');
+    expect(getRiderTaskSequenceLabel(tasks[2], tasks)).toBe('STOP 1 OF 4');
+    expect(getRiderTaskSequenceLabel(tasks[3], tasks)).toBe('STOP 4 OF 4');
+  });
+
+  it('uses the admin-assigned queue rank for locks even when a lower rank has a later delivery date', () => {
+    const movedToFirstToday = makeJob({ request_id: 'moved', delivery_date: '2026-05-25', queue_order: 1 });
+    const oldDateButLowerPriority = makeJob({ request_id: 'older', delivery_date: '2026-05-24', queue_order: 2 });
+
+    expect(isTaskLocked(movedToFirstToday, [movedToFirstToday, oldDateButLowerPriority])).toBe(false);
+    expect(isTaskLocked(oldDateButLowerPriority, [movedToFirstToday, oldDateButLowerPriority])).toBe(true);
+  });
+
+  it('uses request ID as a stable tie breaker for duplicate stored queue positions', () => {
+    const tasks = [
+      makeJob({ request_id: 'b', queue_order: 1 }),
+      makeJob({ request_id: 'a', queue_order: 1 }),
+    ];
+
+    expect(getRiderTaskSequenceLabel(tasks[1], tasks)).toBe('STOP 1 OF 2');
+    expect(getRiderTaskSequenceLabel(tasks[0], tasks)).toBe('STOP 2 OF 2');
+  });
+
+  it('returns tomorrow and later jobs in dispatch queue order', () => {
+    const jobs = [
+      makeJob({ request_id: 'later', delivery_date: '2026-06-10', queue_order: 2 }),
+      makeJob({ request_id: 'today', delivery_date: '2026-05-25', queue_order: 1 }),
+      makeJob({ request_id: 'first', delivery_date: '2026-05-26', queue_order: 1 }),
+    ];
+
+    expect(getRiderTasksForTab(jobs, 'tomorrow', today).map(job => job.request_id)).toEqual(['first', 'later']);
   });
 });

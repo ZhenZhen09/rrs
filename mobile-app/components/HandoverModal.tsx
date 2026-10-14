@@ -16,7 +16,7 @@ import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/
 interface HandoverModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => Promise<void>;
+  onConfirm: (reason: string) => Promise<boolean>;
   taskCount: number;
 }
 
@@ -35,9 +35,15 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({ visible, onClose, 
   const handleConfirm = async () => {
     if (!reason.trim()) return;
     setLoading(true);
-    await onConfirm(reason);
-    setLoading(false);
-    onClose();
+    try {
+      const succeeded = await onConfirm(reason.trim());
+      if (succeeded) {
+        setReason('');
+        onClose();
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,7 +60,7 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({ visible, onClose, 
               </View>
               <Text style={styles.title}>Incomplete Tasks</Text>
               <Text style={styles.subtitle}>
-                You have {taskCount} unfinished task(s). Please provide a reason for the delay before logging off.
+                You have {taskCount} unfinished task(s). They will stay assigned to you while the admin coordinates what happens next. Provide a handover reason to end your shift.
               </Text>
             </View>
 
@@ -103,7 +109,7 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({ visible, onClose, 
                 ]}
               >
                 {loading ? <ActivityIndicator color="#FFF" /> : (
-                  <Text style={styles.confirmBtnText}>Confirm Log-off</Text>
+                  <Text style={styles.confirmBtnText}>Confirm Shift End</Text>
                 )}
               </TouchableOpacity>
             </View>

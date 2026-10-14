@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
+import { getRoleHomeRoute } from '../utils/roleRoutes';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,21 +20,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     }
 
     if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-      // User is authenticated but doesn't have the required role
-      // Redirect them to a safe place based on their actual role
-      switch (user.role) {
-        case 'admin':
-          navigate('/admin/dashboard', { replace: true });
-          break;
-        case 'personnel':
-          navigate('/personnel/dashboard', { replace: true });
-          break;
-        case 'rider':
-          navigate('/rider/dashboard', { replace: true });
-          break;
-        default:
-          navigate('/', { replace: true });
-      }
+      // User is authenticated but doesn't have the required role.
+      navigate(getRoleHomeRoute(user.role), { replace: true });
     }
   }, [isAuthenticated, user, allowedRoles, navigate]);
 

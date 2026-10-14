@@ -12,19 +12,22 @@ import {
 } from "../../../utils/statusMapping";
 import { format, parseISO } from 'date-fns';
 import { cn } from '../../ui/utils';
+import { DispatchStatusTabs, type DispatchStatusTab } from '../../../pages/Admin/DispatchStatusTabs';
+import { isRouteReorderableTask } from '../../../utils/activeRouteSelection';
 
 interface RequestListProps {
   requests: DeliveryRequest[];
   filteredRequests?: DeliveryRequest[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  filter?: string;
-  onFilterChange?: (filter: string) => void;
+  filter?: DispatchStatusTab;
+  onFilterChange?: (filter: DispatchStatusTab) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
-  onSelectAll?: () => void; counts?: { pending: number; active: number; done: number };
+  activeSelectionEnabled?: boolean;
+  onSelectAll?: () => void; counts?: { pending: number; active: number; done: number; overdue?: number; total?: number };
 }
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -40,9 +43,12 @@ export const RequestList: React.FC<RequestListProps> = ({
   onSortChange,
   selectedIds = [],
   onToggleSelect = () => {},
-  onSelectAll = () => {}, counts
+  activeSelectionEnabled = false,
+  counts
 }) => {
   const displayRequests = filteredRequests || requests;
+  const visibleOverdueCount = requests.filter(req => req.is_overdue).length;
+  const overdueCount = counts?.overdue ?? visibleOverdueCount;
 
   const { missionTasks, remainingActive } = useMemo(() => {
     if (filter !== 'active') return { missionTasks: [], remainingActive: displayRequests };
@@ -72,13 +78,8 @@ export const RequestList: React.FC<RequestListProps> = ({
     if (filter === 'completed') return null;
 
     const groups: Record<string, DeliveryRequest[]> = {};
-    if (filter !== 'completed') {
-      groups['OVERDUE'] = [];
-    }
+    groups['OVERDUE'] = [];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
     listToGroup.forEach(req => {
       try {
         if (!req.delivery_date) {
@@ -89,7 +90,7 @@ export const RequestList: React.FC<RequestListProps> = ({
         const delDate = parseISO(req.delivery_date);
         delDate.setHours(0, 0, 0, 0);
 
-        if (filter !== 'completed' && delDate < today) {
+        if (req.is_overdue && isActiveRequest(req)) {
           if (!groups['OVERDUE']) groups['OVERDUE'] = [];
           groups['OVERDUE'].push(req);
         } else {
@@ -103,7 +104,7 @@ export const RequestList: React.FC<RequestListProps> = ({
       }
     });
 
-    const finalOrder = filter === 'completed' ? DAY_ORDER : ['OVERDUE', ...DAY_ORDER];
+    const finalOrder = ['OVERDUE', ...DAY_ORDER, 'Other'];
 
     return finalOrder
       .filter(day => groups[day] && groups[day].length > 0)
@@ -117,25 +118,18 @@ export const RequestList: React.FC<RequestListProps> = ({
     <div className="flex flex-col h-full bg-white border-r border-slate-100 shadow-sm overflow-hidden">
       {/* List Header / Filters */}
       <div className="p-4 pb-1 shrink-0">
-        <div className="flex items-center gap-1.5 mb-4 bg-slate-100/50 p-1 rounded-xl">
-          <button 
-            onClick={() => onFilterChange('pending')}
-            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Pending ({counts ? counts.pending : requests.filter(isPendingRequest).length})
-          </button>
-          <button 
-            onClick={() => onFilterChange('active')}
-            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Active ({counts ? counts.active : requests.filter(isActiveRequest).length})
-          </button>
-          <button 
-            onClick={() => onFilterChange('completed')}
-            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'completed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Done ({counts ? counts.done : requests.filter(isTerminalRequest).length})
-          </button>
+        <div className="mb-4">
+          <DispatchStatusTabs
+            selected={filter}
+            counts={{
+              all: counts?.total ?? requests.length,
+              pending: counts?.pending ?? requests.filter(isPendingRequest).length,
+              active: counts?.active ?? requests.filter(isActiveRequest).length,
+              overdue: overdueCount,
+              completed: counts?.done ?? requests.filter(isTerminalRequest).length,
+            }}
+            onChange={onFilterChange}
+          />
         </div>
 
         <div className="flex items-center justify-between px-1">
@@ -145,6 +139,7 @@ export const RequestList: React.FC<RequestListProps> = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+              {(filter === 'active' || filter === 'overdue') && <SelectItem value="sequence" className="text-xs font-bold">Rider Queue</SelectItem>}
               <SelectItem value="newest" className="text-xs font-bold">Time: Newest</SelectItem>
               <SelectItem value="oldest" className="text-xs font-bold">Time: Oldest</SelectItem>
               <SelectItem value="day-of-week" className="text-xs font-bold">🗓️ Day of Week</SelectItem>
@@ -181,7 +176,7 @@ export const RequestList: React.FC<RequestListProps> = ({
                         isSelected={selectedId === req.request_id} 
                         onClick={() => onSelect(req.request_id)}
                         isMultiSelected={selectedIds.includes(req.request_id)}
-                        onToggleSelection={onToggleSelect}
+                        onToggleSelection={undefined}
                         isActiveTab={true}
                       />
                     ))}
@@ -223,8 +218,10 @@ export const RequestList: React.FC<RequestListProps> = ({
                           isSelected={selectedId === req.request_id}
                           onClick={() => onSelect(req.request_id)}
                           isMultiSelected={selectedIds.includes(req.request_id)}
-                          onToggleSelection={onToggleSelect}
-                          isActiveTab={filter === 'active'}
+                          onToggleSelection={filter === 'active'
+                            ? (activeSelectionEnabled && isRouteReorderableTask(req) ? onToggleSelect : undefined)
+                            : onToggleSelect}
+                          isActiveTab={filter === 'active' || filter === 'overdue'}
                         />
                       ))}
                     </div>
@@ -253,8 +250,10 @@ export const RequestList: React.FC<RequestListProps> = ({
                         isSelected={selectedId === req.request_id}
                         onClick={() => onSelect(req.request_id)}
                         isMultiSelected={selectedIds.includes(req.request_id)}
-                        onToggleSelection={onToggleSelect}
-                        isActiveTab={filter === 'active'}
+                        onToggleSelection={filter === 'active'
+                          ? (activeSelectionEnabled && isRouteReorderableTask(req) ? onToggleSelect : undefined)
+                          : onToggleSelect}
+                        isActiveTab={filter === 'active' || filter === 'overdue'}
                       />
                     </motion.div>
                   ))}

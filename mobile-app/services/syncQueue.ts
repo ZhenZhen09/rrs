@@ -1,6 +1,12 @@
 import { getDb } from './localDb';
 import { api } from '@/utils/api';
-import * as Crypto from 'expo-crypto';
+
+const createQueueId = () => {
+  const cryptoObject = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  return cryptoObject?.randomUUID
+    ? cryptoObject.randomUUID()
+    : `queue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 
 /**
  * Enterprise Async Sync Queue (Phase 1.2)
@@ -18,7 +24,7 @@ export interface QueueItem {
 
 export const addToQueue = async (item: Omit<QueueItem, 'idempotencyKey'>) => {
   const db = await getDb();
-  const idempotencyKey = Crypto.randomUUID();
+  const idempotencyKey = createQueueId();
   const now = Date.now();
   const expiresAt = now + (24 * 60 * 60 * 1000); // 24 hours
 

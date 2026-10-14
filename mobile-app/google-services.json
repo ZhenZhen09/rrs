@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "541668647774",
+    "project_id": "cfa-rss",
+    "storage_bucket": "cfa-rss.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:541668647774:android:ef0568a8a23831309be5cf",
+        "android_client_info": {
+          "package_name": "com.hon01.cfarss"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqo-Sdi2ib77_vabylnw9Sziqyz-bq0ZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,5 @@
+import { getAccountingBucket } from './requestAccounting';
+
 /**
  * Enterprise Status Mapping Utility
  * Provides a single source of truth for request status classification across the Admin portal.
@@ -15,47 +17,12 @@ export const getGroupedStatus = (
   status: string = "", 
   deliveryStatus: string = ""
 ): UIGroupStatus => {
-  const s = String(status || "").toLowerCase().trim();
-  const ds = String(deliveryStatus || "").toLowerCase().trim();
-
-  // 0. Queuing Phase (Personnel 60s window)
-  if (s === 'submitted_waiting') {
-    return 'queuing';
-  }
-
-  // 1. Terminal Negative - Declined/Rejected
-  if (['disapproved', 'declined', 'rejected'].includes(s) || 
-      ['disapproved'].includes(ds)) {
-    return 'declined';
-  }
-
-  // 2. Terminal Negative - Failed/Cancelled
-  if (['failed', 'cancelled'].includes(s) || 
-      ['failed', 'cancelled'].includes(ds)) {
-    return 'failed';
-  }
-
-  // 3. Terminal Success
-  if (['completed', 'delivered'].includes(ds)) {
-    return 'done';
-  }
-
-  // 4. Active Operations (Approved but not terminal)
-  if (s === 'approved' || ['assigned', 'in_progress', 'arrived'].includes(ds)) {
-    return 'active';
-  }
-
-  // 5. In Revision (Hidden from Admin)
-  if (s === 'returned_for_revision') {
-    return 'revision';
-  }
-
-  // 6. Awaiting Review (Standard Pending)
-  if (s === 'pending') {
-    return 'pending';
-  }
-
-  return 'pending';
+  const bucket = getAccountingBucket({ status, delivery_status: deliveryStatus });
+  if (bucket === 'completed') return 'done';
+  if (bucket === 'cancelled') return 'failed';
+  if (bucket === 'pending' && String(status).trim().toLowerCase() === 'submitted_waiting') return 'queuing';
+  // Legacy views use pending as their fallback; the reporting ledger explicitly shows Unclassified.
+  return bucket === 'other' ? 'pending' : bucket;
 };
 
 /**
@@ -90,5 +57,8 @@ export const isActiveRequest = (request: { status: string; delivery_status?: str
  * Checks if a request is in a "Pending" state (Pending tab).
  */
 export const isPendingRequest = (request: { status: string; delivery_status?: string }) => {
-  return getGroupedStatus(request.status, request.delivery_status) === 'pending';
+  const group = getGroupedStatus(request.status, request.delivery_status);
+  // The API keeps newly submitted requests in a short queue before promoting
+  // them to `pending`. Admins can already review or return these requests.
+  return group === 'pending' || group === 'queuing';
 };

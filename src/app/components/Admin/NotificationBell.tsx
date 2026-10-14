@@ -3,44 +3,40 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
+import { Bell } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import './notification-bell.css';
 
-export function NotificationBell() {
+export function NotificationBell({ onOpenRequest }: { onOpenRequest?: (requestId: string) => void }) {
   const { user } = useAuth();
-  const { notifications, markNotificationRead, markAllNotificationsRead, requests } = useData();
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
+  const { requests } = useData();
   const [isNotificationSheetOpen, setIsNotificationSheetOpen] = useState(false);
+  const [unavailableRequestId, setUnavailableRequestId] = useState<string | null>(null);
 
-  // Filter notifications for current user and exclude those linked to completed/failed transactions
+  // Keep completed and failed notifications in the inbox as readable history.
   const myNotifications = (Array.isArray(notifications) ? notifications : []).filter(n => {
-    if (n.user_id !== user?.id) return false;
-    
-    if (n.request_id && Array.isArray(requests)) {
-      const request = requests.find(r => r.request_id === n.request_id);
-      if (request && (request.delivery_status === 'completed' || request.delivery_status === 'failed')) {
-        return false;
-      }
-    }
-    return true;
+    return n.user_id === user?.id;
   }).slice(0, 50);
 
   const unreadCount = myNotifications.filter(n => !n.read).length;
 
   const handleNotificationClick = (notificationId: string, requestId?: string) => {
-    markNotificationRead(notificationId);
-    
     if (requestId) {
-      setIsNotificationSheetOpen(false);
-      const element = document.getElementById(`request-${requestId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        element.classList.add('ring-4', 'ring-primary/50', 'ring-offset-2', 'transition-all', 'duration-500');
-        setTimeout(() => {
-          element.classList.remove('ring-4', 'ring-primary/50', 'ring-offset-2');
-        }, 2000);
+      const requestExists = requests.some((request) => request.request_id === requestId);
+      if (!requestExists || !onOpenRequest) {
+        setUnavailableRequestId(requestId);
+        return;
       }
+      onOpenRequest(requestId);
+      markNotificationRead(notificationId);
+      setIsNotificationSheetOpen(false);
+      setUnavailableRequestId(null);
+      return;
     }
+
+    markNotificationRead(notificationId);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -57,21 +53,28 @@ export function NotificationBell() {
   return (
     <Sheet open={isNotificationSheetOpen} onOpenChange={setIsNotificationSheetOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="relative rounded-lg h-7 w-7 border-slate-200 bg-white hover:bg-slate-50 transition-all">
-          <Bell className="h-4 w-4 text-slate-500" />
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+          onClick={() => setUnavailableRequestId(null)}
+          className="relative h-10 w-10 rounded-xl border-slate-200 bg-white transition-all hover:bg-slate-50"
+        >
+          <Bell className="h-4 w-4 text-slate-500" aria-hidden="true" />
           {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-3.5 w-3.5 flex items-center justify-center p-0 text-[7px] bg-rose-500 border-white rounded-full font-black shadow-sm">
+            <Badge aria-hidden="true" className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border-white bg-rose-500 p-0 text-[9px] font-black shadow-sm">
               {unreadCount}
             </Badge>
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-xs border-l border-slate-100 shadow-2xl p-0 flex flex-col">
-        <SheetHeader className="p-4 border-b border-slate-50 text-left">
+      <SheetContent className="admin-notification-sheet inset-x-0 top-auto bottom-0 h-[min(72dvh,36rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-none rounded-t-2xl border-l-0 border-t border-slate-100 pb-[env(safe-area-inset-bottom)] shadow-2xl p-0 flex flex-col max-md:data-[state=open]:!duration-200 max-md:data-[state=closed]:!duration-150 max-md:data-[state=open]:!slide-in-from-bottom max-md:data-[state=closed]:!slide-out-to-bottom md:inset-y-0 md:top-0 md:right-0 md:left-auto md:bottom-0 md:h-full md:max-h-none md:w-full md:max-w-xs md:rounded-none md:border-t-0 md:border-l md:pb-0 md:data-[state=open]:slide-in-from-right md:data-[state=closed]:slide-out-to-right">
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-slate-200 md:hidden" aria-hidden="true" />
+        <SheetHeader className="p-3 md:p-4 border-b border-slate-50 text-left">
           <div className="flex items-center justify-between">
             <div>
               <SheetTitle className="text-sm font-black uppercase tracking-widest">Notifications</SheetTitle>
-              <p className="text-[9px] font-medium text-slate-400 mt-0.5">Managed system updates.</p>
+              <SheetDescription className="mt-0.5 text-[9px] font-medium text-slate-400">Managed system updates.</SheetDescription>
             </div>
             {unreadCount > 0 && (
               <Button 
@@ -85,7 +88,12 @@ export function NotificationBell() {
             )}
           </div>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
+          {unavailableRequestId && (
+            <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+              Request {unavailableRequestId} is not available in the current Admin data. This notification remains unread.
+            </p>
+          )}
           {myNotifications.length === 0 ? (
             <div className="py-12 text-center">
               <div className="w-8 h-8 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-2">
@@ -113,6 +121,7 @@ export function NotificationBell() {
                     <p className="text-[8px] font-black text-slate-400 mt-1 uppercase tracking-widest">
                       {format(parseISO(notification.created_at), 'MMM d, h:mm a')}
                     </p>
+                    {notification.request_id && requests.some((request) => request.request_id === notification.request_id && ['completed', 'delivered', 'failed', 'cancelled'].includes(String(request.delivery_status || '').toLowerCase())) && <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-400">Resolved</p>}
                   </div>
                   {!notification.read && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1" />}
                 </div>

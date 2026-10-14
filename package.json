@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev:frontend": "vite",
-    "dev:backend": "cd server && npm run dev",
+    "dev:backend": "cd server && node ../node_modules/tsx/dist/cli.mjs watch index.ts",
+    "stop:backend": "powershell -ExecutionPolicy Bypass -File scripts/stop-dev-port.ps1 -Port 3001",
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "build:frontend": "vite build",
     "build:backend": "cd server && npm install && npm run build",
@@ -72,8 +73,11 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@dicebear/core": "10.7.0",
+    "@dicebear/styles": "10.6.0",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "4.1.12",
+    "@testing-library/react": "^16.3.3",
     "@types/express": "^5.0.6",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^25.5.0",
@@ -84,7 +88,9 @@
     "concurrently": "^9.2.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "jsdom": "^29.1.1",
     "jsonwebtoken": "^9.0.3",
+    "sharp": "0.35.5",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
     "tailwindcss": "4.1.12",

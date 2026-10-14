@@ -8,9 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Truck, AlertCircle, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LightTrails } from '../components/LightTrails';
 import { PasswordResetOverlay } from '../components/PasswordResetOverlay';
-import logoImage from '../../assets/images/logo.png';
+import { getRoleHomeRoute } from '../utils/roleRoutes';
 
 export function Login() {
   const navigate = useNavigate();
@@ -18,24 +17,25 @@ export function Login() {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Password Reset States
   const [resetOverlayVisible, setResetOverlayVisible] = useState(false);
-  const [resetUserId, setResetUserId] = useState('');
+  const [resetChallenge, setResetChallenge] = useState('');
   const [resetUserRole, setResetUserRole] = useState('');
 
   // MFA States
   const [mfaStep, setMfaStep] = useState<'credentials' | 'setup' | 'verify'>('credentials');
-  const [mfaData, setMfaData] = useState<{ userId: string; qrCode?: string; secret?: string } | null>(null);
+  const [mfaData, setMfaData] = useState<{ challenge: string; qrCode?: string } | null>(null);
   const [mfaToken, setMfaToken] = useState('');
 
   // Auto-redirect if already logged in
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(`/${user.role}/dashboard`, { replace: true });
+      navigate(getRoleHomeRoute(user.role), { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -45,28 +45,28 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      const result = await login(loginEmail.trim(), loginPassword);
+      const result = await login(loginEmail.trim(), loginPassword, rememberMe);
       
       if (result.success) {
         // Success: useEffect will handle redirection
       } else if (result.requirePasswordReset) {
-        setResetUserId(result.userId || '');
+        setResetChallenge(result.challenge || '');
         setResetUserRole(result.role || '');
         setResetOverlayVisible(true);
       } else if (result.mfa_required) {
-        setMfaData({ userId: result.userId! });
+        setMfaData({ challenge: result.challenge! });
         setMfaStep('verify');
       } else if (result.mfa_setup_required) {
         // Initialize setup
         const setupRes = await fetch('/api/auth/mfa/setup-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: result.userId }),
+          body: JSON.stringify({ challenge: result.challenge }),
           credentials: 'include'
         });
         if (setupRes.ok) {
           const setupData = await setupRes.json();
-          setMfaData({ userId: result.userId!, qrCode: setupData.qrCode, secret: setupData.secret });
+          setMfaData({ challenge: setupData.challenge, qrCode: setupData.qrCode });
           setMfaStep('setup');
         } else {
           setError('Failed to initialize MFA setup');
@@ -88,9 +88,7 @@ export function Login() {
 
     try {
       const endpoint = mfaStep === 'setup' ? '/api/auth/mfa/setup-verify' : '/api/auth/mfa/verify-login';
-      const body = mfaStep === 'setup' 
-        ? { userId: mfaData?.userId, secret: mfaData?.secret, token: mfaToken }
-        : { userId: mfaData?.userId, token: mfaToken };
+      const body = { challenge: mfaData?.challenge, token: mfaToken, rememberMe };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -104,7 +102,13 @@ export function Login() {
         // Log user in
         const userToSet = mfaStep === 'setup' ? data.user : data;
         
-        localStorage.setItem('currentUser', JSON.stringify(userToSet));
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('rememberedUser');
+        sessionStorage.removeItem('sessionUser');
+        (rememberMe ? localStorage : sessionStorage).setItem(
+          rememberMe ? 'rememberedUser' : 'sessionUser',
+          JSON.stringify(userToSet)
+        );
         window.location.reload(); // Simple way to trigger AuthContext update
       } else {
         const errorData = await response.json();
@@ -118,46 +122,59 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] font-sans overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#f6f3ee] font-sans overflow-hidden">
       {/* LEFT SIDE: Branding & Image Context */}
-      <div className="relative flex-1 hidden md:flex flex-col justify-center px-12 lg:px-24 overflow-hidden">
+      <div className="relative hidden flex-1 flex-col justify-end overflow-hidden px-8 pb-10 md:flex lg:flex-[1.35] lg:px-12 lg:pb-14 xl:px-16">
         <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1757777440206-00dcce0205e3?auto=format&fit=crop&q=80&w=2000" 
-            alt="Minimalist errands rider" 
-            className="w-full h-full object-cover"
+          <motion.img
+            src="https://images.squarespace-cdn.com/content/v1/604b1fff436e397a99d573e9/149361b1-46af-4f99-9c18-016e5aa06c44/DSCF1313.jpg" 
+            alt="Rider scheduling scene" 
+            initial={{ scale: 1.06 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 1.8, ease: "easeOut" }}
+            className="h-full w-full object-cover"
           />
-          {/* Subdued Brand Overlay: Lowered opacity for a more subtle look */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-[#f3bc2c]/60 via-[#f3bc2c]/20 to-transparent" />
-          <div className="absolute inset-0 bg-black/10" /> {/* Subtle darkening for text contrast */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#071a3b]/90 via-[#071a3b]/15 to-[#071a3b]/5" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#f3bc2c]/25 via-transparent to-transparent" />
         </div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="relative z-10 flex flex-col items-start gap-1 max-w-xl p-12"
+          className="relative z-10 flex max-w-2xl -translate-y-16 flex-col items-start gap-5 lg:-translate-y-24"
         >
-          {/* Minimalist Transparent Brand Plate */}
-          <div className="bg-transparent">
-            <h1 className="text-5xl lg:text-7xl font-black text-slate-900 leading-none tracking-tighter mb-2">
-              CFA <span className="text-white drop-shadow-md">RSS</span>
+          <div>
+            <h1 className="font-[Newsreader] text-5xl font-black leading-[0.82] tracking-[-0.06em] text-[#071a3b] drop-shadow-sm lg:text-7xl">
+              ERRANDS.
             </h1>
-            <div className="flex items-center gap-3">
-              <div className="h-px w-8 bg-slate-900/40" />
-              <p className="text-[10px] lg:text-xs font-black text-slate-900/70 uppercase tracking-[0.4em]">
-                Errands. Simplified.
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-1 w-12 rounded-full bg-[#f3bc2c]" />
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-white/90 lg:text-sm">
+                Collection Simplified
               </p>
             </div>
+          </div>
+          <div className="max-w-md translate-y-16 border-l-2 border-[#f3bc2c] pl-5 text-white/90 lg:translate-y-24">
+            <p className="font-[Newsreader] text-lg leading-tight lg:text-xl">People. Processes. Delivering more every day.</p>
+            <p className="mt-2 text-[11px] leading-4 text-white/65 lg:text-xs">A streamlined platform for our people to keep operations moving forward.</p>
           </div>
         </motion.div>
       </div>
 
       {/* RIGHT SIDE: Interfaces */}
-      <div className="flex-[0.8] lg:flex-[0.7] relative flex items-center justify-center p-6 bg-slate-50 md:bg-transparent">
-        <div className="absolute inset-0 md:hidden bg-gradient-to-br from-amber-600 to-amber-800" />
+      <div className="relative flex min-h-[100dvh] flex-[0.8] items-center justify-center overflow-y-auto bg-[#f6f3ee] p-3 sm:p-4 md:min-h-0 md:overflow-hidden md:flex lg:flex-[0.7]">
+        <div className="absolute inset-0 md:hidden">
+          <img
+            src="https://images.squarespace-cdn.com/content/v1/604b1fff436e397a99d573e9/149361b1-46af-4f99-9c18-016e5aa06c44/DSCF1313.jpg"
+            alt=""
+            aria-hidden="true"
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#071a3b]/85 via-[#071a3b]/55 to-[#071a3b]/90" />
+        </div>
         
-        <div className="relative z-10 w-full max-w-md">
+        <div className="relative z-10 w-full max-w-sm">
           <AnimatePresence mode="wait">
             {mfaStep === 'credentials' ? (
               <motion.div
@@ -167,28 +184,31 @@ export function Login() {
                 exit={{ opacity: 0, scale: 0.95, y: -20 }}
                 transition={{ duration: 0.4, ease: "circOut" }}
               >
-                <div className="md:hidden text-center mb-8">
-                  <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase tracking-widest">CFA RSS</h1>
+                <div className="mb-5 text-center md:hidden">
+                  <h1 className="font-[Newsreader] text-4xl font-black tracking-tight text-white">ERRANDS.</h1>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/70">Collection Simplified</p>
                 </div>
 
-                <Card className="border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] p-4 border-2 ring-1 ring-white/20">
-                  <CardHeader className="space-y-1 text-center pt-8 pb-6">
-                    <CardTitle className="text-4xl font-black tracking-tight text-slate-900">Sign in</CardTitle>
-                    <CardDescription className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                <Card className="rounded-[1.75rem] border border-white/80 bg-white p-2 shadow-[0_24px_70px_-24px_rgba(7,26,59,0.35)] sm:p-3">
+                  <CardHeader className="space-y-1 text-center pt-5 pb-3">
+                    <CardTitle className="font-[Newsreader] text-3xl font-black tracking-tight text-[#071a3b]">Sign in</CardTitle>
+                    <div className="mx-auto mt-3 h-1 w-12 rounded-full bg-[#f3bc2c]" />
+                    <CardDescription className="pt-2 text-[10px] font-black uppercase tracking-[0.25em] text-[#8291b0]">
                       Authorized Personnel Gateway
                     </CardDescription>
                   </CardHeader>
 
-                  <CardContent className="px-6 pb-10">
-                    <form onSubmit={handleLogin} className="space-y-6">
+                  <CardContent className="px-4 pb-5 sm:px-5 sm:pb-6">
+                    <form onSubmit={handleLogin} className="space-y-4">
                       <div className="space-y-2">
+                        <Label htmlFor="login-email" className="mb-2 block text-left text-sm font-semibold text-[#172b4d]">Email address</Label>
                         <div className="relative group">
                           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-600 transition-colors" size={20} />
                           <Input
                             id="login-email"
                             type="email"
                             placeholder="Email address"
-                            className="bg-white/80 border-slate-200 h-14 rounded-2xl pl-12 pr-4 text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm"
+                            className="h-11 rounded-2xl border-[#dce2ec] bg-white pl-12 pr-4 text-slate-800 shadow-sm transition-all focus:border-[#d98a0b] focus:ring-2 focus:ring-[#f3bc2c]/20"
                             value={loginEmail}
                             onChange={(e) => setLoginEmail(e.target.value)}
                             required
@@ -197,13 +217,14 @@ export function Login() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor="login-password" className="mb-2 block text-left text-sm font-semibold text-[#172b4d]">Password</Label>
                         <div className="relative group">
                           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-600 transition-colors" size={20} />
                           <Input
                             id="login-password"
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Password"
-                            className="bg-white/80 border-slate-200 h-14 rounded-2xl pl-12 pr-12 text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm"
+                            className="h-11 rounded-2xl border-[#dce2ec] bg-white pl-12 pr-12 text-slate-800 shadow-sm transition-all focus:border-[#d98a0b] focus:ring-2 focus:ring-[#f3bc2c]/20"
                             value={loginPassword}
                             onChange={(e) => setLoginPassword(e.target.value)}
                             required
@@ -220,11 +241,20 @@ export function Login() {
                           <button 
                             type="button"
                             onClick={() => alert("Please contact your administrator to reset your secure credentials.")}
-                            className="text-xs font-bold text-amber-700 hover:text-amber-800 transition-colors"
+                            className="text-xs font-bold text-[#d2670b] transition-colors hover:text-[#a94d08]"
                           >
                             Forgot password?
                           </button>
                         </div>
+                        <label className="flex items-center gap-2 px-1 text-xs font-semibold text-[#53627a]">
+                          <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 accent-[#d98a0b]"
+                          />
+                          Keep me signed in on this device
+                        </label>
                       </div>
 
                       <AnimatePresence>
@@ -246,7 +276,7 @@ export function Login() {
                         <Button 
                           type="submit" 
                           disabled={isLoading}
-                          className="w-full h-14 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-lg font-black rounded-2xl transition-all shadow-xl shadow-amber-600/30 active:scale-[0.98] border-none"
+                          className="h-11 w-full rounded-2xl border-none bg-gradient-to-r from-[#f0a000] to-[#c95d00] text-sm font-black text-white shadow-xl shadow-[#d56f0b]/25 transition-all hover:from-[#e28f00] hover:to-[#b95000] active:scale-[0.98]"
                         >
                           {isLoading ? (
                             <motion.div 
@@ -279,12 +309,12 @@ export function Login() {
                 exit={{ opacity: 0, scale: 0.95, y: -20 }}
                 transition={{ duration: 0.4, ease: "circOut" }}
               >
-                <Card className="w-full max-w-md border-white/40 bg-white/70 backdrop-blur-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-[2.5rem] overflow-hidden p-4 border-2 ring-1 ring-white/20">
+                <Card className="w-full max-w-sm overflow-hidden rounded-[1.75rem] border border-white/80 bg-white p-3 shadow-[0_24px_70px_-24px_rgba(7,26,59,0.35)]">
                   <CardHeader className="pt-10 pb-6 text-center">
                     <div className="mx-auto w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center mb-6 shadow-2xl shadow-slate-900/40 border border-slate-700">
                       <Lock className="text-white h-8 w-8" />
                     </div>
-                    <CardTitle className="text-3xl font-black text-slate-900 tracking-tight">
+                    <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">
                       {mfaStep === 'setup' ? 'Security Setup' : 'Verification'}
                     </CardTitle>
                     <CardDescription className="text-slate-500 font-bold px-6">
@@ -357,7 +387,7 @@ export function Login() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="mt-8 flex flex-col items-center gap-4"
+            className="mt-5 hidden flex-col items-center gap-3 md:flex"
           >
             <div className="flex items-center gap-3">
               <motion.div 
@@ -366,8 +396,8 @@ export function Login() {
               >
                 <Truck size={22} className="text-white" />
               </motion.div>
-              <span className="text-2xl font-black text-slate-900 md:text-slate-800 tracking-tighter uppercase italic drop-shadow-sm">
-                CFA<span className="text-[#f3bc2c]"> RSS</span>
+              <span className="font-[Newsreader] text-3xl font-black tracking-tight text-[#071a3b]">
+                ERRANDS.
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] opacity-80">
@@ -379,7 +409,7 @@ export function Login() {
 
       <PasswordResetOverlay 
         visible={resetOverlayVisible}
-        userId={resetUserId}
+        challenge={resetChallenge}
         userRole={resetUserRole}
         onClose={() => setResetOverlayVisible(false)}
         onSuccess={() => {

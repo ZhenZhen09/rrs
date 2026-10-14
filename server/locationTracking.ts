@@ -78,6 +78,24 @@ export const pruneTrackingState = (finishedRequestIds: string[], offlineRiderIds
 // HARDENING CONSTANTS (Slice 1)
 const MAX_PHYSICAL_SPEED_KMPH = 5000;
 
+export const getStaleLocationMetadata = ({
+  type,
+  now,
+  timestamp,
+  lastAcceptedTimestamp,
+}: {
+  type: 'time_skew' | 'age_limit';
+  now: number;
+  timestamp: number | null;
+  lastAcceptedTimestamp?: number;
+}) => ({
+  type,
+  serverNow: now,
+  receivedTimestamp: timestamp,
+  ...(lastAcceptedTimestamp === undefined ? {} : { lastAcceptedTimestamp }),
+  ...(type === 'age_limit' ? { ageMs: now - (timestamp ?? now) } : {}),
+});
+
 export function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const radius = 6371e3;
   const p1 = (lat1 * Math.PI) / 180;
@@ -224,12 +242,27 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
   // 2. TIMESTAMP ORDERING PROTECTION (Senior Requirement)
   // Bypassed for simulations as they often jump around during testing.
   if (!isSimulation && lastFix && timestamp !== null && Number(timestamp) <= lastFix.timestamp) {
-    console.warn(`[Location] REJECT_TIME_SKEW for ${riderId}: Received ${timestamp}, but DB has ${lastFix.timestamp}`);
+    if (Number(timestamp) === lastFix.timestamp) {
+      // Foreground and background location streams can deliver the same native
+      // GPS fix. It is a duplicate sample, not evidence of a device clock skew.
+      return {
+        fleetLocationUpdated: false,
+        requestTrackingUpdated: false,
+        reason: 'duplicate_location' as const,
+      };
+    }
+    console.warn(`[Location] REJECT_TIME_SKEW for ${riderId}: Received ${timestamp}ms, latest accepted fix is ${lastFix.timestamp}ms (older by ${lastFix.timestamp - Number(timestamp)}ms)`);
     if (io) io.to('admin-room').emit('tracking-rejected', { riderId, reason: 'stale_location', type: 'time_skew' });
     return {
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
       reason: 'stale_location' as const,
+      ...getStaleLocationMetadata({
+        type: 'time_skew',
+        now,
+        timestamp,
+        lastAcceptedTimestamp: lastFix.timestamp,
+      }),
     };
   }
 
@@ -246,6 +279,11 @@ export async function handleRiderLocationUpdate(input: LocationUpdateInput & { i
       fleetLocationUpdated: false,
       requestTrackingUpdated: false,
       reason: 'stale_location' as const,
+      ...getStaleLocationMetadata({
+        type: 'age_limit',
+        now,
+        timestamp,
+      }),
     };
   }
 

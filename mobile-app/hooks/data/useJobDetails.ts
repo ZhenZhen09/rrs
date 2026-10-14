@@ -3,13 +3,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Linking, Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJobDetails, updateJobStatus, getTasks } from '@/services/apiService';
+import { getJobDetails, updateJobStatus, getTasks, getDeliveryEta } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
 import { useLocation } from '@/context/LocationContext';
 import { Job } from '@/types';
+import { compareRiderQueueTasks } from '@/utils/taskFilters';
 import { Config } from '@/constants/Config';
 
 import NetInfo from '@react-native-community/netinfo';
+import { EtaStatus, RouteEstimate } from '@/utils/eta';
+import { updateActiveDeliveryNotification } from '@/services/deliveryNotifications';
 
 export type JobSyncStatus = 'synced' | 'pending' | 'verifying' | 'sync_pending' | 'sync_error';
 
@@ -17,7 +20,7 @@ export const useJobDetails = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { startTracking, stopTracking, isTracking } = useLocation();
+  const { startTracking, stopTracking, isTracking, lastLocation } = useLocation();
   const queryClient = useQueryClient();
   
   const [statusModalVisible, setStatusModalVisible] = useState(false);
@@ -26,6 +29,12 @@ export const useJobDetails = () => {
   const [customRemark, setCustomRemark] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<JobSyncStatus>('synced');
   const [isSelfUpdated, setIsSelfUpdated] = useState(false);
+  const [eta, setEta] = useState<RouteEstimate | null>(null);
+  const [etaLocationAt, setEtaLocationAt] = useState<number | null>(null);
+  const [etaError, setEtaError] = useState<string | null>(null);
+  const [etaRefreshing, setEtaRefreshing] = useState(false);
+  const lastEtaRequestAtRef = useRef(0);
+  const etaRequestRef = useRef(0);
   
   // Use TanStack Query for Job Details
   const {
@@ -63,13 +72,8 @@ export const useJobDetails = () => {
       !['completed', 'failed', 'cancelled', 'disapproved'].includes(t.delivery_status || '')
     );
 
-    // 2. Sort by queue_order (Layer 2)
-    const sortedQueue = [...activeTasks].sort((a, b) => {
-      const orderA = a.queue_order || 999;
-      const orderB = b.queue_order || 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    });
+    // queue_order is the dispatcher's authoritative rider-wide route sequence.
+    const sortedQueue = [...activeTasks].sort(compareRiderQueueTasks);
 
     const currentTaskInQueue = sortedQueue[0];
     const isFirstInQueue = currentTaskInQueue?.request_id === id;
@@ -240,6 +244,63 @@ export const useJobDetails = () => {
     }
   }, [job?.delivery_status, isTracking, id]);
 
+  useEffect(() => {
+    const status = job?.delivery_status?.toLowerCase();
+    const destination = job?.dropoff_location;
+    const origin = lastLocation || job?.current_location;
+    const hasValidCoordinates = Boolean(
+      origin && destination &&
+      Number.isFinite(Number(origin.lat)) && Number.isFinite(Number(origin.lng)) &&
+      Number.isFinite(Number(destination.lat)) && Number.isFinite(Number(destination.lng)),
+    );
+
+    if (status !== 'in_progress' || !hasValidCoordinates || !origin || !destination) {
+      const resetTimer = setTimeout(() => {
+        setEta(null);
+        setEtaLocationAt(null);
+        setEtaError(null);
+        setEtaRefreshing(false);
+      }, 0);
+      return () => clearTimeout(resetTimer);
+    }
+
+    const now = Date.now();
+    if (now - lastEtaRequestAtRef.current < 60_000) return;
+    const requestNumber = ++etaRequestRef.current;
+    lastEtaRequestAtRef.current = now;
+    setEtaRefreshing(true);
+
+    getDeliveryEta(
+      { lat: Number(origin.lat), lng: Number(origin.lng) },
+      { lat: Number(destination.lat), lng: Number(destination.lng) },
+      id as string,
+    ).then((estimate) => {
+      if (requestNumber !== etaRequestRef.current) return;
+      setEta(estimate);
+      setEtaLocationAt(lastLocation?.timestamp || Date.now());
+      setEtaError(null);
+    }).catch((error) => {
+      if (requestNumber !== etaRequestRef.current) return;
+      setEtaError(error instanceof Error ? error.message : 'ETA unavailable');
+    }).finally(() => {
+      if (requestNumber === etaRequestRef.current) setEtaRefreshing(false);
+    });
+  }, [id, job?.delivery_status, job?.dropoff_location?.lat, job?.dropoff_location?.lng, job?.current_location?.lat, job?.current_location?.lng, lastLocation?.lat, lastLocation?.lng, lastLocation?.timestamp]);
+
+  const locationIsStale = Boolean(
+    lastLocation?.timestamp && etaLocationAt &&
+    lastLocation.timestamp - etaLocationAt > 180_000,
+  );
+  const etaStatus: EtaStatus = etaError || locationIsStale ? 'stale' : eta ? 'available' : 'unavailable';
+
+  useEffect(() => {
+    if (!job?.request_id) return;
+    void updateActiveDeliveryNotification(
+      job,
+      etaStatus === 'available' ? eta : null,
+    ).catch((error) => console.warn('Unable to update active delivery notification:', error));
+  }, [job?.request_id, job?.delivery_status, etaStatus, eta?.durationSeconds]);
+
   const openInNativeMaps = (lat: number, lng: number, label: string) => {
     const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
     const latLng = `${lat},${lng}`;
@@ -290,5 +351,9 @@ export const useJobDetails = () => {
     fetchJobDetails,
     isSelfUpdated,
     sequentialEnforcement,
+    eta,
+    etaStatus,
+    etaError,
+    etaRefreshing,
   };
 };

@@ -4,9 +4,7 @@ import {
   View, 
   Text, 
   TouchableOpacity, 
-  Modal, 
-  Platform,
-  Dimensions
+  Modal
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';

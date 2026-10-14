@@ -9,9 +9,9 @@ interface Props {
 
 export default function PasswordStrengthMeter({ score }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
+  const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
 
-  const barWidth: DimensionValue = `${((score / 3) * 100).toFixed(2)}%`;
+  const barWidth = `${((score / 3) * 100).toFixed(2)}%` as DimensionValue;
 
   const getColor = () => {
     if (score === 1) return theme.danger;

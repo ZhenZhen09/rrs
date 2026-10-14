@@ -52,10 +52,32 @@ export const classifyRiskLevel = (
   return 'low';
 };
 
+const PHILIPPINE_TIME_ZONE = 'Asia/Manila';
+
+const formatPhilippineSqlDate = (value: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PHILIPPINE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value).reduce<Record<string, string>>((result, part) => {
+    if (part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
 const toSqlDate = (value: Date | string | null | undefined) => {
   if (!value) return null;
-  if (typeof value === 'string') return value.slice(0, 19).replace('T', ' ');
-  return value.toISOString().slice(0, 19).replace('T', ' ');
+  if (typeof value === 'string') {
+    const hasExplicitTimeZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value);
+    return hasExplicitTimeZone ? formatPhilippineSqlDate(new Date(value)) : value.slice(0, 19).replace('T', ' ');
+  }
+  return formatPhilippineSqlDate(value);
 };
 
 const getLocationAgeSeconds = (eventTime: Date, locationRecordedAt?: Date | string | null) => {

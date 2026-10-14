@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
   DialogTitle,
   DialogDescription,
   DialogFooter
@@ -42,7 +41,14 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
 }) => {
   const [tasks, setTasks] = useState<DeliveryRequest[]>([]);
   const [riders, setRiders] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedSelection, setLoadedSelection] = useState<string | null>(null);
+  const selectionKey = JSON.stringify([isOpen, riderId, date]);
+  const [previousSelection, setPreviousSelection] = useState(selectionKey);
+  if (previousSelection !== selectionKey) {
+    setPreviousSelection(selectionKey);
+    setLoadedSelection(null);
+  }
+  const loading = loadedSelection !== selectionKey;
   const [submitting, setIsSubmitting] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [action, setAction] = useState<'reassign' | 'reschedule' | null>(null);
@@ -50,34 +56,25 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
   const [targetDate, setTargetDate] = useState(date);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchData();
-    }
-  }, [isOpen, riderId, date]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // 1. Fetch orphaned tasks for this rider and date
-      const tasksRes = await fetch(`/api/requests?rider_id=${riderId}&delivery_status=assigned,in_progress,arrived`, {
-        credentials: 'include'
-      });
-      const tasksData = await tasksRes.json();
-      // Filter by date manually
+    if (!isOpen) return;
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/requests?rider_id=${riderId}&delivery_status=assigned,in_progress,arrived`, { credentials: 'include' }).then(res => res.json()),
+      fetch('/api/users/riders', { credentials: 'include' }).then(res => res.json()),
+    ]).then(([tasksData, ridersData]) => {
+      if (cancelled) return;
       const filteredTasks = (tasksData.data || []).filter((t: DeliveryRequest) => t.delivery_date === date);
       setTasks(filteredTasks);
       setSelectedTaskIds(filteredTasks.map((t: DeliveryRequest) => t.request_id));
-
-      // 2. Fetch available riders
-      const ridersRes = await fetch('/api/users/riders', { credentials: 'include' });
-      const ridersData = await ridersRes.json();
       setRiders(ridersData.filter((r: User) => r.id !== riderId));
-    } catch (e) {
+      setLoadedSelection(selectionKey);
+    }).catch(() => {
+      if (cancelled) return;
       toast.error("Failed to load conflict data");
-    } finally {
-      setLoading(false);
-    }
-  };
+      setLoadedSelection(selectionKey);
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, riderId, date, selectionKey]);
 
   const handleMassUpdate = async () => {
     if (selectedTaskIds.length === 0) {

@@ -12,11 +12,63 @@ import {
   resequenceSchema,
   patchLocationsSchema
 } from '../schemas/requestSchema';
-// @ts-ignore
-import webpush from 'web-push';
 import { AuthRequest, authorize } from '../middleware/auth';
+import { resolveRequestAttribution } from '../utils/requestAttribution';
+import { getOverdueMetadata, getProactiveOverdueMetadata } from '../utils/overdue';
+import { ACCOUNTING_BUCKET_SQL, buildRequestAccounting, getAccountingBucket } from '../utils/requestAccounting';
+import { sendPushNotification } from './notifications';
+import { persistAdminDispatchNotifications, persistDeliveryNotification, publishDeliveryNotification } from '../services/deliveryNotifications';
+import { appendRequestsToRiderQueue, lockRiderQueues, normalizeRiderQueueOrder, replaceRiderQueueOrder } from '../services/riderTaskQueue';
+import { RiderQueueValidationError } from '../utils/riderQueue';
 
 const router = Router();
+
+const getPhilippineDateString = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+};
+
+const normalizeDateString = (date: any) => {
+  if (date instanceof Date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+  if (typeof date === 'string') return date.split('T')[0];
+  return String(date || '');
+};
+
+const getRiderAvailabilityIssue = async (conn: any, riderId: string, deliveryDates: any[]) => {
+  const [riderRows] = await conn.query(`
+    SELECT u.id, u.name, u.is_on_duty,
+           (SELECT status FROM attendance_logs WHERE rider_id = u.id AND date = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')) LIMIT 1) as attendance_status
+    FROM users u
+    WHERE u.id = ? AND u.role = 'rider'
+  `, [riderId]) as any[];
+
+  if (!riderRows || riderRows.length === 0) {
+    return { code: 'RIDER_NOT_FOUND', message: 'Rider not found.' };
+  }
+
+  const rider = riderRows[0];
+  const hasTodayRequest = deliveryDates.some((date) => normalizeDateString(date) === getPhilippineDateString());
+  if (!hasTodayRequest) return null;
+
+  if (rider.attendance_status === 'absent') return { code: 'RIDER_UNAVAILABLE', message: 'Rider is absent today.' };
+  if (rider.attendance_status === 'on_leave') return { code: 'RIDER_UNAVAILABLE', message: 'Rider is on leave today.' };
+  if (!rider.is_on_duty) return { code: 'RIDER_UNAVAILABLE', message: 'Rider is off duty.' };
+  if (!onlineRiders.has(riderId)) return { code: 'RIDER_UNAVAILABLE', message: 'Rider is offline.' };
+
+  return null;
+};
 
 const canViewRequest = (user: AuthRequest['user'], request: any) => {
   if (!user) return false;
@@ -39,19 +91,17 @@ const formatRequestRow = (row: any) => ({
   pickup_location: { lat: row.pickup_lat, lng: row.pickup_lng, address: row.pickup_address, businessName: row.pickup_business_name, landmarks: row.pickup_landmarks },
   dropoff_location: { lat: row.dropoff_lat, lng: row.dropoff_lng, address: row.dropoff_address, businessName: row.dropoff_business_name, landmarks: row.dropoff_landmarks },
   current_location: row.current_lat !== null && row.current_lat !== undefined && row.current_lng !== null && row.current_lng !== undefined ? { lat: row.current_lat, lng: row.current_lng } : null,
-  exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : []
+  exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : [],
+  ...getOverdueMetadata({
+    delivery_date: row.delivery_date,
+    time_window: row.time_window,
+    status: row.status,
+    delivery_status: row.delivery_status,
+    assigned_rider_id: row.assigned_rider_id,
+    exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : [],
+  }),
+  ...getProactiveOverdueMetadata(row),
 });
-
-// Configure Web Push with VAPID keys
-try {
-  webpush.setVapidDetails(
-    'mailto:admin@company.com',
-    'BCXzd-f_1CJ033WPwGsbJ1Rovf2yToy43VCA0uoi45_DCV91pmkeroipCr8GVeaKVNmJ9R0k2jL0eBhcWIzLGfE',
-    'x2EhA5k0QsYrot0-xuJpZXA7MMvrzb6jGF7yGukGCVo'
-  );
-} catch (e) {
-  console.error('⚠️ WebPush configuration failed:', e);
-}
 
 // Get availability/occupancy (Personnel and Admin)
 router.get('/availability', authorize(['admin', 'personnel']), async (req: AuthRequest, res) => {
@@ -90,35 +140,7 @@ router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: Au
   try {
     const user = req.user!;
     
-    let query = `
-      SELECT 
-        -- Original Dashboard Stats
-        COUNT(CASE 
-          WHEN delivery_date = CURRENT_DATE 
-          AND status = 'approved' 
-          AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
-          THEN 1 END) as today,
-        COUNT(CASE 
-          WHEN delivery_date < CURRENT_DATE 
-          AND status = 'approved' 
-          AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled') 
-          THEN 1 END) as overdue,
-          
-        -- Dispatch Console Tab Stats
-        COUNT(CASE 
-          WHEN status = 'pending' 
-          AND COALESCE(delivery_status, '') NOT IN ('pending_review', 'completed', 'delivered', 'failed', 'cancelled')
-          THEN 1 END) as pending,
-        COUNT(CASE 
-          WHEN (status = 'approved' AND COALESCE(delivery_status, '') NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
-          OR delivery_status = 'pending_review'
-          THEN 1 END) as active,
-        COUNT(CASE 
-          WHEN COALESCE(delivery_status, '') IN ('completed', 'delivered', 'failed', 'cancelled')
-          OR status = 'disapproved'
-          THEN 1 END) as done
-      FROM delivery_requests
-    `;
+    let query = 'SELECT status, delivery_status, delivery_date, time_window, scheduled_end_at, assigned_rider_id FROM delivery_requests';
     const params: any[] = [];
 
     // DATA ISOLATION: Apply filters based on role
@@ -130,6 +152,11 @@ router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: Au
       conditions.push('(requester_department = ? OR requester_id = ?)');
       params.push(user.department, user.id);
     }
+    if (req.query.monthYear) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.monthYear))) return res.status(400).json({ error: 'Invalid monthYear' });
+      conditions.push("DATE_FORMAT(created_at, '%Y-%m') = ?");
+      params.push(req.query.monthYear);
+    }
 
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
@@ -137,7 +164,10 @@ router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: Au
 
     const [rows]: any = await pool.query(query, params);
 
-    res.json(rows[0] || { today: 0, overdue: 0, pending: 0, active: 0, done: 0 });
+    const now = new Date();
+    const records = rows.map((row: any) => ({ ...row, ...getOverdueMetadata(row, now), ...getProactiveOverdueMetadata(row, now) }));
+    res.json({ ...buildRequestAccounting(records),
+      today: records.filter((row: any) => String(row.delivery_date).slice(0, 10) === getPhilippineDateString() && getAccountingBucket(row) === 'active').length });
   } catch (error) {
     console.error('Error fetching counts:', error);
     res.status(500).json({ error: 'Database error' });
@@ -147,11 +177,16 @@ router.get('/counts', authorize(['rider', 'admin', 'personnel']), async (req: Au
 // Get all requests with mandatory data isolation
 router.get('/', async (req, res) => {
   try {
-    const { rider_id, delivery_status, page = 1, limit = 10 } = req.query;
+    const { rider_id, delivery_status, monthYear, page = 1, limit = 10 } = req.query;
+    if (!Number.isInteger(Number(page)) || Number(page) < 1 || !Number.isInteger(Number(limit)) || Number(limit) < 1 || Number(limit) > 1000) {
+      return res.status(400).json({ error: 'Invalid pagination' });
+    }
     const offset = (Number(page) - 1) * Number(limit);
     const user = (req as AuthRequest).user;
     
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    // Admin reconciliation needs all records from one SELECT, not a truncated first page.
+    const allRecords = req.query.all === 'true' && user.role === 'admin';
 
     let query = 'SELECT * FROM delivery_requests';
     let countQuery = 'SELECT COUNT(*) as total FROM delivery_requests';
@@ -180,6 +215,11 @@ router.get('/', async (req, res) => {
       conditions.push(`delivery_status IN (${statuses.map(() => '?').join(',')})`);
       params.push(...statuses);
     }
+    if (monthYear) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(monthYear))) return res.status(400).json({ error: 'Invalid monthYear' });
+      conditions.push("DATE_FORMAT(created_at, '%Y-%m') = ?");
+      params.push(monthYear);
+    }
 
     if (conditions.length > 0) {
       const whereClause = ` WHERE ${conditions.join(' AND ')}`;
@@ -191,37 +231,34 @@ router.get('/', async (req, res) => {
     const activeFirstOrder = `
       ORDER BY
         CASE
-          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
-          OR delivery_status = 'pending_review'
+          WHEN (${ACCOUNTING_BUCKET_SQL}) = 'active'
           THEN 0
           ELSE 1
         END ASC,
         CASE
-          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
-          OR delivery_status = 'pending_review'
+          WHEN (${ACCOUNTING_BUCKET_SQL}) = 'active'
           THEN delivery_date
           ELSE NULL
         END ASC,
         CASE
-          WHEN (status = 'approved' AND delivery_status NOT IN ('completed', 'delivered', 'failed', 'cancelled'))
-          OR delivery_status = 'pending_review'
+          WHEN (${ACCOUNTING_BUCKET_SQL}) = 'active'
           THEN time_window
           ELSE NULL
         END ASC,
-        created_at DESC
+        created_at DESC, request_id ASC
     `;
-    query += `${activeFirstOrder} LIMIT ? OFFSET ?`;
-    params.push(Number(limit), offset);
+    query += `${activeFirstOrder}${allRecords ? '' : ' LIMIT ? OFFSET ?'}`;
+    if (!allRecords) params.push(Number(limit), offset);
 
     const [rows] = await pool.query(query, params);
-    const [countRows] = await pool.query(countQuery, countParams);
+    const [countRows] = allRecords ? [[{ total: (rows as any[]).length }]] : await pool.query(countQuery, countParams);
     
     const total = (countRows as any[])[0]?.total || 0;
     const requests = (rows as any[]).map(formatRequestRow);
 
     res.json({
       data: requests,
-      meta: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / Number(limit)) }
+      meta: { total, page: allRecords ? 1 : Number(page), limit: allRecords ? total : Number(limit), totalPages: allRecords ? 1 : Math.ceil(total / Number(limit)) }
     });
   } catch (error) {
     console.error('Fetch requests error:', error);
@@ -471,7 +508,9 @@ router.post('/:id/deviation-resolve', authorize(['admin']), async (req: AuthRequ
 router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema), async (req, res) => {
   try {
     const {
-      requester_id, requester_name, requester_department,
+      requester_id: submittedRequesterId,
+      requester_name: submittedRequesterName,
+      requester_department: submittedRequesterDepartment,
       delivery_date, time_window, pickup_location, dropoff_location,
       pickup_contact_name, pickup_contact_mobile,
       recipient_name, recipient_contact, request_type, urgency_level, on_behalf_of,
@@ -479,9 +518,34 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
     } = req.body || {};
 
     const user = (req as AuthRequest).user!;
-    
-    // SECURITY FIX (Final Audit): Enforce department from JWT for Personnel
-    const finalDepartment = user.role === 'admin' ? requester_department : user.department;
+    let currentPersonnelProfile: { name: string; department: string } | null = null;
+    if (user.role === 'personnel') {
+      const [profileRows] = await pool.query(
+        'SELECT name, department FROM users WHERE id = ? AND role = ? LIMIT 1',
+        [user.id, 'personnel']
+      ) as any[];
+      const profile = profileRows?.[0];
+      if (!profile) {
+        return res.status(403).json({ error: 'The authenticated personnel account is no longer available.' });
+      }
+      if (typeof profile.name !== 'string' || !profile.name.trim() || typeof profile.department !== 'string' || !profile.department.trim()) {
+        return res.status(403).json({ error: 'The personnel profile must have a name and department before creating requests.' });
+      }
+      currentPersonnelProfile = { name: profile.name, department: profile.department };
+    }
+
+    const attribution = resolveRequestAttribution(
+      { id: user.id, role: user.role as 'admin' | 'personnel' },
+      currentPersonnelProfile,
+      {
+        requesterId: submittedRequesterId,
+        requesterName: submittedRequesterName,
+        department: submittedRequesterDepartment,
+      },
+    );
+    const requester_id = attribution.requesterId;
+    const requester_name = attribution.requesterName;
+    const finalDepartment = attribution.department;
 
     const request_id = `req_${Date.now()}`;
 
@@ -508,19 +572,25 @@ router.post('/', authorize(['admin', 'personnel']), validate(createRequestSchema
 
     const [rows] = await pool.query('SELECT * FROM delivery_requests WHERE request_id = ?', [request_id]);
     const row = (rows as any[])[0];
-    const request = {
-      ...row,
-      delivery_date: row.delivery_date instanceof Date 
-        ? row.delivery_date.toISOString().split('T')[0] 
-        : (typeof row.delivery_date === 'string' ? row.delivery_date.split('T')[0] : row.delivery_date),
-      pickup_location: { lat: row.pickup_lat, lng: row.pickup_lng, address: row.pickup_address, businessName: row.pickup_business_name, landmarks: row.pickup_landmarks },
-      dropoff_location: { lat: row.dropoff_lat, lng: row.dropoff_lng, address: row.dropoff_address, businessName: row.dropoff_business_name, landmarks: row.dropoff_landmarks },
-      current_location: row.current_lat !== null && row.current_lat !== undefined && row.current_lng !== null && row.current_lng !== undefined ? { lat: row.current_lat, lng: row.current_lng } : null
-    };
+    const request = formatRequestRow(row);
+
+    const io = req.app.get('io');
+    try {
+      const adminNotifications = await persistAdminDispatchNotifications(pool, {
+        requestId: request_id,
+        type: 'request_submitted',
+        message: `New request from ${requester_name} (${finalDepartment}).`,
+      });
+      for (const notification of adminNotifications) {
+        await publishDeliveryNotification(io, notification);
+      }
+    } catch {
+      console.error('[REQUEST] Unable to save Admin submission notifications.');
+    }
+
     res.json(request);
 
     // ENTERPRISE BROADCAST: Ensure Admins see the new request instantly
-    const io = req.app.get('io');
     if (io) {
       // TARGETED WHISPERING: Only notify Admins and the specific requester.
       io.to('admin-room').to(row.requester_id).emit('request-updated', { 
@@ -604,6 +674,14 @@ router.put('/:id/cancel', async (req, res) => {
       );
     }
 
+    const adminAssignmentNotifications = riderId
+      ? await persistAdminDispatchNotifications(conn, {
+        requestId: String(id),
+        type: 'assignment_cancelled',
+        message: `An assignment for request #${String(id).slice(-6).toUpperCase()} was cancelled. Review dispatch.`,
+      })
+      : [];
+
     await conn.commit();
 
     // AUDIT LOG (Slice 3.2 Hardening)
@@ -620,25 +698,20 @@ router.put('/:id/cancel', async (req, res) => {
 
     // REAL-TIME BROADCAST
     const io = req.app.get('io');
-    if (io) {
-      // 1. Notify the Personnel
-      io.to(requesterId).emit('notification-added', { 
-        id: personnelNotifId, 
-        message: personnelMsg, 
-        type: 'request_cancelled', 
-        request_id: id 
+    await publishDeliveryNotification(io, {
+      id: personnelNotifId, user_id: requesterId, message: personnelMsg,
+      type: 'request_cancelled', request_id: String(id),
+    });
+    if (riderId && riderNotifId && riderMsg) {
+      await publishDeliveryNotification(io, {
+        id: riderNotifId, user_id: riderId, message: riderMsg,
+        type: 'assignment_cancelled', request_id: String(id),
       });
-
-      // 2. Notify the Rider (if exists)
-      if (riderId) {
-        io.to(riderId).emit('notification-added', { 
-          id: riderNotifId, 
-          message: riderMsg, 
-          type: 'assignment_cancelled', 
-          request_id: id 
-        });
-      }
-
+    }
+    for (const notification of adminAssignmentNotifications) {
+      await publishDeliveryNotification(io, notification);
+    }
+    if (io) {
       // 3. TARGETED WHISPERING: Notify admin, requester, and rider (if assigned)
       io.to('admin-room')
         .to(requesterId)
@@ -682,9 +755,22 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // 1. LOCK the row and check status to prevent race conditions (BUG 05)
+    // Lock the selected rider before locking a task row. Queue mutations all use rider-first ordering.
+    const [riderRows] = await conn.query(`
+      SELECT u.id, u.name, u.is_on_duty,
+             (SELECT status FROM attendance_logs WHERE rider_id = u.id AND date = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')) LIMIT 1) as attendance_status
+      FROM users u
+      WHERE u.id = ? AND u.role = 'rider'
+    `, [rider_id]) as any[];
+    if (!riderRows || riderRows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Rider not found.' });
+    }
+    await lockRiderQueues(conn, [String(rider_id)]);
+
+    // Lock and validate the task after the rider queue lock to avoid queue lock inversion.
     const [rows]: any = await conn.query(
-      'SELECT status FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      'SELECT status, delivery_status, delivery_date FROM delivery_requests WHERE request_id = ? FOR UPDATE',
       [id]
     );
 
@@ -711,34 +797,43 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
       return res.status(400).json({ error: 'Cannot approve or reassign a request in a terminal state.' });
     }
 
-    // 2. Proceed with assignment
-    const [riderRows] = await conn.query('SELECT name FROM users WHERE id = ?', [rider_id]) as any[];
-    const riderName = riderRows[0]?.name || 'Unknown Rider';
+    // Proceed with assignment while retaining the rider queue lock.
+    const riderName = riderRows[0].name || 'Unknown Rider';
+    const availabilityIssue = await getRiderAvailabilityIssue(conn, rider_id, [rows[0].delivery_date]);
+    if (availabilityIssue) {
+      await conn.rollback();
+      return res.status(availabilityIssue.code === 'RIDER_NOT_FOUND' ? 404 : 409).json({
+        error: availabilityIssue.code === 'RIDER_NOT_FOUND'
+          ? availabilityIssue.message
+          : `Cannot assign this request: ${availabilityIssue.message}`,
+        code: availabilityIssue.code,
+      });
+    }
 
     await conn.query(`
       UPDATE delivery_requests 
-      SET status = 'approved', assigned_rider_id = ?, assigned_rider_name = ?, admin_remark = ?, delivery_status = 'assigned', approved_at = CURRENT_TIMESTAMP
+      SET status = 'approved', assigned_rider_id = ?, assigned_rider_name = ?, admin_remark = ?, delivery_status = 'assigned', queue_order = NULL, approved_at = CURRENT_TIMESTAMP
       WHERE request_id = ?
     `, [rider_id, riderName, admin_remark, id]);
+    const queueRanks = await appendRequestsToRiderQueue(conn, rider_id, [String(id)]);
+    const queueOrder = queueRanks[0];
 
-    const notifId = `notif_${Date.now()}_assign_${Math.random().toString(36).substring(2, 7)}`;
     const msg = `New delivery task assigned to you. Request #${String(id).slice(-6).toUpperCase()}.`;
-    await conn.query(
-      'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-      [notifId, rider_id, msg, 'new_assignment', id]
-    );
+    const riderNotification = await persistDeliveryNotification(conn, {
+      recipientId: rider_id, requestId: String(id), type: 'new_assignment', message: msg,
+    });
 
     // FIX: Also notify the Personnel (Requester) that their request was approved/assigned
-    const [reqDetails]: any = await conn.query('SELECT requester_id FROM delivery_requests WHERE request_id = ?', [id]);
-    const requesterId = reqDetails[0]?.requester_id;
-    const personnelNotifId = `notif_${Date.now()}_pers_${Math.random().toString(36).substring(2, 7)}`;
+    const [reqDetails]: any = await conn.query('SELECT requester_id, pickup_address, dropoff_address, recipient_contact, dropoff_lat, dropoff_lng FROM delivery_requests WHERE request_id = ?', [id]);
+    const requestDetails = reqDetails[0] || {};
+    const requesterId = requestDetails.requester_id;
     const personnelMsg = `Your request #${String(id).slice(-8).toUpperCase()} has been approved and assigned to ${riderName}.`;
+    let personnelNotification: Awaited<ReturnType<typeof persistDeliveryNotification>> | null = null;
     
     if (requesterId) {
-      await conn.query(
-        'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-        [personnelNotifId, requesterId, personnelMsg, 'request_approved', id]
-      );
+      personnelNotification = await persistDeliveryNotification(conn, {
+        recipientId: requesterId, requestId: String(id), type: 'request_approved', message: personnelMsg,
+      });
     }
 
     await conn.commit();
@@ -757,32 +852,44 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
 
     // REAL-TIME BROADCAST: Notify the specific rider and all admins
     const io = req.app.get('io');
+    if (personnelNotification) await publishDeliveryNotification(io, personnelNotification);
     if (io) {
       // 1. Tell the specific rider they have a new task
       io.to(rider_id).emit('new_assignment', { request_id: id, rider_name: riderName });
-      io.to(rider_id).emit('notification-added', { id: notifId, message: msg, type: 'new_assignment', request_id: id });
+      await publishDeliveryNotification(io, riderNotification, {
+        push: {
+          send: sendPushNotification,
+          title: 'New delivery task assigned',
+          body: requestDetails.pickup_address && requestDetails.dropoff_address
+            ? `${msg} ${requestDetails.pickup_address} → ${requestDetails.dropoff_address}`
+            : msg,
+          data: {
+            request_id: id, type: 'new_assignment',
+            ...(requestDetails.recipient_contact ? { recipient_contact: requestDetails.recipient_contact } : {}),
+            ...(requestDetails.dropoff_lat != null ? { dropoff_lat: requestDetails.dropoff_lat } : {}),
+            ...(requestDetails.dropoff_lng != null ? { dropoff_lng: requestDetails.dropoff_lng } : {}),
+          },
+          channelId: 'delivery_updates',
+          categoryId: requestDetails.recipient_contact && requestDetails.dropoff_lat != null && requestDetails.dropoff_lng != null
+            ? 'DELIVERY_TASK_CALL_MAP'
+            : requestDetails.recipient_contact ? 'DELIVERY_TASK_CALL'
+              : requestDetails.dropoff_lat != null && requestDetails.dropoff_lng != null ? 'DELIVERY_TASK_MAP' : 'DELIVERY_TASK',
+          tag: `delivery:${id}:assignment`,
+        },
+      });
       
-      // 2. Tell the Personnel (Requester) directly
-      if (requesterId) {
-        io.to(requesterId).emit('notification-added', { 
-          id: personnelNotifId, 
-          message: personnelMsg, 
-          type: 'request_approved', 
-          request_id: id 
-        });
-      }
-
       // 3. TARGETED WHISPERING: Notify admin, requester, and the newly assigned rider
       io.to('admin-room')
         .to(requesterId)
         .to(rider_id)
         .to(`job_${id}`)
-        .emit('request-updated', { 
+        .emit('request-updated', {
           request_id: id, 
           status: 'approved',
           delivery_status: 'assigned',
           assigned_rider_id: rider_id,
           assigned_rider_name: riderName,
+          queue_order: queueOrder,
           admin_remark: admin_remark,
           updated_at: new Date().toISOString()
         });
@@ -790,7 +897,7 @@ router.put('/:id/approve', authorize(['admin']), validate(approveRequestSchema),
       console.log(`📡 Broadcast: Task ${id} assigned to ${rider_id}`);
     }
 
-    res.json({ success: true, riderName });
+    res.json({ success: true, riderName, queue_order: queueOrder });
   } catch (error) {
     if (conn) await conn.rollback();
     console.error("Approval error:", error);
@@ -812,7 +919,7 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
 
     // LOCK and VALIDATE: Only pending/submitted_waiting can be disapproved
     const [rows]: any = await conn.query(
-      'SELECT status, requester_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
+      'SELECT status, delivery_status, requester_id FROM delivery_requests WHERE request_id = ? FOR UPDATE',
       [id]
     );
 
@@ -821,7 +928,7 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
       return res.status(404).json({ error: 'Request not found' });
     }
 
-    const { status, requester_id } = rows[0];
+    const { status, delivery_status, requester_id } = rows[0];
     if (status !== 'pending' && status !== 'submitted_waiting' && status !== 'returned_for_revision') {
       await conn.rollback();
       return res.status(400).json({
@@ -843,11 +950,26 @@ router.put('/:id/disapprove', authorize(['admin']), validate(disapproveRequestSc
 
     await conn.commit();
 
+    await publishDeliveryNotification(req.app.get('io'), {
+      id: notifId, user_id: requester_id, message: msg,
+      type: 'request_disapproved', request_id: String(id),
+    });
+
+    logAction({
+      actor_id: (req as AuthRequest).user!.id,
+      actor_role: (req as AuthRequest).user!.role,
+      action: 'disapprove_request',
+      resource_type: 'delivery_requests',
+      resource_id: id as string,
+      new_values: { status: 'disapproved', delivery_status, admin_remark },
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent']
+    });
+
     const io = req.app.get('io');
     if (io) {
       // TARGETED WHISPERING: Only notify Admins and the specific requester.
       io.to('admin-room').to(requester_id).emit('request-updated', { request_id: id, status: 'disapproved' });
-      io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_disapproved', request_id: id });
     }
 
     res.json({ success: true });
@@ -902,11 +1024,15 @@ router.put('/:id/return', authorize(['admin']), validate(returnRequestSchema), a
 
     await conn.commit();
 
+    await publishDeliveryNotification(req.app.get('io'), {
+      id: notifId, user_id: requester_id, message: msg,
+      type: 'request_revision', request_id: String(id),
+    });
+
     const io = req.app.get('io');
     if (io) {
       // TARGETED WHISPERING: Only notify Admins and the specific requester.
       io.to('admin-room').to(requester_id).emit('request-updated', { request_id: id, status: 'returned_for_revision' });
-      io.to(requester_id).emit('notification-added', { id: notifId, message: msg, type: 'request_revision', request_id: id });
     }
 
     res.json({ success: true });
@@ -992,7 +1118,9 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
     if (io) {
       // TARGETED WHISPERING: Only notify Admins and the specific requester.
       io.to('admin-room').to(user.id).emit('request-updated', { request_id: id, status: 'pending', delivery_status: 'pending' });
+    }
 
+    try {
       // Notify admins
       const [admins]: any = await pool.query('SELECT id FROM users WHERE role = "admin"');
       const requestIdStr = id as string;
@@ -1004,13 +1132,13 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
           'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
           [notifId, admin.id, msg, 'request_submitted', id]
         );
-        io.to(admin.id).emit('notification-added', { 
-          id: notifId, 
-          message: msg, 
-          type: 'request_submitted', 
-          request_id: id 
+        await publishDeliveryNotification(io, {
+          id: notifId, user_id: admin.id, message: msg,
+          type: 'request_submitted', request_id: String(id),
         });
       }
+    } catch {
+      console.error('[REQUEST] Unable to save Admin resubmission notifications.');
     }
 
     res.json({ success: true });
@@ -1076,6 +1204,11 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       query += ', completed_at = ?';
       params.push(timestamp ? new Date(timestamp) : new Date());
     }
+    if (status === 'failed') {
+      query += ', failed_at = ?, overdue_at = CASE WHEN scheduled_end_at < ? THEN COALESCE(overdue_at, scheduled_end_at) ELSE overdue_at END';
+      const serverNow = new Date();
+      params.push(serverNow, serverNow);
+    }
 
     if (current_lat !== undefined && current_lng !== undefined) {
       query += ', current_lat = ?, current_lng = ?';
@@ -1092,6 +1225,25 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
       [id, current.assigned_rider_id || user.id, status, auditRemark]
     );
+
+    const deliveryEventNotifications: Awaited<ReturnType<typeof persistDeliveryNotification>>[] = [];
+    const normalizedDeliveryStatus = String(status).toLowerCase();
+    const isDeliveryStartEvent = normalizedDeliveryStatus === 'in_progress';
+    const isDeliveryArrivalEvent = ['arrived', 'arrived_at_pickup', 'arrived_at_dropoff'].includes(normalizedDeliveryStatus);
+    if ((isDeliveryStartEvent || isDeliveryArrivalEvent) && current.requester_id) {
+      const eventType = isDeliveryStartEvent ? 'delivery_started' : 'delivery_arrival';
+      const eventMessage = isDeliveryStartEvent
+        ? `Delivery #${String(id).slice(-6).toUpperCase()} is on the way.`
+        : `Delivery #${String(id).slice(-6).toUpperCase()} has reached ${normalizedDeliveryStatus === 'arrived_at_dropoff' ? 'the destination' : 'a delivery stop'}.`;
+      const [adminRows]: any = await connection.query('SELECT id FROM users WHERE role = ?', ['admin']);
+      const recipients = [...new Set([current.requester_id, ...(adminRows || []).map((admin: any) => admin.id)])]
+        .filter((recipientId) => recipientId && recipientId !== user.id);
+      for (const recipientId of recipients) {
+        deliveryEventNotifications.push(await persistDeliveryNotification(connection, {
+          recipientId, requestId: String(id), type: eventType, message: eventMessage,
+        }));
+      }
+    }
 
     // 2. AUDIT LOG (Phase 3.2 Hardening)
     logAction({
@@ -1111,6 +1263,9 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     // --- SENIOR FIX: REAL-TIME BROADCAST & NOTIFICATIONS ---
     const io = req.app.get('io');
     if (io) {
+      for (const notification of deliveryEventNotifications) {
+        await publishDeliveryNotification(io, notification);
+      }
       // 2. TARGETED WHISPERING: Notify admin, requester, and assigned rider
       io.to('admin-room')
         .to(current.requester_id)
@@ -1270,6 +1425,7 @@ router.get('/:id/timeline', authorize(['admin', 'personnel', 'rider']), async (r
  */
 router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) => {
   const conn = await pool.getConnection();
+  const notificationsToPublish: Array<{ notification: Awaited<ReturnType<typeof persistDeliveryNotification>>; push?: { title: string; body: string; data: Record<string, unknown>; channelId: 'delivery_updates' | 'delivery_urgent'; categoryId?: string; tag?: string } }> = [];
   try {
     const { taskIds, action, value } = req.body;
     if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
@@ -1287,12 +1443,86 @@ router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) 
         return res.status(404).json({ error: 'Rider not found' });
       }
       const riderName = riderRows[0].name;
+      const [initialTaskRows] = await conn.query(
+        'SELECT request_id, status, delivery_status, delivery_date, requester_id, assigned_rider_id, pickup_address, dropoff_address, recipient_contact, dropoff_lat, dropoff_lng FROM delivery_requests WHERE request_id IN (?)',
+        [taskIds]
+      ) as any[];
+      if (initialTaskRows.length !== new Set(taskIds.map(String)).size || taskIds.length !== new Set(taskIds.map(String)).size) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'One or more requests changed or were not found.', code: 'QUEUE_CHANGED' });
+      }
+      const sourceRiderIds: string[] = Array.from(new Set<string>(initialTaskRows
+        .map((task: any) => task.assigned_rider_id)
+        .filter((id: any) => id && String(id) !== String(riderId))
+        .map((id: unknown) => String(id))));
+      await lockRiderQueues(conn, [...sourceRiderIds, String(riderId)]);
 
-      for (const id of taskIds) {
+      const [taskRows] = await conn.query(
+        'SELECT request_id, status, delivery_status, delivery_date, requester_id, assigned_rider_id, pickup_address, dropoff_address, recipient_contact, dropoff_lat, dropoff_lng FROM delivery_requests WHERE request_id IN (?) FOR UPDATE',
+        [taskIds]
+      ) as any[];
+      const initialById = new Map<string, any>(initialTaskRows.map((task: any) => [String(task.request_id), task]));
+      if (taskRows.length !== initialTaskRows.length || taskRows.some((task: any) => {
+        const initial = initialById.get(String(task.request_id));
+        return !initial || String(initial.assigned_rider_id || '') !== String(task.assigned_rider_id || '') ||
+          initial.status !== task.status || initial.delivery_status !== task.delivery_status;
+      })) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Requests changed while assignment was being prepared.', code: 'QUEUE_CHANGED' });
+      }
+      const requestedIds: string[] = taskIds.map((id: unknown) => String(id));
+      if (sequence !== undefined && !Array.isArray(sequence)) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Submitted order must contain every selected request exactly once.', code: 'QUEUE_CHANGED' });
+      }
+      const validatedSubmittedOrder: string[] = Array.isArray(sequence)
+        ? sequence.map((id: unknown) => String(id))
+        : requestedIds;
+      const requestedIdSet = new Set(requestedIds);
+      if (validatedSubmittedOrder.length !== requestedIds.length ||
+        new Set(validatedSubmittedOrder).size !== requestedIdSet.size ||
+        validatedSubmittedOrder.some((id) => !requestedIdSet.has(id))) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Submitted order must contain every selected request exactly once.', code: 'QUEUE_CHANGED' });
+      }
+      const terminalStatuses = new Set(['completed', 'delivered', 'failed', 'cancelled', 'disapproved']);
+      if (taskRows.some((task: any) => terminalStatuses.has(task.status) || terminalStatuses.has(task.delivery_status))) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Terminal requests cannot be assigned.', code: 'QUEUE_CHANGED' });
+      }
+      if (action === 'approve' && taskRows.some((task: any) =>
+        !['pending', 'submitted_waiting'].includes(String(task.status)) || task.assigned_rider_id,
+      )) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'A selected request is no longer pending assignment.', code: 'QUEUE_CHANGED' });
+      }
+      const availabilityIssue = await getRiderAvailabilityIssue(conn, riderId, taskRows.map((task: any) => task.delivery_date));
+      if (availabilityIssue) {
+        await conn.rollback();
+        return res.status(availabilityIssue.code === 'RIDER_NOT_FOUND' ? 404 : 409).json({
+          error: availabilityIssue.code === 'RIDER_NOT_FOUND'
+            ? availabilityIssue.message
+            : `Cannot assign these requests: ${availabilityIssue.message}`,
+          code: availabilityIssue.code,
+        });
+      }
+
+      const targetRiderTaskIds = taskRows
+        .filter((task: any) => action === 'approve' || String(task.assigned_rider_id || '') !== String(riderId))
+        .map((task: any) => String(task.request_id));
+      if (targetRiderTaskIds.length === 0) {
+        await conn.commit();
+        return res.json({ success: true, message: 'Tasks are already assigned to this rider.' });
+      }
+      const changedTaskIds = new Set(targetRiderTaskIds);
+
+      for (const id of targetRiderTaskIds) {
+        const details = (taskRows as any[]).find((task) => String(task.request_id) === String(id));
         await conn.query(`
           UPDATE delivery_requests 
           SET assigned_rider_id = ?, 
               assigned_rider_name = ?, 
+              queue_order = NULL,
               status = 'approved', 
               delivery_status = CASE 
                 WHEN delivery_status IN ('in_progress', 'arrived', 'picked_up', 'arrived_at_pickup', 'arrived_at_dropoff') THEN delivery_status
@@ -1307,11 +1537,58 @@ router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) 
         const shortId = String(id).slice(-6).toUpperCase();
         
         // 1. Notify Rider
-        const riderNotifId = `notif_${Date.now()}_mass_r_${id}_${Math.random().toString(36).substring(2, 7)}`;
-        await conn.query(
-          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-          [riderNotifId, riderId, `Task #${shortId} assigned.`, 'new_assignment', id]
-        );
+        const assignmentMessage = `Task #${shortId} assigned to ${riderName}.`;
+        const riderNotification = await persistDeliveryNotification(conn, {
+          recipientId: riderId, requestId: String(id), message: assignmentMessage, type: 'new_assignment',
+        });
+        notificationsToPublish.push({
+          notification: riderNotification,
+          push: {
+            title: 'New delivery task assigned',
+            body: details?.pickup_address && details?.dropoff_address
+              ? `${assignmentMessage} ${details.pickup_address} → ${details.dropoff_address}` : assignmentMessage,
+            data: {
+              request_id: id, type: 'new_assignment',
+              ...(details?.recipient_contact ? { recipient_contact: details.recipient_contact } : {}),
+              ...(details?.dropoff_lat != null ? { dropoff_lat: details.dropoff_lat } : {}),
+              ...(details?.dropoff_lng != null ? { dropoff_lng: details.dropoff_lng } : {}),
+            },
+            channelId: 'delivery_updates',
+            categoryId: details?.recipient_contact && details?.dropoff_lat != null && details?.dropoff_lng != null
+              ? 'DELIVERY_TASK_CALL_MAP' : details?.recipient_contact ? 'DELIVERY_TASK_CALL'
+                : details?.dropoff_lat != null && details?.dropoff_lng != null ? 'DELIVERY_TASK_MAP' : 'DELIVERY_TASK',
+            tag: `delivery:${id}:assignment`,
+          },
+        });
+        if (details?.assigned_rider_id && details.assigned_rider_id !== riderId) {
+          const oldRiderMessage = `Delivery #${shortId} has been reassigned.`;
+          const oldRiderNotification = await persistDeliveryNotification(conn, {
+            recipientId: details.assigned_rider_id, requestId: String(id), message: oldRiderMessage, type: 'assignment_cancelled',
+          });
+          notificationsToPublish.push({
+            notification: oldRiderNotification,
+            push: {
+              title: 'Delivery assignment updated', body: oldRiderMessage,
+              data: { request_id: id, type: 'assignment_cancelled' }, channelId: 'delivery_updates',
+              tag: `delivery:${id}:assignment_cancelled`,
+            },
+          });
+          const adminCancellationNotifications = await persistAdminDispatchNotifications(conn, {
+            requestId: String(id),
+            type: 'assignment_cancelled',
+            message: `An assignment for request #${shortId} was cancelled. Review dispatch.`,
+          });
+          for (const notification of adminCancellationNotifications) {
+            notificationsToPublish.push({ notification });
+          }
+        }
+        if (details?.requester_id) {
+          const requesterNotification = await persistDeliveryNotification(conn, {
+            recipientId: details.requester_id, requestId: String(id),
+            message: `Delivery #${shortId} has been assigned to ${riderName}.`, type: 'request_approved',
+          });
+          notificationsToPublish.push({ notification: requesterNotification });
+        }
 
         // 2. Timeline Event
         const eventId = `ev_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -1321,39 +1598,77 @@ router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) 
         );
       }
 
-      // LAYER 2: Preserve Global Sequence
-      // After updating the batch, we must ensure the entire sequence order is persisted for ALL tasks in the rider's queue
-      if (Array.isArray(sequence)) {
-        for (let i = 0; i < sequence.length; i++) {
-          await conn.query(
-            "UPDATE delivery_requests SET queue_order = ? WHERE request_id = ?",
-            [i + 1, sequence[i]]
-          );
-        }
-      }
+      for (const sourceRiderId of sourceRiderIds) await normalizeRiderQueueOrder(conn, sourceRiderId);
+      const submittedOrder = validatedSubmittedOrder.filter((id) => changedTaskIds.has(id));
+      await appendRequestsToRiderQueue(conn, String(riderId), targetRiderTaskIds, submittedOrder);
     } else if (action === 'reschedule') {
       const newDate = value; // YYYY-MM-DD
       
       // Fetch details for notifications
-      const [details]: any = await conn.query(
-        'SELECT request_id, requester_id FROM delivery_requests WHERE request_id IN (?)',
+      const [initialDetails]: any = await conn.query(
+        'SELECT request_id, requester_id, assigned_rider_id, status, delivery_status FROM delivery_requests WHERE request_id IN (?)',
         [taskIds]
       );
+      if (initialDetails.length !== new Set(taskIds.map(String)).size || taskIds.length !== new Set(taskIds.map(String)).size) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'One or more requests changed or were not found.', code: 'QUEUE_CHANGED' });
+      }
+      const previousRiderIds: string[] = Array.from(new Set<string>(initialDetails
+        .map((row: any) => row.assigned_rider_id)
+        .filter(Boolean)
+        .map((id: unknown) => String(id))));
+      await lockRiderQueues(conn, previousRiderIds);
+      const [details]: any = await conn.query(
+        'SELECT request_id, requester_id, assigned_rider_id, status, delivery_status FROM delivery_requests WHERE request_id IN (?) FOR UPDATE',
+        [taskIds]
+      );
+      const initialAssignments = new Map<string, any>(initialDetails.map((row: any) => [String(row.request_id), row]));
+      if (details.length !== initialDetails.length || details.some((row: any) =>
+        !initialAssignments.has(String(row.request_id)) ||
+        String(initialAssignments.get(String(row.request_id)).assigned_rider_id || '') !== String(row.assigned_rider_id || '') ||
+        initialAssignments.get(String(row.request_id)).status !== row.status ||
+        initialAssignments.get(String(row.request_id)).delivery_status !== row.delivery_status,
+      )) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Requests changed while rescheduling was being prepared.', code: 'QUEUE_CHANGED' });
+      }
 
       await conn.query(`
         UPDATE delivery_requests 
-        SET delivery_date = ?, assigned_rider_id = NULL, assigned_rider_name = NULL, status = 'pending', delivery_status = NULL, updated_at = CURRENT_TIMESTAMP
+        SET delivery_date = ?, assigned_rider_id = NULL, assigned_rider_name = NULL, queue_order = NULL, status = 'pending', delivery_status = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE request_id IN (?)
       `, [newDate, taskIds]);
+
+      for (const previousRiderId of previousRiderIds) await normalizeRiderQueueOrder(conn, previousRiderId);
 
       for (const row of details) {
         const id = row.request_id;
         const shortId = String(id).slice(-6).toUpperCase();
-        const persNotifId = `notif_${Date.now()}_mass_s_${id}_${Math.random().toString(36).substring(2, 7)}`;
-        await conn.query(
-          'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
-          [persNotifId, row.requester_id, `Your request #${shortId} has been rescheduled to ${newDate}. Please check your dashboard.`, 'info', id]
-        );
+        const requesterNotification = await persistDeliveryNotification(conn, {
+          recipientId: row.requester_id, requestId: String(id),
+          message: `Your request #${shortId} has been rescheduled to ${newDate}. Please check your dashboard.`, type: 'info',
+        });
+        notificationsToPublish.push({ notification: requesterNotification });
+        if (row.assigned_rider_id) {
+          const riderMessage = `Delivery #${shortId} has been rescheduled and is no longer assigned to you.`;
+          const riderNotification = await persistDeliveryNotification(conn, {
+            recipientId: row.assigned_rider_id, requestId: String(id), message: riderMessage, type: 'assignment_cancelled',
+          });
+          notificationsToPublish.push({
+            notification: riderNotification,
+            push: { title: 'Delivery arrangement updated', body: riderMessage,
+              data: { request_id: id, type: 'assignment_cancelled' }, channelId: 'delivery_updates',
+              tag: `delivery:${id}:rescheduled` },
+          });
+          const adminCancellationNotifications = await persistAdminDispatchNotifications(conn, {
+            requestId: String(id),
+            type: 'assignment_cancelled',
+            message: `An assignment for request #${shortId} was cancelled. Review dispatch.`,
+          });
+          for (const notification of adminCancellationNotifications) {
+            notificationsToPublish.push({ notification });
+          }
+        }
       }
     } else {
       await conn.rollback();
@@ -1361,6 +1676,10 @@ router.post('/mass-update', authorize(['admin']), async (req: AuthRequest, res) 
     }
 
     await conn.commit();
+    const io = req.app.get('io');
+    for (const item of notificationsToPublish) {
+      await publishDeliveryNotification(io, item.notification, item.push ? { push: { ...item.push, send: sendPushNotification } } : undefined);
+    }
     res.json({ success: true, message: `Successfully updated ${taskIds.length} tasks` });
   } catch (error) {
     await conn.rollback();
@@ -1392,13 +1711,14 @@ router.post('/:id/deviation', authorize(['rider']), async (req: AuthRequest, res
       [eventId, id, user.id, 'deviation_requested', `Rider requested sequence skip: ${reason}`, JSON.stringify({ reason, photoUrl, sequencePos: currentPos, riderName: user.name, requestId: id })]
     );
 
-    // 3. Notify Admins in real-time
-    io.to('admin-room').emit('notification-added', {
-      id: `notif_dev_${Date.now()}`,
-      message: `Rider ${String(user.name)} requested a sequence skip for #${String(id).slice(-6).toUpperCase()}`,
+    const adminNotifications = await persistAdminDispatchNotifications(pool, {
+      requestId: String(id),
       type: 'deviation_requested',
-      metadata: { riderId: user.id, riderName: user.name, requestId: id, reason, photoUrl, sequencePos: currentPos }
+      message: `A rider requested a route deviation for #${String(id).slice(-6).toUpperCase()}.`,
     });
+    for (const notification of adminNotifications) {
+      await publishDeliveryNotification(io, notification);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -1411,15 +1731,11 @@ router.post('/resequence', authorize(['admin']), validate(resequenceSchema), asy
   try {
     const { riderId, sequence, note } = req.body;
     const user = req.user!;
+    let routeNotification: Awaited<ReturnType<typeof persistDeliveryNotification>> | null = null;
     await conn.beginTransaction();
 
-    // 1. Atomic sequence update
-    for (let i = 0; i < sequence.length; i++) {
-      await conn.query(
-        "UPDATE delivery_requests SET queue_order = ? WHERE request_id = ? AND assigned_rider_id = ?",
-        [i + 1, sequence[i], riderId]
-      );
-    }
+    // 1. Validate and persist an exact replacement of the authoritative active queue.
+    await replaceRiderQueueOrder(conn, riderId, sequence);
 
     // 2. Discipline Audit Log (Layer 4 integration)
     const eventId = `ev_reseq_${Date.now()}`;
@@ -1427,6 +1743,15 @@ router.post('/resequence', authorize(['admin']), validate(resequenceSchema), asy
       "INSERT INTO movement_events (id, rider_id, event_type, message) VALUES (?, ?, ?, ?)",
       [eventId, riderId, 'route_optimized', `Admin re-ordered sequence. Note: ${note || 'N/A'}`]
     );
+
+    if (sequence.length > 0) {
+      routeNotification = await persistDeliveryNotification(conn, {
+        recipientId: riderId,
+        requestId: String(sequence[0]),
+        type: 'route_optimization',
+        message: 'Your delivery order has changed. Review your updated route.',
+      });
+    }
 
     await conn.commit();
 
@@ -1445,6 +1770,18 @@ router.post('/resequence', authorize(['admin']), validate(resequenceSchema), asy
     // 4. INSTANT SYNC: Notify Rider (Mobile) and Admin room
     const io = req.app.get('io');
     if (io) {
+      if (routeNotification) {
+        await publishDeliveryNotification(io, routeNotification, {
+          push: {
+            send: sendPushNotification,
+            title: 'Delivery order updated',
+            body: routeNotification.message,
+            data: { request_id: routeNotification.request_id, type: 'route_optimization' },
+            channelId: 'delivery_updates',
+            tag: `rider:${riderId}:route-optimization`,
+          },
+        });
+      }
       io.to(riderId).emit('requests-updated', { 
         message: "📍 Route Updated: Admin has optimized your delivery sequence.",
         type: 'route_optimization'
@@ -1455,6 +1792,9 @@ router.post('/resequence', authorize(['admin']), validate(resequenceSchema), asy
     res.json({ success: true });
   } catch (error) {
     if (conn) await conn.rollback();
+    if (error instanceof RiderQueueValidationError) {
+      return res.status(409).json({ error: error.message, code: 'QUEUE_CHANGED' });
+    }
     console.error('Resequence error:', error);
     res.status(500).json({ error: 'Database error during resequence' });
   } finally {

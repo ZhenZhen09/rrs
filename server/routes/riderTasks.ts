@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { pool } from '../db';
 import { AuthRequest, authorize } from '../middleware/auth';
+import { getOverdueMetadata, getProactiveOverdueMetadata } from '../utils/overdue';
 
 const router = Router();
 
@@ -29,6 +30,15 @@ const formatRequestRow = (row: any) => ({
     ? { lat: row.current_lat, lng: row.current_lng }
     : null,
   exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : [],
+  ...getOverdueMetadata({
+    delivery_date: row.delivery_date,
+    time_window: row.time_window,
+    status: row.status,
+    delivery_status: row.delivery_status,
+    assigned_rider_id: row.assigned_rider_id,
+    exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : [],
+  }),
+  ...getProactiveOverdueMetadata(row),
 });
 
 router.get('/active', authorize(['rider']), async (req: AuthRequest, res: Response) => {
@@ -46,7 +56,7 @@ router.get('/active', authorize(['rider']), async (req: AuthRequest, res: Respon
       FROM delivery_requests
       WHERE assigned_rider_id = ?
         AND status = 'approved'
-        AND delivery_status NOT IN (?, ?, ?, ?)
+        AND COALESCE(delivery_status, '') NOT IN (?, ?, ?, ?)
       ORDER BY delivery_date ASC, time_window ASC, created_at DESC
     `, [user.id, ...TERMINAL_STATUSES]);
 

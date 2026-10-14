@@ -12,10 +12,14 @@ import { useAuth } from "./AuthContext";
 import { useRealTime } from "./RealTimeContext";
 import { toast } from "sonner";
 import { WifiOff, Bike } from "lucide-react";
+import { fetchWithSessionRecovery } from "../utils/authSession";
+import { getRequestUpdateToast } from "../utils/notificationMessages";
 
 interface DataContextType {
   requests: DeliveryRequest[];
-  notifications: Notification[]; globalStats: { pending: number; active: number; done: number };
+  requestsLoading: boolean;
+  requestsError: string | null;
+  notifications: Notification[]; globalStats: { pending: number; active: number; done: number; overdue: number };
   submitRequest: (
     request: Omit<
       DeliveryRequest,
@@ -62,9 +66,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { socket } = useRealTime();
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [globalStats, setGlobalStats] = useState({ pending: 0, active: 0, done: 0 });
+  const [globalStats, setGlobalStats] = useState({ pending: 0, active: 0, done: 0, overdue: 0 });
   const pendingOptimisticIds = useRef<Set<string>>(new Set());
+  const sessionExpiryHandled = useRef(false);
   
   // Enterprise Pattern: Keep a ref of the latest requests for socket event access
   const requestsRef = useRef<DeliveryRequest[]>([]);
@@ -72,55 +80,63 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     requestsRef.current = requests;
   }, [requests]);
 
+  useEffect(() => {
+    if (user?.id) sessionExpiryHandled.current = false;
+  }, [user?.id]);
+
+  const handleExpiredSession = useCallback(async () => {
+    if (sessionExpiryHandled.current) return;
+    sessionExpiryHandled.current = true;
+    toast.error('Your session expired. You have been logged out. Please sign in again.');
+    await logout();
+  }, [logout]);
+
   const fetchWithAuth = useCallback(
-    async (url: string, options: RequestInit = {}) => {
+    (url: string, options: RequestInit = {}) => {
       const headers = {
         ...options.headers,
         "Content-Type": "application/json",
       };
 
       // Using credentials: 'include' for secure HttpOnly cookies
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: "include",
-      });
-
-      if (response.status === 401) {
-        logout();
-        return null;
-      }
-      return response;
+      return fetchWithSessionRecovery(url, { ...options, headers }, handleExpiredSession);
     },
-    [logout],
+    [handleExpiredSession],
   );
 
-  const fetchCounts = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/requests/counts`);
+  const fetchCounts = useCallback(() => {
+    if (!user) return Promise.resolve();
+    return fetchWithAuth(`${API_URL}/requests/counts`).then(async res => {
       if (res && res.ok) {
         const stats = await res.json();
         setGlobalStats({
           pending: stats.pending || 0,
           active: stats.active || 0,
-          done: stats.done || 0
+          done: stats.done || 0,
+          overdue: stats.overdue || 0,
         });
       }
-    } catch (error) {
+    }).catch(error => {
       console.error("Fetch counts error:", error);
-    }
+    });
   }, [user, fetchWithAuth]);
 
-  const fetchRequests = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/requests?limit=100`);
-      if (res && res.ok) {
+  const fetchRequests = useCallback(() => {
+    if (!user) return Promise.resolve();
+    const sequence = ++requestSequence.current;
+    setRequestsLoading(true);
+    setRequestsError(null);
+    return fetchWithAuth(`${API_URL}/requests?limit=100${user.role === 'admin' ? '&all=true' : ''}`).then(async res => {
+      if (!res?.ok) throw new Error('Request snapshot failed');
+      {
         const json = await res.json();
+        if (!Array.isArray(json) && !Array.isArray(json?.data)) throw new Error('Invalid request snapshot');
         let data: DeliveryRequest[] = Array.isArray(json)
           ? json
           : json.data || [];
+        if (user.role === 'admin' && (!Number.isSafeInteger(json?.meta?.total) || json.meta.total !== data.length)) throw new Error('Incomplete request snapshot');
+        if (user.role === 'admin' && new Set(data.map(row => row.request_id)).size !== data.length) throw new Error('Duplicate records in request snapshot');
+        if (sequence !== requestSequence.current) return;
 
         setRequests((prev) => {
           const existingStates = new Map<string, Partial<DeliveryRequest>>();
@@ -171,9 +187,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           return merged;
         });
       }
-    } catch (err) {
+    }).catch(err => {
       console.error("Failed to fetch requests", err);
-    }
+      if (sequence === requestSequence.current) setRequestsError('Unable to verify all requests. Refresh to retry; any displayed records may be outdated.');
+    }).finally(() => {
+      if (sequence === requestSequence.current) setRequestsLoading(false);
+    });
   }, [fetchWithAuth, user]);
 
   const fetchRequestById = useCallback(
@@ -200,10 +219,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [fetchWithAuth],
   );
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/notifications`);
+  const fetchNotifications = useCallback(() => {
+    if (!user?.id) return Promise.resolve();
+    return fetchWithAuth(`${API_URL}/notifications`).then(async res => {
       if (res && res.ok) {
         const data = await res.json();
         let notifArray: any[] = Array.isArray(data) ? data : data.data || [];
@@ -211,9 +229,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           notifArray.map((n: any) => ({ ...n, read: Boolean(n.is_read) })),
         );
       }
-    } catch (err) {
+    }).catch(err => {
       console.error("Failed to fetch notifications", err);
-    }
+    });
   }, [user?.id, fetchWithAuth]);
 
   const refreshData = useCallback(async () => {
@@ -336,26 +354,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       );
     });
 
-    socket.on("request-updated", (data: { request_id: string; status: string; delivery_status?: string }) => {
-      // Toast message based on status
-      const id = data.request_id.slice(-6).toUpperCase();
-      switch (data.status) {
-        case 'pending':
-          toast.success(`Request #${id} is now under Review.`);
-          break;
-        case 'approved':
-          toast.success(`Request #${id} has been Approved!`);
-          break;
-        case 'disapproved':
-          toast.error(`Request #${id} was declined.`);
-          break;
-        case 'returned_for_revision':
-          toast.warning(`Action Required: Request #${id} needs revision.`, { duration: 6000 });
-          break;
-        case 'cancelled':
-          toast.info(`Request #${id} has been cancelled.`);
-          break;
-      }
+    socket.on("request-updated", (data: Pick<DeliveryRequest, 'request_id' | 'status' | 'delivery_status'> & { actor_role?: string }) => {
+      const message = getRequestUpdateToast(data, user?.role);
+      if (message) toast(message);
 
       setRequests((prev) => 
         prev.map((req) => 
@@ -367,6 +368,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       // Background fetch to ensure full data consistency
       fetchRequests();
       fetchCounts();
+    });
+
+    socket.on("requests-updated", () => {
+      refreshData();
     });
 
     socket.on("new_assignment", () => {
@@ -388,6 +393,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       socket.off("exception-detected");
       socket.off("exception-cleared");
       socket.off("request-updated");
+      socket.off("requests-updated");
       socket.off("new_assignment");
       socket.off("notification-added");
       socket.off("connect");
@@ -499,7 +505,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     riderId: string,
     adminRemark?: string,
   ) => {
-    const previousRequests = [...requests];
+    const previousRequest = requests.find((request) => request.request_id === requestId);
+    const restoreOptimisticRequest = () => setRequests((current) => current.map((request) =>
+      request.request_id === requestId && request.is_optimistic && request.assigned_rider_id === riderId && previousRequest
+        ? previousRequest
+        : request,
+    ));
     pendingOptimisticIds.current.add(requestId);
     setRequests((prev) =>
       prev.map((req) =>
@@ -534,11 +545,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         fetchCounts();
       } else {
         pendingOptimisticIds.current.delete(requestId);
-        setRequests(previousRequests);
+        restoreOptimisticRequest();
+        throw new Error('Request approval failed');
       }
     } catch (error) {
       pendingOptimisticIds.current.delete(requestId);
-      setRequests(previousRequests);
+      restoreOptimisticRequest();
+      throw error;
     }
   };
 
@@ -742,6 +755,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   return (
     <DataContext.Provider
       value={{
+        requestsLoading,
+        requestsError,
         requests,
         notifications,
         globalStats,

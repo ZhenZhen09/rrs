@@ -1,13 +1,12 @@
 {
   "expo": {
-    "name": "CFA-RSS",
+    "name": "Errands Rider",
     "slug": "rider",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/errands-parcel-mark.png",
     "scheme": "cfarss",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hon01.cfarss",
@@ -16,11 +15,12 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#f3bc2c",
-        "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/errands-parcel-mark.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -37,38 +37,41 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withFcmNotificationColorManifest",
       "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
+          "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#f3bc2c"
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to track your delivery progress."
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to track your delivery progress.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.png",
+          "image": "./assets/images/errands-rider-wordmark.png",
           "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#f3bc2c"
+          "backgroundColor": "#F8FAFC"
         }
       ],
       "expo-web-browser",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      "expo-status-bar"
     ],
-    "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#f3bc2c"
-    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

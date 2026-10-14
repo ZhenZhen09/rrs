@@ -12,9 +12,6 @@ import {
   MapPin, 
   Bike, 
   Navigation, 
-  Info, 
-  Clock, 
-  AlertTriangle, 
   Battery, 
   BatteryLow, 
   BatteryMedium, 
@@ -22,6 +19,8 @@ import {
   Power 
 } from 'lucide-react';
 import { cn } from '../../components/ui/utils';
+import type { DeliveryStatus } from '../../types';
+import { getDefaultRiderAvatarUrl } from '../../utils/riderAvatar';
 import 'leaflet/dist/leaflet.css';
 
 // Fix for default marker icons in React Leaflet
@@ -40,37 +39,56 @@ interface RiderLive {
   id: string;
   name: string;
   email: string;
+  avatar_id?: string | null;
   user_status: 'active' | 'inactive';
   is_online: boolean;
   last_seen: string | null;
   current_lat: number | null;
   current_lng: number | null;
   pickup_address: string | null;
+  request_id: string | null;
+  delivery_status: DeliveryStatus | null;
+  time_window: string | null;
   is_on_duty: boolean;
   last_battery_level: number | null;
   last_signal_strength: string | null;
 }
 
-function MapController({ center, zoom }: { center: [number, number] | null, zoom?: number }) {
+function MapController({ riderId, center, zoom }: { riderId: string | null, center: [number, number] | null, zoom?: number }) {
   const map = useMap();
+  const lastCenteredRiderRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (center) {
+    if (!riderId) {
+      lastCenteredRiderRef.current = null;
+      return;
+    }
+
+    // Center once when a rider is selected. Live location updates should move
+    // the marker without repeatedly restarting a map animation.
+    if (center && riderId !== lastCenteredRiderRef.current) {
+      lastCenteredRiderRef.current = riderId;
       map.flyTo(center, zoom || map.getZoom(), {
-        duration: 1.5
+        duration: 0.35
       });
     }
-  }, [center, zoom, map]);
+  }, [center, riderId, zoom, map]);
   return null;
 }
 
 export function RiderMap() {
   const { socket, riderPresence, riderLocations } = useRealTime();
   const [riders, setRiders] = useState<RiderLive[]>([]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'online' | 'offline' | 'on-duty'>('all');
   const [selectedRider, setSelectedRider] = useState<RiderLive | null>(null);
-  const [autoUpdate, setAutoUpdate] = useState(true);
+  const [autoUpdate] = useState(true);
   const mapRef = useRef<L.Map | null>(null);
 
   const getRiderLocation = useCallback((rider: RiderLive) => {
@@ -107,34 +125,25 @@ export function RiderMap() {
       ? Number(live.timestamp)
       : (rider.last_seen ? new Date(rider.last_seen).getTime() : 0);
     
-    const dataAgeSeconds = lastUpdateTs ? (Date.now() - lastUpdateTs) / 1000 : 9999;
+    const dataAgeSeconds = lastUpdateTs ? (nowMs - lastUpdateTs) / 1000 : 9999;
 
     if (!isOnline) return 'OFFLINE';
     if (dataAgeSeconds > 130) return 'SIGNAL LOST';
     if (dataAgeSeconds > 65) return 'DELAYED';
     return 'LIVE';
-  }, [isRiderOnline, riderLocations]);
+  }, [isRiderOnline, riderLocations, nowMs]);
 
-  const fetchRiders = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/users/riders/live`, {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const data = await response.json();
+  const fetchRiders = useCallback(() => {
+    return fetch(`${API_URL}/users/riders/live`, { credentials: 'include' })
+      .then(async response => {
+        if (!response.ok) return;
+        const data: RiderLive[] = await response.json();
         setRiders(data);
-
-        if (selectedRider) {
-          const updated = data.find((r: RiderLive) => r.id === selectedRider.id);
-          if (updated) setSelectedRider(updated);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching live riders:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedRider?.id]);
+        setSelectedRider(current => current ? data.find(r => r.id === current.id) || current : current);
+      })
+      .catch(error => console.error('Error fetching live riders:', error))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     fetchRiders();
@@ -153,12 +162,12 @@ export function RiderMap() {
 
     socket.on('connect', syncFleet);
     socket.on('rider-presence-changed', syncFleet);
-    socket.on('rider-location-updated', syncFleet);
+    socket.on('rider-status-updated', syncFleet);
 
     return () => {
       socket.off('connect', syncFleet);
       socket.off('rider-presence-changed', syncFleet);
-      socket.off('rider-location-updated', syncFleet);
+      socket.off('rider-status-updated', syncFleet);
     };
   }, [socket, fetchRiders]);
 
@@ -178,7 +187,7 @@ export function RiderMap() {
 
   const activeCount = riders.filter(r => r.is_on_duty).length;
 
-  const createCustomIcon = (rider: RiderLive) => {
+  const createCustomIcon = useCallback((rider: RiderLive) => {
     const status = getRiderStatusLabel(rider);
     const hasUnfinishedTasks = !!rider.request_id;
     const isOverdueOffDuty = !rider.is_on_duty && hasUnfinishedTasks;
@@ -187,14 +196,12 @@ export function RiderMap() {
     if (isOverdueOffDuty) color = '#ef4444'; // Red for overdue log-off
 
     const isSelected = selectedRider?.id === rider.id;
-    
-    return L.divIcon({
+    const avatarUrl = getDefaultRiderAvatarUrl(rider.avatar_id || rider.id);
+    const icon = L.divIcon({
       className: 'custom-rider-icon',
       html: `
-        <div style="position: relative; width: ${isSelected ? '40px' : '32px'}; height: ${isSelected ? '40px' : '32px'}; background: white; border-radius: 50%; border: 2px solid ${color}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; ${isOverdueOffDuty ? 'opacity: 0.5;' : ''}">
-          <div style="width: ${isSelected ? '32px' : '24px'}; height: ${isSelected ? '32px' : '24px'}; background: #1e293b; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: ${isSelected ? '12px' : '10px'};">
-            ${(rider.name || 'R').substring(0, 1)}
-          </div>
+        <div style="position: relative; width: ${isSelected ? '40px' : '32px'}; height: ${isSelected ? '40px' : '32px'}; background: white; border-radius: 50%; border: 2px solid ${color}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); ${isOverdueOffDuty ? 'opacity: 0.5;' : ''}">
+          <img src="${avatarUrl}" alt="" aria-hidden="true" style="width: ${isSelected ? '32px' : '24px'}; height: ${isSelected ? '32px' : '24px'}; border-radius: 50%; object-fit: cover;" />
           <div style="position: absolute; bottom: -1px; right: -1px; width: ${isSelected ? '12px' : '10px'}; height: ${isSelected ? '12px' : '10px'}; background: ${color}; border: 1.5px solid white; border-radius: 50%;"></div>
           ${isOverdueOffDuty ? '<div class="absolute inset-0 rounded-full animate-red-pulse -z-10" style="background: rgba(239, 68, 68, 0.4);"></div>' : ''}
         </div>
@@ -202,13 +209,46 @@ export function RiderMap() {
       iconSize: isSelected ? [40, 40] : [32, 32],
       iconAnchor: isSelected ? [20, 20] : [16, 16]
     });
-  };
+    return icon;
+  }, [getRiderStatusLabel, selectedRider?.id]);
+
+  const renderSelectedRiderActions = (compact = false) => (
+    <div className={cn("grid grid-cols-2 gap-2", compact && "w-[150px] shrink-0 gap-1.5")}>
+      <Button
+        size="sm"
+        className={cn(
+          "rounded-xl bg-slate-900 text-white hover:bg-black font-black uppercase tracking-widest shadow-md active:scale-95 transition-all",
+          compact ? "h-8 px-1 text-[7px] tracking-tight" : "h-9 text-[9px]"
+        )}
+        onClick={() => {
+          if (!selectedRider) return;
+          const loc = getRiderLocation(selectedRider);
+          if (loc && mapRef.current) {
+            mapRef.current.flyTo([loc.lat, loc.lng], 16);
+          }
+        }}
+      >
+        Focus Map
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className={cn(
+          "rounded-xl border-slate-200 text-slate-900 hover:bg-slate-50 font-black uppercase tracking-widest active:scale-95 transition-all",
+          compact ? "h-8 px-1 text-[7px] tracking-tight" : "h-9 text-[9px]"
+        )}
+        onClick={() => setSelectedRider(null)}
+      >
+        Dismiss
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="flex h-full bg-white overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col md:flex-row bg-white overflow-hidden">
       {/* Sidebar List */}
-      <div className="w-[300px] border-r border-slate-100 flex flex-col z-10 bg-white shadow-[1px_0_10px_rgba(0,0,0,0.02)]">
-        <div className="p-3 md:p-4 space-y-3 shrink-0">
+      <div className="w-full h-[48%] min-h-0 md:h-full md:w-[300px] shrink-0 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col z-10 bg-white shadow-[1px_0_10px_rgba(0,0,0,0.02)] overflow-hidden">
+        <div className="p-2 md:p-4 space-y-2 md:space-y-3 shrink-0">
           <div className="flex items-center justify-between">
              <div>
                 <h2 className="text-sm font-black text-slate-900 tracking-tight">Rider Fleet</h2>
@@ -247,7 +287,10 @@ export function RiderMap() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 md:px-4 space-y-2 pb-4 custom-scrollbar">
+        <div className={cn(
+          "min-h-0 flex-1 overflow-y-auto px-2 md:px-4 space-y-1.5 md:space-y-2 pb-2 md:pb-4 custom-scrollbar overscroll-contain",
+          selectedRider && "min-h-[96px] md:min-h-0"
+        )}>
           {loading ? (
              <div className="flex flex-col gap-2">
                 {[1,2,3,4].map(i => <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />)}
@@ -269,7 +312,7 @@ export function RiderMap() {
                   key={rider.id}
                   onClick={() => setSelectedRider(rider)}
                   className={cn(
-                    "w-full p-2.5 rounded-xl border-2 transition-all text-left flex items-start gap-3 relative overflow-hidden",
+                    "w-full p-2 md:p-2.5 rounded-xl border-2 transition-all text-left flex items-start gap-2 md:gap-3 relative overflow-hidden",
                     isSelected 
                       ? "border-slate-900 bg-slate-900 shadow-lg shadow-slate-900/10" 
                       : isOverdueOffDuty
@@ -389,10 +432,10 @@ export function RiderMap() {
         </div>
 
         {selectedRider && (
-          <div className="p-4 border-t border-slate-100 bg-white animate-in slide-in-from-bottom-4 duration-300 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
-             <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-lg shadow-slate-900/20">
-                   <Navigation size={18} />
+        <div className="relative z-20 min-h-0 max-h-[60%] shrink-0 overflow-y-auto overscroll-contain p-2 md:p-4 border-t border-slate-100 bg-white animate-in slide-in-from-bottom-4 duration-300 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:max-h-none md:overflow-visible md:pb-4">
+             <div className="flex items-start gap-2 md:gap-3 mb-2 md:mb-4">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl md:rounded-2xl bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-lg shadow-slate-900/20">
+                   <Navigation size={16} className="md:h-[18px] md:w-[18px]" />
                 </div>
                 <div className="min-w-0 flex-1">
                    <h3 className="text-xs font-black text-slate-900 truncate uppercase tracking-tight">{selectedRider.name}</h3>
@@ -409,14 +452,14 @@ export function RiderMap() {
              </div>
 
              {selectedRider.request_id ? (
-                <div className="mb-4 space-y-2">
+                 <div className="mb-2 md:mb-4 space-y-1 md:space-y-2">
                    <div className="flex items-center justify-between">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Active Transaction</p>
                       <Badge className="bg-primary/10 text-primary border-none font-black text-[7px] h-4">
                          #{selectedRider.request_id.slice(-8).toUpperCase()}
                       </Badge>
                    </div>
-                   <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 space-y-2">
+                    <div className="bg-slate-50 rounded-xl p-2 border border-slate-100 space-y-1.5 md:p-2.5 md:space-y-2">
                       <div className="flex items-center gap-2">
                          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                          <p className="text-[9px] font-black text-slate-900 uppercase">
@@ -440,39 +483,23 @@ export function RiderMap() {
                    </div>
                 </div>
              ) : (
-                <div className="mb-4 py-3 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-center">
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter italic">No Active Job Assigned</p>
+                 <div className="mb-2 md:mb-4 flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-2 py-1.5 md:py-2">
+                   <p className="min-w-0 flex-1 text-center text-[9px] font-black uppercase tracking-tighter italic text-slate-400">No Active Job Assigned</p>
+                   {renderSelectedRiderActions(true)}
                 </div>
              )}
 
-             <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  size="sm" 
-                  className="h-9 rounded-xl bg-slate-900 text-white hover:bg-black text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all"
-                  onClick={() => {
-                    const loc = getRiderLocation(selectedRider);
-                    if (loc && mapRef.current) {
-                      mapRef.current.flyTo([loc.lat, loc.lng], 16);
-                    }
-                  }}
-                >
-                  Focus Map
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="h-9 rounded-xl border-slate-200 text-slate-900 hover:bg-slate-50 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
-                  onClick={() => setSelectedRider(null)}
-                >
-                  Dismiss
-                </Button>
-             </div>
+             {selectedRider.request_id && (
+               <div className="sticky bottom-0 z-10 bg-white pt-2 md:static md:bg-transparent md:pt-0">
+                 {renderSelectedRiderActions()}
+               </div>
+             )}
           </div>
         )}
       </div>
 
       {/* Main Map View */}
-      <div className="flex-1 relative">
+      <div className="flex-1 min-h-0 min-w-0 relative">
         <MapContainer
           center={[14.5995, 120.9842]}
           zoom={12}
@@ -535,11 +562,14 @@ export function RiderMap() {
             })}
           </MarkerClusterGroup>
 
-          <MapController center={selectedRider ? [getRiderLocation(selectedRider)?.lat || 0, getRiderLocation(selectedRider)?.lng || 0] : null} />
+          <MapController
+            riderId={selectedRider?.id || null}
+            center={selectedRider ? [getRiderLocation(selectedRider)?.lat || 0, getRiderLocation(selectedRider)?.lng || 0] : null}
+          />
         </MapContainer>
 
         {/* Legend Overlay */}
-        <div className="absolute bottom-6 left-6 z-[1000] space-y-2">
+        <div className="absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-3 md:bottom-6 md:left-6 z-[1000] space-y-2">
            <Card className="bg-white/90 backdrop-blur-md border-slate-100 p-3 rounded-2xl shadow-2xl">
               <div className="space-y-2">
                  <div className="flex items-center gap-2">

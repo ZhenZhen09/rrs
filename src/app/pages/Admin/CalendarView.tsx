@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   format, 
   addMonths, 
@@ -17,21 +17,13 @@ import {
   ChevronRight, 
   Search, 
   RefreshCw, 
-  Filter, 
-  Plus, 
   Calendar as CalendarIcon,
-  MapPin,
-  MoreHorizontal,
-  Package,
-  FileText,
-  Bike
-} from 'lucide-react';
+  FileText} from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { Card } from '../../components/ui/card';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { cn } from '../../components/ui/utils';
@@ -42,11 +34,7 @@ import { DEPARTMENTS } from '../../types';
 
 import { 
   Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription
-} from '../../components/ui/dialog';
+  DialogContent} from '../../components/ui/dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Types
@@ -58,7 +46,6 @@ interface CalendarFilters {
   dateRange: { start: Date | null; end: Date | null };
 }
 
-type ViewMode = 'month' | 'week';
 
 function getCalendarExportActionBy(request: any) {
   const status = getGroupedStatus(request.status, request.delivery_status);
@@ -87,9 +74,7 @@ export function CalendarView() {
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
-  const [myRequestsOnly, setMyRequestsOnly] = useState(false);
   const [riders, setRiders] = useState<any[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [displayMode, setDisplayMode] = useState<'calendar' | 'list'>('calendar');
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
   
@@ -108,6 +93,36 @@ export function CalendarView() {
     dateRange: { start: null, end: null }
   });
   const [localFilters, setLocalFilters] = useState<CalendarFilters>({ ...activeFilters });
+
+  // Logic: Filtering & Sorting Core
+  const filteredRequests = useMemo(() => {
+    const filtered = (requests || []).filter(req => {
+      if (req.status === 'submitted_waiting') return false;
+      
+      const matchesSearch = 
+        (req.request_id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (req.requester_name || "").toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      const groupStatus = getGroupedStatus(req.status, req.delivery_status);
+      if (!activeFilters.status.includes(groupStatus)) return false;
+      if (activeFilters.rider !== 'all' && req.assigned_rider_id !== activeFilters.rider) return false;
+      if (activeFilters.department !== 'all' && req.requester_department !== activeFilters.department) return false;
+      if (!activeFilters.urgency.includes(req.urgency_level)) return false;
+
+      return true;
+    });
+
+    if (!sortConfig) return filtered;
+
+    return [...filtered].sort((a: any, b: any) => {
+      const aVal = String(a[sortConfig.key] || "");
+      const bVal = String(b[sortConfig.key] || "");
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [requests, searchQuery, activeFilters, sortConfig]);
 
   // Logic: Sorting
   const handleSort = (key: string) => {
@@ -164,34 +179,7 @@ export function CalendarView() {
   };
 
   // Logic: Filtering & Sorting Core
-  const filteredRequests = useMemo(() => {
-    const filtered = (requests || []).filter(req => {
-      if (req.status === 'submitted_waiting') return false;
-      
-      const matchesSearch = 
-        (req.request_id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (req.requester_name || "").toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
 
-      const groupStatus = getGroupedStatus(req.status, req.delivery_status);
-      if (!activeFilters.status.includes(groupStatus)) return false;
-      if (activeFilters.rider !== 'all' && req.assigned_rider_id !== activeFilters.rider) return false;
-      if (activeFilters.department !== 'all' && req.requester_department !== activeFilters.department) return false;
-      if (!activeFilters.urgency.includes(req.urgency_level)) return false;
-
-      return true;
-    });
-
-    if (!sortConfig) return filtered;
-
-    return [...filtered].sort((a: any, b: any) => {
-      const aVal = String(a[sortConfig.key] || "");
-      const bVal = String(b[sortConfig.key] || "");
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [requests, searchQuery, activeFilters, sortConfig]);
 
   // Grouping for Calendar
   const requestsByDay = useMemo(() => {
@@ -276,18 +264,18 @@ export function CalendarView() {
   }, [currentDate]);
 
   return (
-    <div className="flex flex-col h-full bg-[#faf9f6] overflow-hidden font-sans">
+    <div className="flex flex-col h-full min-h-0 bg-[#faf9f6] overflow-hidden font-sans">
       {/* Header - Refined Spacing and UX */}
-      <div className="bg-white border-b border-black/[0.03] px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shrink-0 shadow-sm z-30">
-        <div className="flex items-center gap-5">
+      <div className="bg-white border-b border-black/[0.03] px-3 py-3 sm:px-6 sm:py-4 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:pt-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 shrink-0 shadow-sm z-30">
+          <div className="flex items-center gap-3 sm:gap-5">
           <div className="p-2.5 bg-slate-900 rounded-xl text-white shadow-lg shadow-slate-900/10 shrink-0">
             <CalendarIcon size={20} strokeWidth={2} />
           </div>
           <div className="space-y-0.5">
-            <h1 className="text-xl font-medium text-slate-900 tracking-tight leading-none font-serif">
+            <h1 className="text-lg sm:text-xl font-medium text-slate-900 tracking-tight leading-none font-serif">
               Operations Schedule
             </h1>
-            <div className="flex items-center gap-4 mt-1.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5">
                <StatusIndicator color="bg-emerald-500" label="Active" />
                <StatusIndicator color="bg-amber-500" label="Pending" />
                <StatusIndicator color="bg-slate-400" label="Done" />
@@ -361,7 +349,7 @@ export function CalendarView() {
                     <div className="w-40" />
                 </div>
                 
-                <div className="grid grid-cols-7 border-b border-slate-100 bg-white">
+                <div className="grid grid-cols-7 min-w-[640px] border-b border-slate-100 bg-white">
                     {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
                         <div key={day} className="py-3 text-center border-r border-slate-50 last:border-r-0">
                             <span className="text-[9px] font-bold text-slate-400 tracking-[0.2em]">{day}</span>
@@ -370,15 +358,20 @@ export function CalendarView() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <div className="grid grid-cols-7 min-h-full">
+                    <div className="grid grid-cols-7 min-w-[640px] min-h-full">
                         {calendarDays.map((day) => {
                             const dayKey = format(day, 'yyyy-MM-dd');
                             const dayRequests = requestsByDay[dayKey] || [];
                             const isToday = isSameDay(day, new Date());
                             const isCurMonth = isSameMonth(day, currentDate);
                             return (
-                                <div key={day.toString()} className={cn("min-h-[140px] border-r border-b border-slate-100 p-4 transition-colors", !isCurMonth && "opacity-30 bg-slate-50/10", isToday && "bg-slate-50/30")}>
-                                    <div className="flex justify-between items-start mb-3">
+                                 <div key={day.toString()} className={cn(
+                                   "self-start border-r border-b border-slate-100 transition-colors",
+                                   dayRequests.length > 0 ? "min-h-[140px] p-4" : "min-h-[58px] p-2",
+                                   !isCurMonth && "opacity-30 bg-slate-50/10",
+                                   isToday && "bg-slate-50/30"
+                                 )}>
+                                     <div className={cn("flex justify-between items-start", dayRequests.length > 0 ? "mb-3" : "mb-0")}>
                                         <span className={cn("text-xs font-bold w-7 h-7 flex items-center justify-center rounded-lg", isToday ? "bg-slate-900 text-white shadow-lg" : "text-slate-400")}>{format(day, 'd')}</span>
                                         {dayRequests.length > 0 && <button onClick={() => setSelectedDayTasks({ date: day, tasks: dayRequests })} className="text-[10px] font-semibold text-slate-400 uppercase hover:text-slate-900">{dayRequests.length} tasks</button>}
                                     </div>
@@ -411,7 +404,7 @@ export function CalendarView() {
         </AnimatePresence>
 
         {/* Sidebar Filters */}
-        <aside className="w-[260px] bg-white border-l border-black/[0.03] flex flex-col shrink-0">
+        <aside className="hidden lg:flex w-[260px] bg-white border-l border-black/[0.03] flex-col shrink-0">
             <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
                 <h3 className="text-xs font-bold uppercase tracking-widest">Filters</h3>
                 <button onClick={resetFilters} className="text-[9px] font-bold uppercase text-slate-400">Reset</button>
@@ -457,7 +450,7 @@ export function CalendarView() {
 
       {/* Details Modal */}
       <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
-        <DialogContent className="max-w-6xl h-[92vh] rounded-2xl p-0 border-none shadow-2xl overflow-hidden bg-[#faf9f6]">
+        <DialogContent className="w-[calc(100%-1rem)] max-w-6xl h-[92dvh] rounded-xl sm:rounded-2xl p-0 border-none shadow-2xl overflow-hidden bg-[#faf9f6]">
           {selectedTask && (
             <RequestDetailsPanel 
               request={selectedTask}
@@ -521,7 +514,7 @@ function FilterCheckbox({ label, checked, onChange }: { label: string, checked: 
 }
 
 function IndustrialListView({ 
-  requests = [], onSelect, sortConfig, onSort, density, selectedIds, onToggleSelect, onToggleAll, onExport 
+  requests = [], onSelect, onSort, density, selectedIds, onToggleSelect, onToggleAll, onExport 
 }: any) {
   const hasSelected = (id: string) => selectedIds instanceof Set && selectedIds.has(id);
   const selectedCount = selectedIds instanceof Set ? selectedIds.size : 0;

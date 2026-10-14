@@ -1,35 +1,39 @@
+﻿import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { cn } from '../../components/ui/utils';
+import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import { format } from 'date-fns';
+import { useData } from '../../context/DataContext';
+import { getWeeklyResolutionDetails, getWeeklyResolverLabel, getWeeklyScheduleDetailLabels, getWeeklyStartedAt } from '../../utils/weeklySchedule';
+import { buildWeeklyRiderReport, getWeeklyReportSummary, getWeeklyTaskOutcome } from '../../utils/weeklyRiderReport';
+import { ACCOUNTING_BUCKETS, ACCOUNTING_LABELS, AccountingBucket, buildRequestAccounting, getAccountingBucket } from '../../utils/requestAccounting';
+import { RequestReconciliation } from '../../components/Admin/RequestReconciliation';
+
+import { OperationalIntegrityView } from '../../components/Admin/OperationalIntegrityView';
+
 import React, { useEffect, useState } from 'react';
 import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area, ComposedChart
+  BarChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart
 } from 'recharts';
 import { 
   TrendingUp, 
-  Users, 
   Clock, 
   CheckCircle, 
   AlertCircle, 
-  ArrowUpRight, 
-  ArrowDownRight, 
   Calendar,
   Filter,
   Download,
   MapPin,
-  Zap,
-  Building,
-  Info,
-  Sparkles,
   FileText,
-  Package,
   Bike,
   ClipboardList,
   AlertTriangle,
   FileBarChart,
-  Map as MapIcon,
   CheckCircle2,
   XCircle,
-  BadgeAlert,
-  Truck,
   ShieldAlert,
   Wifi as WifiIcon,
   PieChart as PieChartIcon,
@@ -38,257 +42,54 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/badge';
-import { cn } from '../../components/ui/utils';
-import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import { format } from 'date-fns';
-import * as XLSX from 'xlsx';
-import { useData } from '../../context/DataContext';
 
-// Helper for vibrant colors
+const PHILIPPINE_TIME_ZONE = 'Asia/Manila';
+const initialPhilippineMonthYear = new Intl.DateTimeFormat('en-CA', {
+  timeZone: PHILIPPINE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+}).format(new Date());
+
+const getPhilippineDateParts = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PHILIPPINE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce<Record<string, string>>((result, part) => {
+    if (part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
+};
+
+const getPhilippineWeekStart = (date = new Date()) => {
+  const { year, month, day } = getPhilippineDateParts(date);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const mondayOffset = (utcDate.getUTCDay() + 6) % 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() - mondayOffset);
+  return utcDate.toISOString().slice(0, 10);
+};
+
+const shiftIsoDate = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const formatWeekDay = (value: string) => new Intl.DateTimeFormat('en-US', {
+  timeZone: PHILIPPINE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+}).format(new Date(`${value}T00:00:00+08:00`));
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#ef4444', '#14b8a6'];
 
-import { OperationalIntegrityView } from '../../components/Admin/OperationalIntegrityView';
-
-export function AnalyticsHub() {
-  const { fetchWithAuth } = useData();
-  const [monthYear, setMonthYear] = useState(new Date().toISOString().slice(0, 7));
-  const [monthlyTrendData, setMonthlyTrendData] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'main' | 'integrity' | 'connectivity'>('main');
-  const [connectivityFilters, setConnectivityFilters] = useState({
-    riderId: 'all',
-    eventType: 'all',
-    risk: 'all',
-  });
-  const [summaryStats, setSummaryStats] = useState<any>({ 
-    counts: { total: 0, completed: 0, in_transit: 0, pending: 0, failed: 0 }, 
-    avgTime: 0,
-    onTimeRate: 87,
-    utilization: 76
-  });
-  const [deptData, setDeptData] = useState<any[]>([]);
-  const [categoryData, setCategoryData] = useState<any[]>([]);
-  const [heatmapData, setHeatmapData] = useState<any[]>([]);
-  const [failureReasonsData, setFailureReasonsData] = useState<any[]>([]);
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-  const [urgencyData, setUrgencyData] = useState<any[]>([]);
-  const [hotspots, setHotspots] = useState<any[]>([]);
-  const [peakHourData, setPeakHourData] = useState<any[]>([]);
-  const [forecastData, setForecastData] = useState<any[]>([]);
-  const [forecastDay, setForecastDay] = useState('');
-  const [recentRequests, setRecentRequests] = useState<any[]>([]);
-  const [riderPerformance, setRiderPerformance] = useState<any[]>([]);
-  const [exceptions, setExceptions] = useState<any[]>([]);
-  const [locationInsights, setLocationInsights] = useState<any>({ pickups: [], dropoffs: [] });
-  const [integrityData, setIntegrityData] = useState<any>(null);
-  const [connectivityData, setConnectivityData] = useState<any>({
-    summary: {},
-    logs: [],
-    riderReport: [],
-  });
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        const my = monthYear;
-        
-        if (activeTab === 'main') {
-          const urls = [
-            `/api/analytics/department-allocation?monthYear=${my}`,
-            `/api/analytics/urgency-inflation?monthYear=${my}`,
-            `/api/analytics/hotspots?monthYear=${my}`,
-            `/api/analytics/peak-hours?monthYear=${my}`,
-            `/api/analytics/forecast?monthYear=${my}`,
-            `/api/analytics/summary-stats?monthYear=${my}`,
-            `/api/requests?limit=10&monthYear=${my}`,
-            `/api/analytics/rider-performance?monthYear=${my}`,
-            `/api/analytics/exceptions?monthYear=${my}`,
-            `/api/analytics/location-insights?monthYear=${my}`,
-            `/api/analytics/monthly-trend?monthYear=${my}`,
-            `/api/analytics/request-categories?monthYear=${my}`,
-            `/api/analytics/daily-heatmap?monthYear=${my}`,
-            `/api/analytics/failure-reasons?monthYear=${my}`,
-            `/api/analytics/export-csv?monthYear=${my}`
-          ];
-
-          const results = await Promise.all(urls.map(url => fetchWithAuth(url)));
-          const [
-            deptRes, urgencyRes, hotspotsRes, peakRes, forecastRes, summaryRes, recentRes, riderRes, exceptionRes, locationRes, trendRes, categoryRes, heatmapRes, failureRes, exportRes
-          ] = results;
-
-          if (deptRes && deptRes.ok) {
-            const deptJson = await deptRes.json();
-            const grouped: Record<string, number> = {};
-            deptJson.forEach((row: any) => {
-              grouped[row.requester_department || 'General'] = (grouped[row.requester_department || 'General'] || 0) + row.volume;
-            });
-            setDeptData(Object.keys(grouped).map((key, i) => ({ name: key, value: grouped[key], color: COLORS[i % COLORS.length] })));
-          }
-
-          if (urgencyRes && urgencyRes.ok) {
-            const urgencyJson = await urgencyRes.json();
-            setUrgencyData(urgencyJson.map((row: any) => ({
-              urgency: row.urgency_level,
-              avgMinutes: Math.round(Number(row.avg_completion_minutes) || 0),
-              completed: row.total_completed
-            })));
-          }
-
-          if (hotspotsRes && hotspotsRes.ok) setHotspots(await hotspotsRes.json());
-          if (peakRes && peakRes.ok) {
-            const peakJson = await peakRes.json();
-            setPeakHourData(Array.from({ length: 24 }, (_, i) => {
-              const found = peakJson.find((r: any) => r.hour === i);
-              return {
-                hour: i,
-                displayHour: i > 12 ? `${i-12} PM` : i === 0 ? '12 AM' : i === 12 ? '12 PM' : `${i} AM`,
-                volume: found ? found.volume : 0
-              };
-            }));
-          }
-          if (forecastRes && forecastRes.ok) {
-            const forecastJson = await forecastRes.json();
-            setForecastDay(forecastJson.day);
-            setForecastData(Array.from({ length: 24 }, (_, i) => {
-              const found = forecastJson.forecast.find((r: any) => r.hour_of_day === i);
-              return {
-                hour: i,
-                displayHour: i > 12 ? `${i-12} PM` : i === 0 ? '12 AM' : i === 12 ? '12 PM' : `${i} AM`,
-                expectedVolume: found ? Math.round(found.expected_volume) : 0
-              };
-            }));
-          }
-          if (summaryRes && summaryRes.ok) setSummaryStats(await summaryRes.json());
-          if (recentRes && recentRes.ok) {
-            const recentJson = await recentRes.json();
-            setRecentRequests(recentJson.data || []);
-          }
-          if (riderRes && riderRes.ok) setRiderPerformance(await riderRes.json());
-          if (exceptionRes && exceptionRes.ok) setExceptions(await exceptionRes.json());
-          if (locationRes && locationRes.ok) setLocationInsights(await locationRes.json());
-          if (trendRes && trendRes.ok) setMonthlyTrendData(await trendRes.json());
-          if (categoryRes && categoryRes.ok) {
-            const json = await categoryRes.json();
-            setCategoryData(json.map((r: any, i: number) => ({ name: r.request_type, value: r.volume, color: COLORS[(i + 3) % COLORS.length] })));
-          }
-          if (heatmapRes && heatmapRes.ok) setHeatmapData(await heatmapRes.json());
-          if (failureRes && failureRes.ok) setFailureReasonsData(await failureRes.json());
-          if (exportRes && exportRes.ok) setTableData(await exportRes.json());
-        } else if (activeTab === 'integrity') {
-          // LAYER 4: Fetch Integrity Data
-          const res = await fetchWithAuth(`/api/analytics/operational-integrity?monthYear=${my}`);
-          if (res && res.ok) {
-            setIntegrityData(await res.json());
-          }
-        } else {
-          const params = new URLSearchParams({
-            monthYear: monthYear,
-            riderId: connectivityFilters.riderId,
-            eventType: connectivityFilters.eventType,
-            risk: connectivityFilters.risk,
-          });
-          const res = await fetchWithAuth(`/api/analytics/rider-connectivity?${params.toString()}`);
-          if (res && res.ok) {
-            setConnectivityData(await res.json());
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load analytics data", error);
-      }
-    };
-
-    fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 300000);
-    return () => clearInterval(interval);
-  }, [monthYear, activeTab, connectivityFilters, fetchWithAuth]);
-
-  // Derived metrics from tableData
-  const pendingBreakdownData = React.useMemo(() => {
-    const categories = {
-      'Pending': { count: 0, requesters: [] as string[] },
-      'Assigned': { count: 0, requesters: [] as string[] },
-      'Action Required': { count: 0, requesters: [] as string[] }
-    };
-
-    tableData.forEach(r => {
-      let status = String(r.status || '').toLowerCase();
-      let deliveryStatus = String(r.delivery_status || 'pending').toLowerCase();
-      
-      let cat = '';
-      
-      if (status === 'returned_for_revision') {
-        cat = 'Action Required';
-      } else if (status !== 'disapproved' && status !== 'cancelled' && deliveryStatus !== 'completed' && deliveryStatus !== 'failed') {
-        if (deliveryStatus === 'assigned') {
-          cat = 'Assigned';
-        } else {
-          cat = 'Pending';
-        }
-      }
-      
-      if (cat) {
-        categories[cat as keyof typeof categories].count += 1;
-        if (r.requester_name) categories[cat as keyof typeof categories].requesters.push(r.requester_name);
-      }
-    });
-
-    return [
-      { name: 'Pending', value: categories['Pending'].count, requesters: Array.from(new Set(categories['Pending'].requesters)), color: '#f59e0b' },
-      { name: 'Assigned', value: categories['Assigned'].count, requesters: Array.from(new Set(categories['Assigned'].requesters)), color: '#3b82f6' },
-      { name: 'Action Required', value: categories['Action Required'].count, requesters: Array.from(new Set(categories['Action Required'].requesters)), color: '#ef4444' }
-    ];
-  }, [tableData]);
-
-  const sortedData = React.useMemo(() => {
-    let sortableItems = [...tableData];
-    if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-        
-        if (sortConfig.key === 'created_at') {
-          aVal = new Date(a.created_at || 0).getTime();
-          bVal = new Date(b.created_at || 0).getTime();
-        } else if (sortConfig.key === 'request_id') {
-          aVal = Number(a.request_id);
-          bVal = Number(b.request_id);
-        } else if (sortConfig.key === 'delivery_status') {
-          aVal = String(a.delivery_status || 'pending').toLowerCase();
-          bVal = String(b.delivery_status || 'pending').toLowerCase();
-        } else {
-          aVal = String(aVal || '').toLowerCase();
-          bVal = String(bVal || '').toLowerCase();
-        }
-
-        if (aVal < bVal) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [tableData, sortConfig]);
-
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const SortableHeader = ({ title, sortKey, className }: { title: string, sortKey: string, className?: string }) => (
-    <th 
+const SortableHeader = ({ title, sortKey, className, sortConfig, onSort }: { title: string, sortKey: string, className?: string, sortConfig: { key: string, direction: 'asc' | 'desc' } | null, onSort: (key: string) => void }) => (
+    <th
       className={cn("p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none", className)}
-      onClick={() => handleSort(sortKey)}
+      onClick={() => onSort(sortKey)}
     >
       <div className="flex items-center gap-1.5">
         {title}
@@ -333,78 +134,227 @@ export function AnalyticsHub() {
     return null;
   };
 
-  const handleExportCSV = async () => {
-    try {
-      const res = await fetchWithAuth(`/api/analytics/export-csv?monthYear=${monthYear}`);
-      if (!res?.ok) throw new Error("Failed to fetch export data");
-      
-      const data = await res.json();
-      
-      const headers = [
-        "TRANSACTION ID",
-        "Date Created",
-        "Requester",
-        "Department",
-        "Request Category",
-        "Origin Building",
-        "Origin Address",
-        "Destination Building",
-        "Destination Address",
-        "Task Instructions",
-        "Admin Note",
-        "Status Actor",
-        "Rider/Admin Notes"
-      ];
-      
-      const rows = data.map((row: any) => {
-        let statusActor = row.delivery_status;
-        let cleanNote = row.rider_remark || '';
-        
-        if (cleanNote.includes('[Admin update by')) {
-          statusActor = `${row.delivery_status} (Admin)`;
-          cleanNote = cleanNote.replace(/\[Admin update by.*?\]\s*/, '');
-        } else if (row.assigned_rider_name) {
-          statusActor = `${row.delivery_status} (Rider: ${row.assigned_rider_name})`;
-        } else {
-          statusActor = `${row.delivery_status}`;
+
+export function AnalyticsHub() {
+  const { fetchWithAuth } = useData();
+  const [monthYear, setMonthYear] = useState(initialPhilippineMonthYear);
+  const [mainScope, setMainScope] = useState<'month' | 'all'>('month');
+  const mainScopeKey = mainScope === 'all' ? 'all' : monthYear;
+  const [monthlyTrendData, setMonthlyTrendData] = useState<any[]>([]);
+  const [weeklyStart, setWeeklyStart] = useState(getPhilippineWeekStart);
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'completed' | 'overdue' | 'open'>('all');
+  const [weeklyLoad, setWeeklyLoad] = useState<{
+    weekStart: string; requests: any[]; loading: boolean; error: string | null;
+  }>({ weekStart: '', requests: [], loading: true, error: null });
+  const [weeklyRetry, setWeeklyRetry] = useState(0);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnosticsRetry, setDiagnosticsRetry] = useState(0);
+  const [diagnosticsLoad, setDiagnosticsLoad] = useState({ loading: false, error: '' });
+  const [connectivityFilters, setConnectivityFilters] = useState({
+    riderId: 'all',
+    eventType: 'all',
+    risk: 'all',
+  });
+  const [summaryStats, setSummaryStats] = useState<any>({ 
+    counts: { total: 0, completed: 0, in_transit: 0, pending: 0, failed: 0 }, 
+    avgTime: 0,
+    onTimeRate: null,
+    utilization: null
+  });
+  const [deptData, setDeptData] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [failureReasonsData, setFailureReasonsData] = useState<any[]>([]);
+  const [tableData, setTableData] = useState<any[]>([]);
+  const [ledgerBucket, setLedgerBucket] = useState<AccountingBucket | 'all'>('all');
+  const [mainLoad, setMainLoad] = useState({ monthYear: '', loading: true, error: '' });
+  const [mainRetry, setMainRetry] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+  const [hotspots, setHotspots] = useState<any[]>([]);
+  const [integrityData, setIntegrityData] = useState<any>(null);
+  const [connectivityData, setConnectivityData] = useState<any>({
+    summary: {},
+    logs: [],
+    riderReport: [],
+  });
+
+  useEffect(() => {
+    let active = true;
+    let latestRequest = 0;
+    const fetchAnalytics = async () => {
+      const requestNumber = ++latestRequest;
+      try {
+        const my = monthYear;
+        setMainLoad({ monthYear: mainScopeKey, loading: true, error: '' });
+        const [summaryRes, trendRes] = await Promise.all([
+          fetchWithAuth(`/api/analytics/summary-stats?${mainScope === 'all' ? 'scope=all' : `monthYear=${my}`}`),
+          fetchWithAuth(`/api/analytics/monthly-trend?monthYear=${my}`),
+        ]);
+        if (!summaryRes?.ok || !trendRes?.ok) throw new Error('Analytics request failed');
+        const [snapshot, trend] = await Promise.all([summaryRes.json(), trendRes.json()]);
+        if (!Array.isArray(snapshot?.requests) || !Array.isArray(trend)) throw new Error('Invalid analytics snapshot');
+        const records = snapshot.requests;
+        if (new Set(records.map((row: any) => row.request_id)).size !== records.length) throw new Error('Duplicate ledger records');
+        const counts = buildRequestAccounting(records);
+        if (Number(snapshot.counts?.total) !== counts.total ||
+            ACCOUNTING_BUCKETS.some(bucket => Number(snapshot.counts?.[bucket]) !== counts[bucket])) {
+          throw new Error('Counters do not reconcile with the ledger');
         }
-        
-        return [
-          row.request_id,
-          format(new Date(row.created_at), 'MMM dd, yyyy hh:mm a'),
-          row.requester_name,
-          row.requester_department,
-          row.request_type,
-          row.pickup_business_name || '',
-          row.pickup_address,
-          row.dropoff_business_name || '',
-          row.dropoff_address,
-          row.personnel_instructions,
-          row.admin_remark,
-          statusActor,
-          cleanNote
-        ];
+        if (!active || requestNumber !== latestRequest) return;
+        setTableData(records);
+        setSummaryStats({ ...snapshot, counts });
+        const breakdown = (field: string, fallback: string) => {
+          const grouped = new Map<string, number>();
+          records.forEach((row: any) => {
+            const key = String(row[field] || '').trim() || fallback;
+            grouped.set(key, (grouped.get(key) || 0) + 1);
+          });
+          return Array.from(grouped, ([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+        };
+        setDeptData(breakdown('requester_department', 'Unspecified department'));
+        setCategoryData(breakdown('request_type', 'Unspecified type'));
+        const failures = new Map<string, number>();
+        records.filter((row: any) => getAccountingBucket(row) === 'failed').forEach((row: any) => {
+          const reason = String(row.rider_remark || '').replace(/\[Admin update by.*?\]\s*/, '').trim() || 'No reason provided';
+          failures.set(reason, (failures.get(reason) || 0) + 1);
+        });
+        setFailureReasonsData(Array.from(failures, ([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count));
+        const points = new Map<string, { lat: number; lng: number; weight: number }>();
+        records.forEach((row: any) => {
+          if (row.dropoff_lat == null || row.dropoff_lng == null || row.dropoff_lat === '' || row.dropoff_lng === '') return;
+          const lat = Number(row.dropoff_lat), lng = Number(row.dropoff_lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+          const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+          const point = points.get(key) || { lat, lng, weight: 0 };
+          point.weight++;
+          points.set(key, point);
+        });
+        setHotspots(Array.from(points.values()));
+        // Other months are historical context; the selected month must match this ledger snapshot.
+        const selectedMonthCounts = mainScope === 'all' ? buildRequestAccounting(records.filter((row: any) => String(row.created_at || '').slice(0, 7) === my)) : counts;
+        setMonthlyTrendData([...trend.filter((row: any) => row.month_key !== my), {
+          month_key: my,
+          month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(new Date(`${my}-01T00:00:00Z`)),
+          total_tasks: selectedMonthCounts.total, completed: selectedMonthCounts.completed,
+        }].sort((a, b) => String(a.month_key).localeCompare(String(b.month_key))));
+        setMainLoad({ monthYear: mainScopeKey, loading: false, error: '' });
+      } catch (error) {
+        if (active && requestNumber === latestRequest) {
+          setMainLoad({ monthYear: mainScopeKey, loading: false, error: 'Unable to reconcile Main Stats. Please retry.' });
+        }
+        console.error("Failed to load analytics data", error);
+      }
+    };
+
+    fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, 300000);
+    return () => { active = false; clearInterval(interval); };
+  }, [monthYear, mainScope, mainScopeKey, fetchWithAuth, mainRetry]);
+
+  useEffect(() => {
+    let active = true;
+    let latestRequest = 0;
+    const loadWeek = async () => {
+      const requestNumber = ++latestRequest;
+      setWeeklyLoad({ weekStart: weeklyStart, requests: [], loading: true, error: null });
+      try {
+        const response = await fetchWithAuth(`/api/analytics/weekly-schedule?weekStart=${weeklyStart}`);
+        if (!response?.ok) throw new Error('Weekly schedule request failed');
+        const payload = await response.json();
+        if (!Array.isArray(payload?.requests)) throw new Error('Invalid weekly schedule response');
+        if (active && requestNumber === latestRequest) {
+          setWeeklyLoad({ weekStart: weeklyStart, requests: payload.requests, loading: false, error: null });
+        }
+      } catch {
+        if (active && requestNumber === latestRequest) {
+          setWeeklyLoad({ weekStart: weeklyStart, requests: [], loading: false,
+            error: 'Unable to load weekly schedule. Please try again.' });
+        }
+      }
+    };
+    void loadWeek();
+    const interval = setInterval(loadWeek, 300000);
+    return () => { active = false; clearInterval(interval); };
+  }, [weeklyStart, weeklyRetry, fetchWithAuth]);
+
+  useEffect(() => {
+    if (!diagnosticsOpen) return;
+    let active = true;
+    const loadDiagnostics = async () => {
+      setDiagnosticsLoad({ loading: true, error: '' });
+      const params = new URLSearchParams({
+        monthYear,
+        riderId: connectivityFilters.riderId,
+        eventType: connectivityFilters.eventType,
+        risk: connectivityFilters.risk,
       });
-      
-      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      
-      // Auto-size columns slightly
-      const colWidths = headers.map(h => ({ wch: Math.max(15, h.length + 5) }));
-      colWidths[1].wch = 22; // Date
-      colWidths[5].wch = 30; // Origin
-      colWidths[6].wch = 30; // Destination
-      colWidths[7].wch = 40; // Instructions
-      colWidths[8].wch = 20; // Admin Note
-      colWidths[10].wch = 40; // Rider Notes
-      worksheet['!cols'] = colWidths;
-      
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Analytics Report");
-      XLSX.writeFile(workbook, `Transactions_Report_${monthYear}.xlsx`);
-    } catch (error) {
-      console.error("Export error", error);
-      alert("Failed to export CSV. Please try again.");
+      try {
+        const [integrityResponse, connectivityResponse] = await Promise.all([
+          fetchWithAuth(`/api/analytics/operational-integrity?monthYear=${monthYear}`),
+          fetchWithAuth(`/api/analytics/rider-connectivity?${params.toString()}`),
+        ]);
+        if (!integrityResponse?.ok || !connectivityResponse?.ok) throw new Error('Diagnostics request failed');
+        const [integrity, connectivity] = await Promise.all([integrityResponse.json(), connectivityResponse.json()]);
+        if (!active) return;
+        setIntegrityData(integrity);
+        setConnectivityData(connectivity);
+        setDiagnosticsLoad({ loading: false, error: '' });
+      } catch (error) {
+        if (active) setDiagnosticsLoad({ loading: false, error: 'Unable to load diagnostics. Please try again.' });
+        console.error('Failed to load analytics diagnostics', error);
+      }
+    };
+    void loadDiagnostics();
+    const interval = setInterval(loadDiagnostics, 300000);
+    return () => { active = false; clearInterval(interval); };
+  }, [diagnosticsOpen, diagnosticsRetry, monthYear, connectivityFilters, fetchWithAuth]);
+
+  const accounting = React.useMemo(() => buildRequestAccounting(tableData), [tableData]);
+  const pendingBreakdownData = React.useMemo(() => (['pending', 'active', 'revision'] as const).map((bucket, i) => ({
+    name: ACCOUNTING_LABELS[bucket], value: accounting[bucket], color: COLORS[i],
+    requesters: Array.from(new Set(tableData.filter(row => getAccountingBucket(row) === bucket).map(row => row.requester_name).filter(Boolean))),
+  })), [tableData, accounting]);
+  useEffect(() => { setCurrentPage(1); }, [mainScopeKey, ledgerBucket, tableData]);
+
+  const sortedData = React.useMemo(() => {
+    let sortableItems = tableData.filter(row => ledgerBucket === 'all' || getAccountingBucket(row) === ledgerBucket);
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
+        if (sortConfig.key === 'created_at') {
+          aVal = new Date(a.created_at || 0).getTime();
+          bVal = new Date(b.created_at || 0).getTime();
+        } else if (sortConfig.key === 'request_id') {
+          aVal = String(a.request_id);
+          bVal = String(b.request_id);
+        } else if (sortConfig.key === 'delivery_status') {
+          aVal = String(a.delivery_status || 'pending').toLowerCase();
+          bVal = String(b.delivery_status || 'pending').toLowerCase();
+        } else {
+          aVal = String(aVal || '').toLowerCase();
+          bVal = String(bVal || '').toLowerCase();
+        }
+
+        if (aVal < bVal) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
     }
+    return sortableItems;
+  }, [tableData, sortConfig, ledgerBucket]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
   };
 
   const mapCenter: [number, number] = hotspots.length > 0 
@@ -416,11 +366,11 @@ export function AnalyticsHub() {
   const cancelRate = summaryStats.counts.total > 0 ? ((summaryStats.counts.cancelled / summaryStats.counts.total) * 100).toFixed(1) : "0";
 
   return (
-    <div className="bg-[#F1F5F9] min-h-screen p-3 md:p-6 font-sans text-slate-900 selection:bg-[#00B14F]/30 relative overflow-hidden">
-      <div className="max-w-[1400px] mx-auto space-y-4 print-container relative z-10">
+    <div className="bg-[#F1F5F9] min-h-screen p-2 sm:p-3 md:p-6 font-sans text-slate-900 selection:bg-[#00B14F]/30 relative overflow-hidden">
+      <div className="max-w-[1400px] mx-auto space-y-3 md:space-y-4 print-container relative z-10">
         
         {/* COMPACT HEADER BAR */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white/60 backdrop-blur-md p-3 rounded-lg border border-white/60 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 md:gap-3 bg-white/60 backdrop-blur-md p-2.5 md:p-3 rounded-lg border border-white/60 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#00B14F] rounded-lg flex items-center justify-center text-white shadow-md shadow-[#00B14F]/10">
               <Bike size={20} strokeWidth={2.5} />
@@ -434,56 +384,42 @@ export function AnalyticsHub() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 no-print">
-            <div className="bg-slate-100 p-0.5 rounded-lg flex gap-0.5 border border-slate-200/50 mr-4">
-              {[
-                { id: 'main', label: 'Main Stats', icon: <TrendingUp size={10} /> },
-                { id: 'integrity', label: 'Operational Integrity', icon: <ShieldAlert size={10} /> },
-                { id: 'connectivity', label: 'Rider Connectivity', icon: <WifiIcon size={10} /> }
-              ].map(t => (
-                <button 
-                  key={t.id} 
-                  onClick={() => setActiveTab(t.id as any)}
-                  className={cn(
-                    "px-3 py-1 rounded-md text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5", 
-                    t.id === activeTab ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                  )}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="bg-slate-100 p-0.5 rounded-lg flex items-center gap-1 border border-slate-200/50 px-2 h-8">
-              <Calendar size={12} className="text-slate-500" />
-              <input
-                type="month"
-                value={monthYear}
-                onChange={(e) => setMonthYear(e.target.value)}
-                className="bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none border-none cursor-pointer"
-              />
-            </div>
-            <Button 
-              onClick={handleExportCSV}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg px-4 h-8 text-[9px] uppercase tracking-widest gap-1.5"
-            >
-              <Download size={14} />
-              EXPORT
-            </Button>
-          </div>
+          <p className="text-xs font-semibold text-slate-600">Weekly delivery performance and request analytics</p>
         </div>
 
-        {activeTab === 'main' ? (
+        <section aria-label="Weekly schedule" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div><h2 className="text-sm font-black text-slate-800">This week at a glance</h2><p className="text-[10px] font-medium text-slate-500">Schedule, workload, and rider delivery progress</p></div>
+            <Button type="button" onClick={() => downloadWeeklyScheduleCsv(weeklyLoad.requests, weeklyStart)} disabled={weeklyLoad.loading || Boolean(weeklyLoad.error)} className="min-h-10 bg-[#00B14F] text-white hover:bg-[#009e46] disabled:opacity-50"><Download size={15} className="mr-2" />Download weekly schedule</Button>
+          </div>
+          {weeklyLoad.weekStart !== weeklyStart || weeklyLoad.loading || weeklyLoad.error ? (
+            <Card className="rounded-lg border-none bg-white shadow-sm">
+              <CardHeader className="flex flex-wrap items-center justify-between gap-3 p-4"><CardTitle className="text-sm font-bold">{formatWeekDay(weeklyStart)} – {formatWeekDay(shiftIsoDate(weeklyStart, 6))}</CardTitle><div className="flex items-center gap-2"><Button variant="outline" size="icon" aria-label="Previous week" onClick={() => setWeeklyStart(shiftIsoDate(weeklyStart, -7))}><ChevronLeft size={14} /></Button><Button variant="outline" onClick={() => setWeeklyStart(getPhilippineWeekStart())}>This Week</Button><Button variant="outline" size="icon" aria-label="Next week" onClick={() => setWeeklyStart(shiftIsoDate(weeklyStart, 7))}><ChevronRight size={14} /></Button></div></CardHeader>
+              <CardContent className="p-4">{weeklyLoad.weekStart === weeklyStart && !weeklyLoad.loading && weeklyLoad.error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p>{weeklyLoad.error}</p><Button variant="outline" className="mt-3" onClick={() => setWeeklyRetry(value => value + 1)}>Try again</Button></div> : <p role="status" aria-label="Loading weekly schedule…" aria-busy="true" className="py-6 text-sm text-slate-500">Loading weekly schedule…</p>}</CardContent>
+            </Card>
+          ) : <WeeklyScheduleView weekStart={weeklyStart} requests={weeklyLoad.requests} onWeekChange={setWeeklyStart} filter={scheduleFilter} onFilterChange={setScheduleFilter} />}
+        </section>
+
+        <section aria-label="Performance and transaction analytics" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2 px-1"><div><h2 className="text-sm font-black text-slate-800">Performance &amp; transaction analytics</h2><p className="text-[10px] font-medium text-slate-500">Monthly trends and request-level detail</p></div><div className="flex items-center gap-2"><div className="w-full bg-white p-1 rounded-lg flex items-center gap-1 border border-slate-200 px-2 h-9 sm:w-auto"><Calendar size={12} className="text-slate-500" /><input type="month" value={monthYear} aria-label="Reporting month" onChange={(e) => { if (e.target.value) { setMonthYear(e.target.value); setMainScope('month'); } }} className="min-w-0 flex-1 bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none border-none cursor-pointer sm:flex-none" /></div><button type="button" aria-pressed={mainScope === 'all'} onClick={() => setMainScope(value => value === 'all' ? 'month' : 'all')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">{mainScope === 'all' ? 'Selected month' : 'All dates'}</button></div></div>
+        {mainLoad.monthYear !== mainScopeKey || mainLoad.loading || mainLoad.error ? (
+          <Card><CardContent className="p-6">
+            {mainLoad.error && mainLoad.monthYear === mainScopeKey ? <div role="alert">
+              <p>{mainLoad.error}</p><Button onClick={() => setMainRetry(value => value + 1)}>Retry Main Stats</Button>
+            </div> : <p role="status">Loading reconciled Main Stats…</p>}
+          </CardContent></Card>
+        ) : (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 fade-in duration-700">
-              <div className="group relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 rounded-[24px] p-8 border border-emerald-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
+            <RequestReconciliation counts={accounting} scope={mainScope === 'all' ? 'All creation dates · Philippine time (UTC+8)' : `Created in ${monthYear} · Philippine time (UTC+8)`}
+              selected={ledgerBucket} onSelect={setLedgerBucket} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-6 animate-in slide-in-from-bottom-4 fade-in duration-700">
+              <div className="group relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 rounded-2xl md:rounded-[24px] p-4 md:p-8 border border-emerald-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
                 <div className="absolute -right-6 -top-6 text-emerald-500/5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
                   <CheckCircle size={140} strokeWidth={1} />
                 </div>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3 relative z-10">Completed Requests</h3>
-                <div className="text-7xl font-black tracking-tighter text-slate-800 relative z-10">{completionRate}%</div>
-                <div className="mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-100/50 relative z-10 shadow-sm">
+                <div className="text-5xl md:text-7xl font-black tracking-tighter text-slate-800 relative z-10">{completionRate}%</div>
+                <div className="mt-3 md:mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-2 md:px-3 py-1.5 rounded-full border border-emerald-100/50 relative z-10 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span className="text-[9px] font-black tracking-widest text-slate-600 uppercase">
                     {summaryStats.counts.completed} of {summaryStats.counts.total} Total
@@ -491,13 +427,13 @@ export function AnalyticsHub() {
                 </div>
               </div>
               
-              <div className="group relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-rose-50/30 rounded-[24px] p-8 border border-rose-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
+              <div className="group relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-rose-50/30 rounded-2xl md:rounded-[24px] p-4 md:p-8 border border-rose-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
                 <div className="absolute -right-6 -top-6 text-rose-500/5 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
                   <XCircle size={140} strokeWidth={1} />
                 </div>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-600 mb-3 relative z-10">Failed Requests</h3>
-                <div className="text-7xl font-black tracking-tighter text-slate-800 relative z-10">{failRate}%</div>
-                <div className="mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-rose-100/50 relative z-10 shadow-sm">
+                <div className="text-5xl md:text-7xl font-black tracking-tighter text-slate-800 relative z-10">{failRate}%</div>
+                <div className="mt-3 md:mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-2 md:px-3 py-1.5 rounded-full border border-rose-100/50 relative z-10 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                   <span className="text-[9px] font-black tracking-widest text-slate-600 uppercase">
                     {summaryStats.counts.failed} of {summaryStats.counts.total} Total
@@ -505,13 +441,13 @@ export function AnalyticsHub() {
                 </div>
               </div>
               
-              <div className="group relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-amber-50/30 rounded-[24px] p-8 border border-amber-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
+              <div className="group relative col-span-2 sm:col-span-1 overflow-hidden bg-gradient-to-br from-amber-50 via-white to-amber-50/30 rounded-2xl md:rounded-[24px] p-4 md:p-8 border border-amber-100/50 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 flex flex-col justify-center items-start">
                 <div className="absolute -right-6 -top-6 text-amber-500/5 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
                   <AlertCircle size={140} strokeWidth={1} />
                 </div>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-3 relative z-10">Cancelled Requests</h3>
-                <div className="text-7xl font-black tracking-tighter text-slate-800 relative z-10">{summaryStats.counts.cancelled || 0}</div>
-                <div className="mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-amber-100/50 relative z-10 shadow-sm">
+                <div className="text-5xl md:text-7xl font-black tracking-tighter text-slate-800 relative z-10">{summaryStats.counts.cancelled || 0}</div>
+                <div className="mt-3 md:mt-5 flex items-center gap-2 bg-white/60 backdrop-blur-md px-2 md:px-3 py-1.5 rounded-full border border-amber-100/50 relative z-10 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                   <span className="text-[9px] font-black tracking-widest text-slate-600 uppercase">
                     {cancelRate}% of Total
@@ -527,7 +463,7 @@ export function AnalyticsHub() {
                     <div className="p-2 bg-amber-50/80 text-amber-500 rounded-[12px] group-hover:bg-amber-100 transition-colors">
                       <Clock size={16} />
                     </div>
-                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">Pending Status Breakdown</CardTitle>
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">Open Requests Breakdown</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="h-80 p-4 relative">
@@ -544,7 +480,7 @@ export function AnalyticsHub() {
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-2xl m-2">
                       <CheckCircle2 size={32} className="text-emerald-400 mb-3 opacity-60" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">No Pending Tasks</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">No Open Requests</span>
                     </div>
                   )}
                 </CardContent>
@@ -635,6 +571,7 @@ export function AnalyticsHub() {
                       <MapPin size={14} />
                     </div>
                     <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">Map Heatmap</CardTitle>
+                    <CardDescription>{hotspots.reduce((sum, point) => sum + point.weight, 0)} of {accounting.total} requests mapped; remaining records have missing or invalid coordinates.</CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent className="h-64 p-0 relative">
@@ -677,7 +614,7 @@ export function AnalyticsHub() {
                     <div className="p-1.5 bg-rose-50/80 text-rose-500 rounded-[10px] group-hover:bg-rose-100 transition-colors">
                       <AlertTriangle size={14} />
                     </div>
-                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">Top Failure Reasons</CardTitle>
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">All Failure Reasons · {accounting.failed} requests</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-5 flex-1">
@@ -711,22 +648,22 @@ export function AnalyticsHub() {
                   </div>
                   <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-800">Transaction Logs</CardTitle>
                 </div>
-                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-slate-100">{tableData.length} Records</Badge>
+                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-slate-100">{sortedData.length} of {tableData.length} Records · {ledgerBucket === 'all' ? 'All categories' : ACCOUNTING_LABELS[ledgerBucket]}</Badge>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50 border-b border-slate-100">
-                        <SortableHeader title="Transaction ID" sortKey="request_id" className="pl-5" />
-                        <SortableHeader title="Date" sortKey="created_at" />
-                        <SortableHeader title="Requester" sortKey="requester_name" />
-                        <SortableHeader title="Department" sortKey="requester_department" />
-                        <SortableHeader title="Category" sortKey="request_type" />
-                        <SortableHeader title="Origin" sortKey="pickup_address" />
-                        <SortableHeader title="Destination" sortKey="dropoff_address" />
-                        <SortableHeader title="Status Actor" sortKey="delivery_status" />
-                        <SortableHeader title="Instructions" sortKey="personnel_instructions" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Transaction ID" sortKey="request_id" className="pl-5" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Date" sortKey="created_at" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Requester" sortKey="requester_name" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Department" sortKey="requester_department" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Category" sortKey="request_type" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Origin" sortKey="pickup_address" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Destination" sortKey="dropoff_address" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Reporting category / assigned rider" sortKey="delivery_status" />
+                        <SortableHeader sortConfig={sortConfig} onSort={handleSort} title="Instructions" sortKey="personnel_instructions" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -735,29 +672,19 @@ export function AnalyticsHub() {
                         const startIndex = (currentPage - 1) * itemsPerPage;
                         const paginatedData = sortedData.slice(startIndex, startIndex + itemsPerPage);
                         return paginatedData.map((row, idx) => {
-                          let statusActor = String(row.delivery_status || 'pending').toLowerCase();
-                          let topStatus = String(row.status || '').toLowerCase();
-                          
-                          if (topStatus === 'cancelled') statusActor = 'cancelled';
-                          else if (topStatus === 'disapproved') statusActor = 'disapproved';
-                          else if (topStatus === 'returned_for_revision') statusActor = 'action required';
-
-                          let cleanNote = row.rider_remark || '';
-                          
-                          if (String(cleanNote).includes('[Admin update by')) {
-                            statusActor = `${statusActor} (Admin)`;
-                          } else if (row.assigned_rider_name && statusActor !== 'cancelled' && statusActor !== 'disapproved') {
-                            statusActor = `${statusActor} (Rider: ${row.assigned_rider_name})`;
+                          let statusActor = ACCOUNTING_LABELS[getAccountingBucket(row)];
+                          if (row.assigned_rider_name) {
+                            statusActor = `${statusActor} (Assigned: ${row.assigned_rider_name})`;
                           }
 
                           const statusStr = String(statusActor).toLowerCase();
 
                           return (
-                            <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
+                            <tr key={row.request_id || idx} className="hover:bg-slate-50/30 transition-colors">
                               <td className="p-3 pl-5 text-[11px] font-bold text-slate-600 whitespace-nowrap">#{row.request_id}</td>
-                              <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{format(new Date(row.created_at || new Date()), 'MMM dd, hh:mm a')}</td>
+                              <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{`${formatSafeDate(row.created_at || new Date(), 'MMM d, yyyy')} ${formatSafeDate(row.created_at || new Date(), 'h:mm a')}`}</td>
                               <td className="p-3 text-[11px] font-bold text-slate-700 whitespace-nowrap">{row.requester_name || 'Unknown'}</td>
-                              <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{row.requester_department || 'General'}</td>
+                              <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{row.requester_department || 'Unspecified department'}</td>
                               <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
                                 <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest border-slate-200 bg-slate-50 text-slate-500 rounded-md">
                                   {row.request_type || 'Unknown'}
@@ -774,6 +701,7 @@ export function AnalyticsHub() {
                                   )} />
                                   {statusActor}
                                 </div>
+                                <div className="text-[10px] text-slate-400">Source: {row.status || '(blank)'} / {row.delivery_status || '(blank)'}</div>
                               </td>
                               <td className="p-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap truncate max-w-[200px]" title={row.personnel_instructions}>
                                 {row.personnel_instructions || '-'}
@@ -826,70 +754,365 @@ export function AnalyticsHub() {
               </CardContent>
             </Card>
           </div>
-        ) : activeTab === 'integrity' ? (
-          <OperationalIntegrityView data={integrityData} />
-        ) : (
-          <RiderConnectivityView
-            data={connectivityData}
-            filters={connectivityFilters}
-            onFilterChange={setConnectivityFilters}
-          />
         )}
+        </section>
       </div>
     </div>
   );
 }
 
-function SummaryKPI({ label, value, icon, color, trend }: any) {
+
+const WEEKLY_TIME_BRACKETS = Array.from({ length: 16 }, (_, index) => {
+  const startHour = index + 6;
+  const endHour = startHour + 1;
+  const label = (hour: number) => {
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:00 ${suffix}`;
+  };
+  return { startHour, label: `${label(startHour)} – ${label(endHour)}` };
+});
+WEEKLY_TIME_BRACKETS.push({ startHour: null as any, label: 'Unscheduled / Other' });
+
+function getTimeWindowStartHour(value: any) {
+  const match = String(value || '').match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && hour < 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+  return Number.isFinite(hour) ? hour : null;
+}
+
+function weeklyStatusClass(request: any) {
+  const status = String(request.status || '').toLowerCase();
+  const deliveryStatus = String(request.delivery_status || '').toLowerCase();
+  if (status === 'returned_for_revision') return 'border-amber-200 bg-amber-50 text-amber-800';
+  if (status === 'disapproved' || status === 'cancelled') return 'border-rose-200 bg-rose-50 text-rose-800';
+  if (deliveryStatus === 'completed' || deliveryStatus === 'delivered') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (deliveryStatus === 'failed' || deliveryStatus === 'cancelled') return 'border-rose-200 bg-rose-50 text-rose-800';
+  if (['assigned', 'in_progress', 'arrived', 'picked_up'].includes(deliveryStatus)) return 'border-blue-200 bg-blue-50 text-blue-800';
+  return 'border-amber-200 bg-amber-50 text-amber-800';
+}
+
+
+function formatOverdueDuration(minutes?: number | null) {
+  if (minutes === null || minutes === undefined || minutes < 0) return '—';
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+}
+
+function downloadWeeklyScheduleCsv(requests: any[], weekStart: string) {
+  const rows = [
+    ['Date', 'Day', 'Time Bracket', 'Request', 'Rider', 'Outcome', 'Overdue', 'Overdue At', 'Scheduled Time', 'Accepted', 'Started', 'Resolved At', 'Resolved By', 'Overdue Duration', 'Pickup', 'Destination'],
+    ...requests.map((request) => {
+      const resolution = getWeeklyResolutionDetails(request);
+      const startedAt = getWeeklyStartedAt(request);
+      return [request.delivery_date, formatWeekDay(request.delivery_date), request.time_window || 'Unscheduled', request.request_id, request.assigned_rider_name || 'Unassigned', resolution.outcome, resolution.overdue ? 'Yes' : 'No', request.overdue_at ? formatSafeDate(request.overdue_at, 'MMM d, h:mm a') : '', request.time_window || '', request.accepted_at ? formatSafeDate(request.accepted_at, 'h:mm a') : '', startedAt ? formatSafeDate(startedAt, 'h:mm a') : '', request.finished_at ? formatSafeDate(request.finished_at, 'MMM d, h:mm a') : '', resolution.resolvedBy, formatOverdueDuration(request.overdue_minutes_at_resolution), request.pickup_address || '', request.dropoff_address || ''];
+    }),
+  ];
+  const csv = rows.map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `weekly-schedule-${weekStart}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function WeeklyScheduleView({
+  weekStart,
+  requests,
+  onWeekChange,
+  filter,
+  onFilterChange,
+}: {
+  weekStart: string;
+  requests: any[];
+  onWeekChange: (value: string) => void;
+  filter: 'all' | 'completed' | 'overdue' | 'open';
+  onFilterChange: (value: 'all' | 'completed' | 'overdue' | 'open') => void;
+}) {
+  const days = Array.from({ length: 7 }, (_, index) => shiftIsoDate(weekStart, index));
+  const [showEmptyHours, setShowEmptyHours] = useState(false);
+  const [expandedRiders, setExpandedRiders] = useState<Set<string>>(new Set());
+  const riderReport = buildWeeklyRiderReport(requests);
+  const reportSummary = getWeeklyReportSummary(requests);
+  const toggleRider = (riderId: string) => {
+    setExpandedRiders((current) => {
+      const next = new Set(current);
+      if (next.has(riderId)) next.delete(riderId);
+      else next.add(riderId);
+      return next;
+    });
+  };
+  const visibleRequests = requests.filter((request) => {
+    if (filter === 'all') return true;
+    const details = getWeeklyResolutionDetails(request);
+    if (filter === 'completed') return details.outcome === 'Completed';
+    if (filter === 'overdue') return details.overdue;
+    return details.outcome === 'Open';
+  });
+  const getCellRequests = (bracket: { startHour: number | null }, day: string) => visibleRequests.filter((request) => {
+    if (request.delivery_date !== day) return false;
+    const startHour = getTimeWindowStartHour(request.time_window);
+    return bracket.startHour === null
+      ? startHour === null || startHour < 6 || startHour > 21
+      : startHour === bracket.startHour;
+  });
+  const hasRequests = (bracket: { startHour: number | null }) => days.some((day) => getCellRequests(bracket, day).length > 0);
+  const scheduleRows: Array<{ type: 'slot' | 'empty'; bracket?: { startHour: number | null; label: string }; label?: string }> = [];
+  let emptyStart: { startHour: number | null; label: string } | null = null;
+  let emptyEnd: { startHour: number | null; label: string } | null = null;
+  const flushEmptyRange = () => {
+    if (!emptyStart || !emptyEnd) return;
+    scheduleRows.push({
+      type: 'empty',
+      label: emptyStart.startHour === emptyEnd.startHour
+        ? `No scheduled requests · ${emptyStart.label}`
+        : `No scheduled requests · ${emptyStart.label.split(' – ')[0]} – ${emptyEnd.label.split(' – ')[1]}`,
+    });
+    emptyStart = null;
+    emptyEnd = null;
+  };
+  WEEKLY_TIME_BRACKETS.forEach((bracket) => {
+    if (bracket.startHour === null) {
+      flushEmptyRange();
+      if (hasRequests(bracket)) scheduleRows.push({ type: 'slot', bracket });
+      return;
+    }
+    if (showEmptyHours || hasRequests(bracket)) {
+      flushEmptyRange();
+      scheduleRows.push({ type: 'slot', bracket });
+    } else {
+      emptyStart ||= bracket;
+      emptyEnd = bracket;
+    }
+  });
+  if (!showEmptyHours) flushEmptyRange();
+  const displayedRows = showEmptyHours && filter === 'all'
+    ? WEEKLY_TIME_BRACKETS.filter((bracket) => bracket.startHour !== null || hasRequests(bracket)).map((bracket) => ({ type: 'slot' as const, bracket }))
+    : scheduleRows;
   return (
-    <div className="p-2.5 rounded-lg border border-slate-100 bg-white shadow-sm flex flex-col gap-2 group hover:scale-[1.01] transition-all duration-200">
-      <div className="flex items-center justify-between">
-        <div className="p-1.5 rounded bg-slate-50 text-slate-600" style={{ color }}>{icon}</div>
-        <div className="text-right">
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none mb-0.5">{label}</p>
-          <p className="text-lg font-black tracking-tighter leading-none" style={{ color }}>{value}</p>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        {[
+          { key: 'all' as const, label: 'Total tasks', value: reportSummary.total, tone: 'text-slate-800' },
+          { key: 'completed' as const, label: 'Completed', value: reportSummary.completed, tone: 'text-emerald-600' },
+          { key: null, label: 'Failed', value: reportSummary.failed, tone: 'text-rose-600' },
+          { key: 'overdue' as const, label: 'Overdue', value: reportSummary.overdue, tone: 'text-amber-600' },
+          { key: 'open' as const, label: 'Open', value: reportSummary.open, tone: 'text-blue-600' },
+          { key: null, label: 'Cancelled', value: reportSummary.cancelled, tone: 'text-slate-500' },
+          { key: null, label: 'On-time rate', value: `${reportSummary.onTimeRate}%`, tone: 'text-indigo-600' },
+        ].map((metric) => (
+          <Card key={metric.label} className={cn("rounded-lg border-none bg-white shadow-sm", metric.key && "transition-shadow hover:shadow-md")}>
+            <CardContent className="p-3">
+              {metric.key ? <button type="button" aria-pressed={filter === metric.key} onClick={() => onFilterChange(metric.key!)} className="w-full min-h-12 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B14F]"><p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p><p className={cn('mt-1 text-xl font-black', metric.tone)}>{metric.value}</p></button> : <><p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p><p className={cn('mt-1 text-xl font-black', metric.tone)}>{metric.value}</p></>}
+            </CardContent>
+          </Card>
+        ))}
       </div>
-      <div className="h-6 w-full opacity-40">
-        <Sparkline data={trend} color={color} />
-      </div>
+
+      <Card className="rounded-lg border-none bg-white shadow-sm">
+        <CardHeader className="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-800">Rider task performance</CardTitle>
+            <CardDescription className="mt-1 text-[9px] font-bold text-slate-400">Expand a rider to review every task in this week’s schedule.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="h-8 text-[8px] font-black uppercase tracking-widest" onClick={() => setExpandedRiders(new Set(riderReport.map((row) => row.riderId)))}>
+            Expand all riders
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[820px] text-left">
+              <thead className="bg-slate-50">
+                <tr>
+                  {['Rider', 'Assigned', 'Completed', 'Failed', 'Overdue', 'On-time rate', 'Avg. completion'].map((heading) => <th key={heading} className="p-3 text-[8px] font-black uppercase tracking-widest text-slate-400">{heading}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {riderReport.map((row) => (
+                  <React.Fragment key={row.riderId}>
+                    <tr className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50/70" onClick={() => toggleRider(row.riderId)}>
+                      <td className="p-3 text-xs font-black text-slate-800"><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[8px] text-white">{row.riderName.slice(0, 1).toUpperCase()}</span>{row.riderName}</td>
+                      <td className="p-3 text-xs font-bold text-slate-700">{row.assigned}</td>
+                      <td className="p-3 text-xs font-bold text-emerald-600">{row.completed}</td>
+                      <td className="p-3 text-xs font-bold text-rose-600">{row.failed}</td>
+                      <td className="p-3 text-xs font-bold text-amber-600">{row.overdue}</td>
+                      <td className="p-3 text-xs font-bold text-indigo-600">{row.completed ? `${row.onTimeRate}%` : '—'}</td>
+                      <td className="p-3 text-xs font-bold text-slate-600">{row.averageCompletionMinutes === null ? '—' : formatOverdueDuration(row.averageCompletionMinutes)}</td>
+                    </tr>
+                    {expandedRiders.has(row.riderId) && (
+                      <tr className="border-t border-slate-100 bg-slate-50/60">
+                        <td colSpan={7} className="p-3">
+                          <div className="space-y-2">
+                            {row.tasks.map((task) => {
+                              const outcome = getWeeklyTaskOutcome(task);
+                              const resolution = getWeeklyResolutionDetails(task);
+                              return (
+                                <div key={task.request_id} className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 text-[9px] sm:grid-cols-[1.2fr_1fr_1fr_1fr_auto] sm:items-center">
+                                  <div><p className="font-black text-slate-800">#{String(task.request_id || '').slice(-8).toUpperCase()}</p><p className="mt-0.5 truncate text-slate-500">{task.dropoff_building_name || task.dropoff_address || 'Destination pending'}</p></div>
+                                  <div><p className="font-black uppercase text-slate-400">Outcome</p><p className="mt-0.5 font-bold text-slate-700">{outcome}</p></div>
+                                  <div><p className="font-black uppercase text-slate-400">Schedule</p><p className="mt-0.5 font-bold text-slate-700">{task.delivery_date || '—'} · {task.time_window || 'Unscheduled'}</p></div>
+                                  <div><p className="font-black uppercase text-slate-400">Resolution</p><p className="mt-0.5 font-bold text-slate-700">{resolution.resolvedBy}</p></div>
+                                  <div className="text-left sm:text-right">{task.overdue_at ? <Badge className="border-amber-200 bg-amber-50 text-[8px] font-black uppercase text-amber-700">Overdue{task.overdue_minutes_at_resolution ? ` · ${formatOverdueDuration(task.overdue_minutes_at_resolution)}` : ''}</Badge> : <Badge variant="outline" className="text-[8px] font-black uppercase text-slate-500">On time</Badge>}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 p-2 md:hidden">
+            {riderReport.map((row) => (
+              <div key={row.riderId} className="rounded-md border border-slate-100">
+                <button type="button" className="flex w-full items-center justify-between p-3 text-left" onClick={() => toggleRider(row.riderId)}>
+                  <span><span className="block text-[10px] font-black text-slate-800">{row.riderName}</span><span className="mt-1 block text-[8px] font-bold text-slate-400">{row.assigned} assigned · {row.completed} completed · {row.overdue} overdue</span></span>
+                  {expandedRiders.has(row.riderId) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {expandedRiders.has(row.riderId) && <div className="space-y-2 border-t border-slate-100 bg-slate-50 p-2">{row.tasks.map((task) => <div key={task.request_id} className="rounded-md bg-white p-2 text-[9px]"><p className="font-black">#{String(task.request_id || '').slice(-8).toUpperCase()}</p><p className="mt-1 text-slate-500">{getWeeklyTaskOutcome(task)} · {task.delivery_date || 'No date'} · {task.time_window || 'Unscheduled'}</p>{task.overdue_at && <p className="mt-1 font-black uppercase text-amber-600">Overdue</p>}</div>)}</div>}
+              </div>
+            ))}
+          </div>
+          {!riderReport.length && <div className="p-8 text-center text-[9px] font-black uppercase tracking-widest text-slate-400">No rider tasks for this week</div>}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg border-none shadow-sm bg-white">
+        <CardHeader className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-800">Weekly Schedule</CardTitle>
+            <CardDescription className="text-[9px] font-bold text-slate-400 mt-1">Scheduled requests and rider time-in · Philippine Time (PHT)</CardDescription>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onWeekChange(shiftIsoDate(weekStart, -7))} aria-label="Previous week">
+              <ChevronLeft size={14} />
+            </Button>
+            <Button variant="outline" className="h-8 px-2 text-[8px] font-black uppercase tracking-widest sm:px-3 sm:text-[9px]" onClick={() => onWeekChange(getPhilippineWeekStart())}>This Week</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onWeekChange(shiftIsoDate(weekStart, 7))} aria-label="Next week">
+              <ChevronRight size={14} />
+            </Button>
+            <input type="date" value={weekStart} onChange={(event) => {
+              const date = new Date(`${event.target.value}T00:00:00+08:00`);
+              if (!Number.isNaN(date.getTime())) onWeekChange(getPhilippineWeekStart(date));
+            }} className="col-span-2 h-8 min-w-0 rounded-md border border-slate-200 px-1.5 text-[9px] font-bold text-slate-700 sm:col-span-1 sm:px-2" aria-label="Select week" />
+            <Button variant="outline" onClick={() => setShowEmptyHours((visible) => !visible)} className="col-span-4 h-8 px-2 text-[8px] font-black uppercase tracking-widest sm:col-span-1 sm:px-3 sm:text-[9px]">
+              {showEmptyHours ? 'Collapse empty hours' : 'Show empty hours'}
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <Card className="rounded-lg border-none shadow-sm bg-white overflow-hidden">
+        <CardContent className="p-0">
+          <div className="space-y-2 p-2 md:hidden">
+            {displayedRows.map((row, index) => row.type === 'empty' ? (
+              <div key={`mobile-empty-${index}`} className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[8px] font-bold italic text-slate-400">
+                {row.label}
+              </div>
+            ) : (
+              <div key={`mobile-slot-${row.bracket?.startHour ?? index}`} className="rounded-lg border border-slate-100 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">{row.bracket?.label}</span>
+                  <span className="text-[8px] font-bold text-slate-400">{days.reduce((total, day) => total + getCellRequests(row.bracket!, day).length, 0)} requests</span>
+                </div>
+                <div className="space-y-2 p-2">
+                  {days.map((day) => {
+                    const cellRequests = getCellRequests(row.bracket!, day);
+                    if (!cellRequests.length) return null;
+                    return (
+                      <div key={`mobile-${day}-${row.bracket?.startHour}`} className="space-y-1">
+                        <p className="px-1 text-[8px] font-black uppercase tracking-widest text-slate-400">{formatWeekDay(day)}</p>
+                        {cellRequests.map((request) => {
+                          const resolution = getWeeklyResolutionDetails(request);
+                          const startedAt = getWeeklyStartedAt(request);
+                          const showOverdueAt = getWeeklyScheduleDetailLabels(request).includes('Overdue at');
+                          return (
+                            <div key={request.request_id} className={cn('weekly-schedule-request-cell rounded-md border p-2 text-[8px] leading-tight', weeklyStatusClass(request))}>
+                              <p className="truncate font-black">{request.dropoff_building_name || 'Destination building'}</p>
+                              <p className="truncate font-bold">Transaction #{String(request.request_id).slice(-6).toUpperCase()}</p>
+                              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 opacity-80">
+                                <span>Scheduled: {request.time_window || 'Unscheduled'}</span>
+                                {showOverdueAt && <span>Overdue at: {request.overdue_at ? formatSafeDate(request.overdue_at, 'MMM d, h:mm a') : '—'}</span>}
+                                <span>Started: {startedAt ? formatSafeDate(startedAt, 'h:mm a') : '—'}</span>
+                                <span>Ended: {request.finished_at ? formatSafeDate(request.finished_at, 'MMM d, h:mm a') : '—'}</span>
+                                <span>{getWeeklyResolverLabel(resolution.outcome)}: {resolution.resolvedBy}</span>
+                              </div>
+                              {resolution.overdue && <p className="mt-1 truncate font-black uppercase">OVERDUE · {formatOverdueDuration(request.overdue_minutes_at_resolution)}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+          <div className="min-w-[1080px]">
+            <div className="grid grid-cols-[112px_repeat(7,minmax(138px,1fr))] border-b border-slate-100 bg-slate-900 text-white">
+              <div className="p-3 text-[8px] font-black uppercase tracking-widest">Time bracket</div>
+              {days.map((day) => (
+                <div key={day} className="border-l border-white/10 p-3 text-center text-[8px] font-black uppercase tracking-widest">
+                  {formatWeekDay(day)}
+                </div>
+              ))}
+            </div>
+            {displayedRows.map((row, index) => row.type === 'empty' ? (
+              <div key={`empty-${index}`} className="grid grid-cols-[112px_repeat(7,minmax(138px,1fr))] min-h-[42px] border-b border-slate-100">
+                <div className="sticky left-0 z-10 bg-slate-50 p-3 text-[8px] font-black uppercase tracking-tight text-slate-400">Collapsed</div>
+                <div className="col-span-7 flex items-center px-4 text-[8px] font-bold italic text-slate-400">{row.label}</div>
+              </div>
+            ) : (
+              <div key={row.bracket?.startHour ?? `slot-${index}`} className="grid grid-cols-[112px_repeat(7,minmax(138px,1fr))] min-h-[92px] border-b border-slate-100 last:border-b-0">
+                <div className="sticky left-0 z-10 bg-slate-50 p-3 text-[8px] font-black uppercase tracking-tight text-slate-500">{row.bracket?.label}</div>
+                {days.map((day) => {
+                  const cellRequests = getCellRequests(row.bracket!, day);
+                  return (
+                    <div key={`${day}-${row.bracket?.startHour}`} className="border-l border-slate-100 p-1.5 space-y-1 bg-white">
+                      {cellRequests.map((request) => {
+                        const resolution = getWeeklyResolutionDetails(request);
+                        const startedAt = getWeeklyStartedAt(request);
+                        const showOverdueAt = getWeeklyScheduleDetailLabels(request).includes('Overdue at');
+                        return (
+                          <div key={request.request_id} className={cn('weekly-schedule-request-cell rounded-md border p-1.5 text-[8px] leading-tight', weeklyStatusClass(request))}>
+                            <p className="truncate font-black">{request.dropoff_building_name || 'Destination building'}</p>
+                            <p className="truncate font-bold">Transaction #{String(request.request_id).slice(-6).toUpperCase()}</p>
+                            <p className="truncate opacity-80">Scheduled: {request.time_window || 'Unscheduled'}</p>
+                            {showOverdueAt && <p className="truncate opacity-80">Overdue at: {request.overdue_at ? formatSafeDate(request.overdue_at, 'MMM d, h:mm a') : '—'}</p>}
+                            <p className="truncate opacity-80">Started: {startedAt ? formatSafeDate(startedAt, 'h:mm a') : '—'}</p>
+                            <p className="truncate opacity-80">Ended: {request.finished_at ? formatSafeDate(request.finished_at, 'MMM d, h:mm a') : '—'}</p>
+                            <p className="truncate opacity-80">{getWeeklyResolverLabel(resolution.outcome)}: {resolution.resolvedBy}</p>
+                            {resolution.overdue && <p className="truncate font-black uppercase">OVERDUE · {formatOverdueDuration(request.overdue_minutes_at_resolution)}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {!requests.length ? <div className="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-[9px] font-black uppercase tracking-widest text-slate-400">No scheduled requests for this week</div> : !visibleRequests.length ? <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center"><p className="text-sm font-semibold text-slate-600">No tasks match this filter</p><Button variant="outline" className="mt-3" onClick={() => onFilterChange('all')}>Clear filter</Button></div> : null}
     </div>
   );
 }
 
-function Sparkline({ data, color }: { data: number[], color: string }) {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data.map(v => ({ v }))}>
-        <Area type="monotone" dataKey="v" stroke={color} fill={color} fillOpacity={0.05} strokeWidth={1.5} />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
 
-function SmallStat({ label, value, icon }: any) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="p-1 bg-white rounded border border-slate-50">{icon}</div>
-      <div className="leading-none">
-        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-        <p className="text-[11px] font-black text-slate-800 italic uppercase tracking-tighter leading-none">{value}</p>
-      </div>
-    </div>
-  );
-}
 
-function MetricBox({ icon, label, value }: any) {
-  return (
-    <div className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/5 transition-all">
-      <div className="p-2 bg-slate-800 rounded shadow-md border border-slate-700">{icon}</div>
-      <div>
-        <p className="text-lg font-black text-white tracking-tighter leading-none">{value}</p>
-        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mt-0.5">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 function RiderConnectivityView({ data, filters, onFilterChange }: {
   data: any;
@@ -924,7 +1147,7 @@ function RiderConnectivityView({ data, filters, onFilterChange }: {
       )}
 
       <Card className="rounded-lg border-none shadow-sm bg-white overflow-hidden">
-        <CardHeader className="p-4 border-b border-slate-50 flex flex-row items-center justify-between">
+        <CardHeader className="p-3 md:p-4 border-b border-slate-50 flex items-start gap-2 flex-row justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-blue-50 rounded text-blue-600">
               <Filter size={16} />
@@ -1051,11 +1274,29 @@ function RiderConnectivityView({ data, filters, onFilterChange }: {
           <Badge className="bg-slate-900 text-white border-none text-[8px] h-5 rounded px-2">{logs.length} ROWS</Badge>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="space-y-2 p-3 md:hidden">
+            {logs.map((log: any) => (
+              <button key={`mobile-log-${log.id}`} type="button" className="w-full rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-left" onClick={() => setSelectedLog(log)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><p className="truncate text-[10px] font-black text-slate-900">{log.rider_name || log.rider_id}</p><p className="mt-1 text-[8px] font-bold text-slate-400">{formatSafeDate(log.event_time, 'MMM d, yyyy')} · {formatSafeDate(log.event_time, 'h:mm a')} PHT</p></div>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[7px] font-black uppercase", riskClass(log.risk_level))}>{log.risk_level || 'unknown'}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[8px] font-bold text-slate-500">
+                  <Badge className={cn("rounded text-[7px] border-none font-black uppercase h-4 px-1.5", eventBadgeClass(log.event_type))}>{formatConnectivityEvent(log.event_type)}</Badge>
+                  <span>{log.request_id ? `#${String(log.request_id).slice(-6).toUpperCase()}` : 'No task'}</span>
+                  <span>·</span><span>{log.duration_label || '-'}</span>
+                  <span>·</span><span>{log.battery_level !== null && log.battery_level !== undefined ? `${log.battery_level}%` : '--'}</span>
+                </div>
+                <p className="mt-2 truncate text-[8px] font-medium text-slate-500">{log.likely_reason || 'No reason recorded'}</p>
+              </button>
+            ))}
+            {logs.length === 0 && <div className="px-3 py-8 text-center text-slate-300 font-black uppercase tracking-widest text-[9px]">No connectivity logs for this timeframe</div>}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left border-collapse">
               <thead className="bg-[#1E293B] text-white text-[8px] font-black uppercase tracking-widest">
                 <tr>
-                  <th className="px-4 py-2.5">Date / Time</th>
+                  <th className="px-4 py-2.5">Date / Time (PHT)</th>
                   <th className="px-3 py-2.5">Rider</th>
                   <th className="px-3 py-2.5">Task</th>
                   <th className="px-3 py-2.5">Event</th>
@@ -1131,7 +1372,7 @@ function RiderConnectivityView({ data, filters, onFilterChange }: {
             <DetailBox label="Rider" value={selectedLog.rider_name || selectedLog.rider_id} />
             <DetailBox label="Task" value={selectedLog.request_id ? `#${String(selectedLog.request_id).slice(-6).toUpperCase()}` : '-'} />
             <DetailBox label="Event" value={formatConnectivityEvent(selectedLog.event_type)} />
-            <DetailBox label="Event Time" value={`${formatSafeDate(selectedLog.event_time, 'MMM d, yyyy')} ${formatSafeDate(selectedLog.event_time, 'h:mm a')}`} />
+            <DetailBox label="Event Time (PHT)" value={`${formatSafeDate(selectedLog.event_time, 'MMM d, yyyy')} ${formatSafeDate(selectedLog.event_time, 'h:mm a')}`} />
             <DetailBox label="Task Status" value={selectedLog.delivery_status || '-'} />
             <DetailBox label="Battery / Network" value={`${selectedLog.battery_level ?? '--'}% / ${selectedLog.network_type || 'Unknown'}`} />
             <DetailBox label="Location Age" value={selectedLog.location_age_seconds !== null && selectedLog.location_age_seconds !== undefined ? `${selectedLog.location_age_seconds}s` : '-'} />
@@ -1147,7 +1388,17 @@ function RiderConnectivityView({ data, filters, onFilterChange }: {
           <CardDescription className="text-[8px] font-bold text-slate-400 uppercase mt-1">Grouped summary for admin follow-up</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="space-y-2 p-3 md:hidden">
+            {riderReport.map((rider: any) => (
+              <div key={`mobile-report-${rider.rider_id}`} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                <div className="flex items-center justify-between gap-2"><p className="truncate text-[10px] font-black text-slate-900">{rider.rider_name}</p><span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[7px] font-black uppercase", reliabilityClass(rider.reliability))}>{rider.reliability}</span></div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[8px] font-bold text-slate-600"><span>Sessions: {rider.duty_sessions}</span><span>Offline tasks: <b className="text-rose-600">{rider.offline_during_tasks}</b></span><span>Total offline: {rider.total_offline_label}</span><span>Average: {rider.average_offline_label}</span><span>Battery: {rider.average_battery_before_offline !== null ? `${rider.average_battery_before_offline}% avg` : 'No sample'}</span><span>Low / high: {rider.low_battery_count} / {rider.high_battery_count}</span></div>
+                <p className="mt-2 text-[8px] font-medium leading-tight text-slate-500">{rider.recommendation || 'No recommendation'}</p>
+              </div>
+            ))}
+            {riderReport.length === 0 && <div className="px-3 py-8 text-center text-slate-300 font-black uppercase tracking-widest text-[9px]">No rider report data yet</div>}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-50 text-slate-500 text-[8px] font-black uppercase tracking-widest">
                 <tr>
@@ -1249,10 +1500,33 @@ function DetailBox({ label, value }: { label: string; value: any }) {
   );
 }
 
+function parsePhilippineDate(value: any) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(value) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) {
+    return new Date(`${value.slice(0, 19).replace(' ', 'T')}+08:00`);
+  }
+  return new Date(value);
+}
+
 function formatSafeDate(value: any, pattern: string) {
   if (!value) return '-';
-  const date = new Date(value);
+  const date = parsePhilippineDate(value);
   if (Number.isNaN(date.getTime())) return '-';
+  if (pattern === 'MMM d, yyyy') {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: PHILIPPINE_TIME_ZONE,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date);
+  }
+  if (pattern === 'h:mm a') {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: PHILIPPINE_TIME_ZONE,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  }
   return format(date, pattern);
 }
 

@@ -16,7 +16,7 @@ interface Props {
 
 export default function PasswordResetOverlay({ visible, userId, onClose, onSuccess }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
-  const themeColors = Colors[colorScheme];
+  const themeColors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
   
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -50,7 +50,7 @@ export default function PasswordResetOverlay({ visible, userId, onClose, onSucce
       });
       setLoading(false);
       onSuccess();
-    } catch (err) {
+    } catch {
       setLoading(false);
       Alert.alert('Error', 'Failed to update password. Please try again.');
     }
@@ -127,7 +127,7 @@ export default function PasswordResetOverlay({ visible, userId, onClose, onSucce
 
 function CheckItem({ label, valid }: { label: string, valid: boolean }) {
   const colorScheme = useColorScheme() ?? 'light';
-  const themeColors = Colors[colorScheme];
+  const themeColors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
   
   return (
     <View style={styles.checkItem}>

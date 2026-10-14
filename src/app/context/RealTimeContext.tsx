@@ -38,7 +38,11 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
     // The server-side socket auth middleware already handles cookie fallback.
     const newSocket = io({
       auth: token ? { token } : undefined,
-      transports: ['websocket', 'polling'], // Allow polling fallback for better compatibility
+      // Establish the Engine.IO session over polling first. This avoids a
+      // premature WebSocket close during React/Vite development remounts,
+      // while Socket.IO still upgrades the stable connection to WebSocket.
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       withCredentials: true // ENSURE cookies are sent with the socket handshake
     });
 

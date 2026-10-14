@@ -93,6 +93,21 @@ const nearestPointOnSegment = (
   };
 };
 
+export const getRouteProgress = (point: LatLng | null, route: LatLng[]) => {
+  let distance = Infinity;
+  let closestIndex = -1;
+  if (point) {
+    for (let index = 0; index < route.length - 1; index += 1) {
+      const candidate = nearestPointOnSegment(point, route[index], route[index + 1]);
+      if (candidate.distance < distance) {
+        distance = candidate.distance;
+        closestIndex = index;
+      }
+    }
+  }
+  return { distance, closestIndex };
+};
+
 const snapToRoute = (
   point: [number, number] | null,
   route: [number, number][],
@@ -354,8 +369,6 @@ export function LiveTrackingMap({
   history,
   riderName,
   status,
-  timeWindow,
-  remark,
   hideSearch = false,
   containerClassName = "h-[600px]",
   trackingStatus = 'LIVE',
@@ -367,9 +380,8 @@ export function LiveTrackingMap({
   const [routingError, setRoutingError] = useState(false);
   const [historyCoords, setHistoryCoords] = useState<[number, number][]>([]);
   const [rawHistoryCoords, setRawHistoryCoords] = useState<[number, number][]>([]);
-  const [snappedHistoryCoords, setSnappedHistoryCoords] = useState<[number, number][]>([]);
   const [historyRoutingError, setHistoryRoutingError] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [lastUpdate, setLastUpdate] = useState<Date>(() => new Date());
   const [followMode, setFollowMode] = useState(true);
 
   // Smooth position state to prevent jumping
@@ -380,17 +392,17 @@ export function LiveTrackingMap({
   const targetPosRef = useRef<[number, number] | null>(null);
   const targetHeadingRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
-  const previousTimeRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(Date.now());
+  const lastUpdateRef = useRef<number>(0);
   const velocityRef = useRef<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
-  const posHistoryRef = useRef<[number, number][]>([]);
-  const historyMatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Animation Loop: Advanced Physics-Based Movement (Real Life Driving Feel)
   useEffect(() => {
     const animate = () => {
       const now = Date.now();
       const timeSinceUpdate = now - lastUpdateRef.current;
+      if (lastUpdateRef.current) {
+        setLastUpdate(previous => previous.getTime() === lastUpdateRef.current ? previous : new Date(lastUpdateRef.current));
+      }
 
       setSmoothPos((prev) => {
         if (!prev) return targetPosRef.current;
@@ -469,7 +481,9 @@ export function LiveTrackingMap({
   const effectiveCurrent = current
     ? ([Number(current.lat), Number(current.lng)] as [number, number])
     : latestHistoryPoint;
-  const activeRouteCoords = routeCoords.length > 0 ? routeCoords : [];
+  const routeClip = getRouteProgress(effectiveCurrent, routeCoords);
+  const activeRouteCoords = routeClip.distance <= 50 && routeClip.closestIndex > 0
+    ? routeCoords.slice(routeClip.closestIndex) : routeCoords;
   const snappedCurrent = snapToRoute(effectiveCurrent, activeRouteCoords);
   const fallbackRouteCoords: [number, number][] = effectiveCurrent
     ? (status === "assigned"
@@ -515,10 +529,6 @@ export function LiveTrackingMap({
       targetPosRef.current = nextPosition;
       lastUpdateRef.current = now;
 
-      if (!smoothPos) {
-        setSmoothPos(nextPosition);
-      }
-
       // Calculate bearing from previous raw point to new raw point
       if (previousPositionRef.current) {
         const prev = previousPositionRef.current;
@@ -532,9 +542,8 @@ export function LiveTrackingMap({
       }
 
       previousPositionRef.current = nextPosition;
-      setLastUpdate(new Date());
     }
-  }, [current, smoothPos]);
+  }, [current?.lat, current?.lng]);
 
   const displayCurrent = smoothPos
     ? snapToRoute(smoothPos, activeRouteCoords)
@@ -547,58 +556,17 @@ export function LiveTrackingMap({
   const center: [number, number] = displayCurrent || [Number(pickup.lat), Number(pickup.lng)];
 
   const [offCourseCount, setOffCourseCount] = useState(0);
-  const [lastReroutePoint, setLastReroutePoint] = useState<[number, number] | null>(null);
+  const [, setLastReroutePoint] = useState<[number, number] | null>(null);
 
-  // --- DISTANCE UTILITIES ---
-  const getDistance = (p1: [number, number], p2: [number, number]) => {
-    const R = 6371e3; // meters
-    const rad = Math.PI / 180;
-    const φ1 = p1[0] * rad, φ2 = p2[0] * rad;
-    const Δφ = (p2[0] - p1[0]) * rad;
-    const Δλ = (p2[1] - p1[1]) * rad;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
-
-  const distToSegment = (p: [number, number], v: [number, number], w: [number, number]) => {
-    const l2 = Math.pow(getDistance(v, w), 2);
-    if (l2 === 0) return getDistance(p, v);
-    let t = ((p[0] - v[0]) * (w[0] - v[0]) + (p[1] - v[1]) * (w[1] - v[1])) / l2;
-    t = Math.max(0, Math.min(1, t));
-    return getDistance(p, [v[0] + t * (w[0] - v[0]), v[1] + t * (w[1] - v[1])]);
-  };
-
-  // --- LOCAL ROUTE CLIPPING & REROUTE TRIGGER ---
-  useEffect(() => {
-    if (!effectiveCurrent || routeCoords.length < 2) return;
-
-    let minReach = Infinity;
-    let closestIdx = -1;
-
-    for (let i = 0; i < routeCoords.length - 1; i++) {
-      const d = distToSegment(effectiveCurrent, routeCoords[i], routeCoords[i+1]);
-      if (d < minReach) {
-        minReach = d;
-        closestIdx = i;
-      }
-    }
-
-    // Reroute Logic - Only if not already loading and status is active
-    const isActive = status === 'assigned' || status === 'in_progress';
-    if (isActive && !isRouteLoading && minReach > 50) {
-      setOffCourseCount(prev => prev + 1);
-    } else {
-      setOffCourseCount(0);
-      
-      // Local Clipping: If we are close to the route, remove the segments we've already passed
-      // to keep the map clean without an API call.
-      if (closestIdx > 0) {
-        setRouteCoords(prev => prev.slice(closestIdx));
-      }
-    }
-  }, [effectiveCurrent, routeCoords, isRouteLoading, status]);
+  // Count distinct GPS updates, rather than rerenders caused by animation frames.
+  const [evaluatedPosition, setEvaluatedPosition] = useState('');
+  const positionKey = JSON.stringify([current?.lat, current?.lng, status]);
+  const routeProgress = getRouteProgress(effectiveCurrent, routeCoords);
+  const offCourse = (status === 'assigned' || status === 'in_progress') && !isRouteLoading && routeProgress.distance > 50 && routeCoords.length > 1;
+  if (positionKey !== evaluatedPosition) {
+    setEvaluatedPosition(positionKey);
+    setOffCourseCount(previous => offCourse ? previous + 1 : 0);
+  }
 
   // Fetch actual road route from OSRM with Geoapify fallback
   useEffect(() => {
@@ -885,13 +853,13 @@ export function LiveTrackingMap({
 
       {/* Enterprise Connectivity Banner */}
       {(trackingStatus === 'OFFLINE' || trackingStatus === 'SIGNAL_LOST') && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[9999] w-auto max-w-[90%]">
+        <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-1rem)] sm:w-auto max-w-[calc(100%-1rem)] sm:max-w-[90%]">
           <div className={cn(
-            "bg-white/90 backdrop-blur shadow-2xl border px-6 py-3 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-500",
+            "bg-white/90 backdrop-blur shadow-2xl border px-3 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 sm:gap-4 animate-in slide-in-from-top-4 duration-500",
             trackingStatus === 'SIGNAL_LOST' ? "border-amber-100" : "border-rose-100"
           )}>
             <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-colors",
+              "w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg transition-colors shrink-0",
               trackingStatus === 'SIGNAL_LOST' ? "bg-amber-500 shadow-amber-500/20" : "bg-rose-500 shadow-rose-500/20"
             )}>
               <WifiOff size={20} className="text-white animate-pulse" />
@@ -913,7 +881,7 @@ export function LiveTrackingMap({
 
       {/* Routing Fallback Warning */}
       {(routingError || historyRoutingError) && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[9999] w-auto">
+        <div className="absolute top-14 sm:top-24 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-1rem)] sm:w-auto max-w-[calc(100%-1rem)]">
           <div className="bg-white/80 backdrop-blur border border-amber-200 px-4 py-2 rounded-xl flex items-center gap-3 shadow-xl animate-in fade-in zoom-in duration-300">
              <div className="w-6 h-6 bg-amber-100 rounded-lg flex items-center justify-center">
                 <Activity size={14} className="text-amber-600" />
@@ -927,7 +895,7 @@ export function LiveTrackingMap({
 
       {/* Rerouting Indicator */}
       {isRouteLoading && routeCoords.length > 0 && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[9999] w-auto">
+        <div className="absolute top-14 sm:top-24 left-1/2 -translate-x-1/2 z-[9999] w-auto max-w-[calc(100%-1rem)]">
           <div className="bg-blue-600 border border-blue-400 px-4 py-2 rounded-xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-2 duration-300">
              <Loader2 size={14} className="text-white animate-spin" />
              <p className="text-[10px] font-black text-white uppercase tracking-widest">
@@ -938,12 +906,12 @@ export function LiveTrackingMap({
       )}
 
       {/* Floating Driver Locator Button */}
-      <div className="absolute bottom-12 md:bottom-16 right-8 z-[1000] flex flex-col items-end gap-3">
+      <div className="absolute bottom-28 sm:bottom-12 md:bottom-16 right-3 sm:right-8 z-[1000] flex flex-col items-end gap-2 sm:gap-3">
         <div className="group relative">
           <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap shadow-xl">
             {followMode ? "Following Driver" : "Recenter Driver"}
           </div>
-          <div className="mb-2 rounded-full bg-white/95 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100 text-right ml-auto">
+          <div className="mb-1 sm:mb-2 rounded-full bg-white/95 px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-slate-600 shadow-lg border border-slate-100 text-right ml-auto">
             Follow {followMode ? "On" : "Off"}
           </div>
           <Button
@@ -956,7 +924,7 @@ export function LiveTrackingMap({
                 });
               }
             }}
-            className={`w-14 h-14 rounded-full text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-90 ripple-effect fab-glow flex items-center justify-center border-none p-0 overflow-visible ${
+            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-90 ripple-effect fab-glow flex items-center justify-center border-none p-0 overflow-visible ${
               followMode
                 ? "bg-gradient-to-br from-emerald-500 to-blue-600"
                 : "bg-gradient-to-br from-slate-700 to-slate-950"
@@ -966,7 +934,7 @@ export function LiveTrackingMap({
             <img
               src={carTopViewIconUrl}
               alt=""
-              className="h-9 w-9 object-contain drop-shadow-md"
+              className="h-8 w-8 sm:h-9 sm:w-9 object-contain drop-shadow-md"
             />
           </Button>
         </div>
@@ -996,7 +964,7 @@ export function LiveTrackingMap({
 
         {routeCoords.length > 0 ? (
           <Polyline
-            positions={routeCoords}
+            positions={activeRouteCoords}
             color="#3b82f6"
             weight={8}
             opacity={0.65}
@@ -1143,27 +1111,27 @@ export function LiveTrackingMap({
         </div>
       )}
 
-      <div className="absolute top-20 left-4 z-[9999] max-w-[280px]">
-        <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-100 p-3 rounded-2xl flex items-start gap-3 text-left">
-          <div className="p-2 bg-red-50 text-red-500 rounded-lg shrink-0">
-            <MapPinned size={20} />
+      <div className="absolute top-12 sm:top-20 left-2 sm:left-4 right-2 sm:right-auto z-[9999] max-w-[280px] sm:max-w-[280px]">
+        <div className="bg-white/95 backdrop-blur shadow-xl border border-slate-100 p-2 sm:p-3 rounded-xl sm:rounded-2xl flex items-start gap-2 sm:gap-3 text-left">
+          <div className="p-1.5 sm:p-2 bg-red-50 text-red-500 rounded-lg shrink-0">
+            <MapPinned size={16} className="sm:h-5 sm:w-5" />
           </div>
           <div className="truncate">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">
+            <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">
               Destination
             </p>
-            <h4 className="text-sm font-bold text-slate-800 truncate leading-tight">
+            <h4 className="text-xs sm:text-sm font-bold text-slate-800 truncate leading-tight">
               {dropoffDetails.main}
             </h4>
           </div>
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-[9999] max-w-[320px]">
-        <div className="bg-white/95 backdrop-blur shadow-2xl border border-slate-100 p-4 rounded-3xl">
-          <div className="flex items-center gap-3 mb-3">
+      <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-auto z-[9999] max-w-none sm:max-w-[320px]">
+        <div className="bg-white/95 backdrop-blur shadow-2xl border border-slate-100 p-2 sm:p-4 rounded-xl sm:rounded-3xl">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
             <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base shadow-lg shrink-0 transition-colors",
+              "w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-sm sm:text-base shadow-lg shrink-0 transition-colors",
               trackingStatus === 'OFFLINE' ? "bg-rose-100 text-rose-500" : 
               trackingStatus === 'SIGNAL_LOST' ? "bg-amber-100 text-amber-600" : 
               "bg-primary text-white shadow-primary/20"
@@ -1207,7 +1175,7 @@ export function LiveTrackingMap({
             </Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-left">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 sm:pt-3 text-left">
             <div className="flex items-center gap-2">
               <Clock className="text-slate-400" size={12} />
               <div className="truncate">

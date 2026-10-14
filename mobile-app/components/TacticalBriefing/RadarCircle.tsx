@@ -31,7 +31,7 @@ export const RadarCircle = ({ size, color, delay = 0, duration = 2000, pulsate =
         )
       );
     }
-  }, [pulsate, delay, duration]);
+  }, [pulsate, delay, duration, progress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     width: size,

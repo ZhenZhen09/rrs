@@ -4,8 +4,11 @@ import PasswordResetOverlay from '../PasswordResetOverlay';
 
 // Mock PasswordStrengthMeter since it has its own tests
 jest.mock('../PasswordStrengthMeter', () => {
-  const { View } = require('react-native');
-  return (props: any) => <View testID="mock-strength-meter" {...props} />;
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  function MockPasswordStrengthMeter(props: any) {
+    return <View testID="mock-strength-meter" {...props} />;
+  }
+  return MockPasswordStrengthMeter;
 });
 
 describe('PasswordResetOverlay', () => {

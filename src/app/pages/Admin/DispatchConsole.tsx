@@ -1,13 +1,11 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useData as useGlobalData } from "../../context/DataContext";
 import { useRealTime } from "../../context/RealTimeContext";
-import { useAuth } from "../../context/AuthContext";
 import { type User as UserType, DeliveryRequest } from "../../types";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 import { Label } from "../../components/ui/label";
-import { Checkbox } from "../../components/ui/checkbox";
 import {
   Search,
   RefreshCw,
@@ -16,19 +14,12 @@ import {
   CheckCheck,
   RotateCcw,
   X,
-  User,
-  AlertCircle,
   Ban,
-  ChevronRight,
-  Filter,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  MapPin,
   Bike as BikeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RequestList } from "../../components/Admin/Dispatch/RequestList";
+import { RequestCard } from "../../components/Admin/Dispatch/RequestCard";
 import { RequestDetailsPanel } from "../../components/Admin/Dispatch/RequestDetailsPanel";
 import { cn } from "../../components/ui/utils";
 import {
@@ -49,36 +40,54 @@ import { LiveTrackingMap } from "../../components/LiveTrackingMap";
 import { NotificationBell } from "../../components/Admin/NotificationBell";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { 
-  isTerminalRequest, 
-  isActiveRequest, 
-  isPendingRequest 
-} from "../../utils/statusMapping";
+import { isActiveRequest } from "../../utils/statusMapping";
+import { buildRequestAccounting, getAccountingBucket } from '../../utils/requestAccounting';
+import { resolveRiderOnlineState } from '../../utils/riderAvailability';
 
 import { EnhancedBatchApproveModal } from "../../components/Admin/EnhancedBatchApproveModal";
+import { compareRiderQueue } from "../../utils/dispatchQueue";
+import { getActiveRouteSelection, isRouteReorderableTask, toggleActiveRouteSelection as toggleRouteSelection } from "../../utils/activeRouteSelection";
 import { DeviationApprovalModal } from "../../components/Admin/DeviationApprovalModal";
+import { DispatchStatusTabs } from "./DispatchStatusTabs";
 
-export function DispatchConsole() {
-  const { logout } = useAuth();
+function useMediaQuery(query: string) {
+  const getMatches = () => typeof window !== "undefined" && window.matchMedia(query).matches;
+  const [matches, setMatches] = useState(getMatches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQuery.matches);
+
+    handleChange();
+    mediaQuery.addEventListener?.("change", handleChange);
+    return () => mediaQuery.removeEventListener?.("change", handleChange);
+  }, [query]);
+
+  return matches;
+}
+
+export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened }: { openRequestId?: string; onOpenRequest?: (requestId: string) => void; onRequestOpened?: (requestId: string) => void }) {
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const {
     requests,
     approveRequest,
     disapproveRequest,
     returnForRevision,
-    cancelRequest,
-    refreshData, globalStats,
+    refreshData, requestsLoading, requestsError,
+    fetchWithAuth,
   } = useGlobalData();
 
-  const { riderLocations, riderPresence, lastSync, socket } = useRealTime();
+  const { riderLocations, riderPresence, socket } = useRealTime();
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
   );
+  const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState(false);
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
-  const [trackingRequest, setTrackingRequest] =
+  const [trackingRequest] =
     useState<DeliveryRequest | null>(null);
   const [filterTab, setFilterTab] = useState<
-    "pending" | "active" | "completed"
+    "pending" | "active" | "overdue" | "completed" | "all"
   >("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [riders, setRiders] = useState<UserType[]>([]);
@@ -86,6 +95,28 @@ export function DispatchConsole() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState("day-of-week");
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+  const [activeSelectedIds, setActiveSelectedIds] = useState<string[]>([]);
+  const [activeSelectionMode, setActiveSelectionMode] = useState(false);
+  const [activeSelectionMessage, setActiveSelectionMessage] = useState("");
+
+  const activeRouteSelection = useMemo(
+    () => getActiveRouteSelection(requests || [], activeSelectedIds),
+    [requests, activeSelectedIds],
+  );
+
+  useEffect(() => {
+    setActiveSelectedIds((current) => current.filter((id) =>
+      (requests || []).some((request) => request.request_id === id && isRouteReorderableTask(request)),
+    ));
+  }, [requests]);
+
+  useEffect(() => {
+    if (!openRequestId || !requests?.some((request) => request.request_id === openRequestId)) return;
+    setFilterTab('all');
+    setSelectedRequestId(openRequestId);
+    setIsMobileDetailsOpen(true);
+    onRequestOpened?.(openRequestId);
+  }, [onRequestOpened, openRequestId, requests]);
 
   // Batch State
   const [showBatchApprove, setShowBatchApprove] = useState(false);
@@ -102,7 +133,7 @@ export function DispatchConsole() {
     riderId: string;
     requests: DeliveryRequest[];
     note: string;
-    mode: 'approve' | 'manage';
+    mode: 'route-review';
   } | null>(null);
 
   const onlineRiderCount = useMemo(() => {
@@ -124,30 +155,36 @@ export function DispatchConsole() {
   // Fetch riders function
   const fetchRiders = useCallback(async () => {
     try {
-      const res = await fetch("/api/users/riders/live", { credentials: 'include' });
-      if (res.status === 401) {
-        logout();
-        return;
-      }
-      if (res.ok) {
+      const res = await fetchWithAuth("/api/users/riders/live");
+      if (res?.ok) {
         const data = await res.json();
         setRiders(data);
       }
     } catch (err) {
       console.error("Failed to load riders", err);
     }
-  }, [logout]);
+  }, [fetchWithAuth]);
 
   // Fetch riders on mount
   useEffect(() => {
-    fetchRiders();
-  }, [fetchRiders]);
+    let active = true;
+    fetchWithAuth("/api/users/riders/live")
+      .then(async res => {
+        if (!active || !res) return;
+        if (res.ok) {
+          const data = await res.json();
+          if (active) setRiders(data);
+        }
+      })
+      .catch(err => { if (active) console.error("Failed to load riders", err); });
+    return () => { active = false; };
+  }, [fetchWithAuth]);
 
   // Reactive Riders List: Merge DB data with live socket presence
   const reactiveRiders = useMemo(() => {
     return riders.map(r => ({
       ...r,
-      is_online: riderPresence[r.id] === 'online' || (r as any).is_online
+      is_online: resolveRiderOnlineState(riderPresence[r.id], (r as any).is_online)
     }));
   }, [riders, riderPresence]);
 
@@ -212,19 +249,16 @@ export function DispatchConsole() {
       refreshData();
     } catch (err) {
       toast.error("Batch assignment failed");
+      throw err;
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleInterceptConfirm = async (riderId: string, sequence: string[], note: string) => {
-    if (interceptData?.mode === 'manage') {
+    if (interceptData?.mode === 'route-review') {
       await handleActiveResequence(riderId, sequence, note);
-    } else {
-      // Pass sequence directly to avoid race condition with state update
-      await handleBatchApprove(riderId, sequence, note, sequence);
     }
-    setInterceptData(null);
   };
 
   const handleActiveResequence = async (riderId: string, sequence: string[], note: string) => {
@@ -240,14 +274,26 @@ export function DispatchConsole() {
         }),
       });
 
-      if (!res.ok) throw new Error("Resequence failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 409 || body.code === 'QUEUE_CHANGED') {
+          await refreshData();
+          toast.info("The rider’s queue changed. Review the refreshed route and try again.");
+          return;
+        }
+        throw new Error("Resequence failed");
+      }
 
       toast.success("Route optimized and synchronized");
       setInterceptData(null);
       setSelectedRequestIds([]);
+      setActiveSelectedIds([]);
+      setActiveSelectionMode(false);
+      setActiveSelectionMessage("");
       refreshData();
     } catch (err) {
       toast.error("Failed to update active route");
+      throw err;
     } finally {
       setIsSubmitting(false);
     }
@@ -300,33 +346,76 @@ export function DispatchConsole() {
     );
   };
 
-  const selectAll = () => {
-    if (selectedRequestIds.length === filteredRequests.length) {
-      setSelectedRequestIds([]);
-    } else {
-      setSelectedRequestIds(filteredRequests.map((r) => r.request_id));
+  const toggleActiveSelection = (id: string) => {
+    const nextSelection = toggleRouteSelection(requests || [], activeSelectedIds, id);
+    if (nextSelection.blocked) {
+      setActiveSelectionMessage("Select tasks for one rider at a time.");
+      return;
     }
+    setActiveSelectionMessage("");
+    setActiveSelectedIds(nextSelection.selectedIds);
   };
 
-  const handleFilterChange = (newTab: "pending" | "active" | "completed") => {
-    setFilterTab(newTab);
-    if (newTab === 'completed') {
-      setSortBy('newest');
-    } else if (newTab === 'active') {
-      setSortBy('sequence');
-    } else {
-      setSortBy('day-of-week');
-    }
-    setSelectedRequestIds([]);
+  const clearActiveSelection = () => {
+    setActiveSelectedIds([]);
+    setActiveSelectionMessage("");
+  };
+
+  const openSelectedRoute = () => {
+    if (!activeRouteSelection) return;
+    setInterceptData({
+      riderId: activeRouteSelection.riderId,
+      requests: activeRouteSelection.requests,
+      note: "",
+      mode: 'route-review',
+    });
+    setActiveSelectionMode(false);
+  };
+
+  const renderActiveRouteActions = () => {
+    if (activeSelectedIds.length === 0 && !activeSelectionMessage) return null;
+
+    return (
+      <div className="shrink-0 border-b border-slate-800 bg-slate-900 px-3 py-2 text-white">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold" aria-live="polite">
+            {activeSelectedIds.length} task{activeSelectedIds.length === 1 ? "" : "s"} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={openSelectedRoute}
+              disabled={!activeRouteSelection}
+              className="min-h-11 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 md:min-h-8"
+            >
+              Manage route
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={clearActiveSelection}
+              className="min-h-11 rounded-lg px-3 text-xs font-semibold text-white hover:bg-slate-700 md:min-h-8"
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+        {activeSelectionMessage && (
+          <p role="status" className="mt-1 text-xs text-amber-200">{activeSelectionMessage}</p>
+        )}
+      </div>
+    );
   };
 
   const filteredRequests = useMemo(() => {
     if (!requests) return [];
 
     let filtered = requests.filter((r) => {
-      if (filterTab === "pending") return isPendingRequest(r);
-      if (filterTab === "active") return isActiveRequest(r);
-      if (filterTab === "completed") return isTerminalRequest(r);
+      const bucket = getAccountingBucket(r);
+      if (filterTab === "pending") return bucket === 'pending';
+      if (filterTab === "overdue") return bucket === 'active' && Boolean(r.is_overdue);
+      if (filterTab === "active") return bucket === 'active';
+      if (filterTab === "completed") return ['completed', 'failed', 'cancelled', 'declined'].includes(bucket);
       return true;
     });
 
@@ -335,8 +424,8 @@ export function DispatchConsole() {
       filtered = filtered.filter(
         (r) =>
           r.request_id.toLowerCase().includes(q) ||
-          r.recipient_name.toLowerCase().includes(q) ||
-          r.requester_name.toLowerCase().includes(q),
+          (r.recipient_name || '').toLowerCase().includes(q) ||
+          (r.requester_name || '').toLowerCase().includes(q),
       );
     }
 
@@ -351,6 +440,10 @@ export function DispatchConsole() {
     };
 
     return filtered.sort((a, b) => {
+      if (sortBy === 'sequence' && (filterTab === 'active' || filterTab === 'overdue')) {
+        return compareRiderQueue(a, b);
+      }
+
       if (sortBy === "day-of-week") {
         // For Active tab: follow enforced sequence (queue_order) first
         if (filterTab === 'active') {
@@ -379,12 +472,19 @@ export function DispatchConsole() {
         return (a.time_window || '').localeCompare(b.time_window || '');
       }
 
+      if (filterTab === 'overdue' && !['urgency', 'newest', 'oldest'].includes(sortBy)) {
+        const overdueA = a.overdue_minutes || 0;
+        const overdueB = b.overdue_minutes || 0;
+        if (overdueA !== overdueB) return overdueB - overdueA;
+        return getUrgencyScore(a.urgency_level) - getUrgencyScore(b.urgency_level);
+      }
+
       if (sortBy === "urgency") {
         return getUrgencyScore(a.urgency_level) - getUrgencyScore(b.urgency_level);
       }
 
-      const dateA = filterTab === "pending" ? a.created_at : a.updated_at;
-      const dateB = filterTab === "pending" ? b.created_at : b.updated_at;
+      const dateA = filterTab === "pending" ? a.created_at : a.updated_at || a.created_at;
+      const dateB = filterTab === "pending" ? b.created_at : b.updated_at || b.created_at;
 
       if (sortBy === "newest")
         return new Date(dateB).getTime() - new Date(dateA).getTime();
@@ -394,26 +494,108 @@ export function DispatchConsole() {
     });
   }, [requests, filterTab, searchQuery, sortBy]);
 
+  const selectAll = () => {
+    if (selectedRequestIds.length === filteredRequests.length) {
+      setSelectedRequestIds([]);
+    } else {
+      setSelectedRequestIds(filteredRequests.map((r) => r.request_id));
+    }
+  };
+
+  const handleFilterChange = (newTab: "pending" | "active" | "overdue" | "completed" | "all") => {
+    setFilterTab(newTab);
+    setSelectedRequestId(null);
+    if (newTab === 'completed') {
+      setSortBy('newest');
+    } else if (newTab === 'active' || newTab === 'overdue') {
+      setSortBy('sequence');
+    } else {
+      setSortBy('day-of-week');
+    }
+    setSelectedRequestIds([]);
+    clearActiveSelection();
+    setActiveSelectionMode(false);
+  };
+
+
+
   const selectedRequest = useMemo(
     () => requests?.find((r) => r.request_id === selectedRequestId) || null,
     [requests, selectedRequestId],
   );
 
-  const stats = globalStats || { pending: 0, active: 0, done: 0 };
+  const stats = useMemo(() => buildRequestAccounting(requests), [requests]);
+  const displayStats = stats;
 
   const handleRefresh = async (showToast = true) => {
     setIsRefreshing(true);
     await refreshData();
     setIsRefreshing(false);
     if (showToast) {
-      toast.success("Dashboard data synchronized");
+      toast.info("Refresh finished. Check the reconciliation status for data verification.");
     }
   };
+
+  const renderRequestDetails = (mobile = false) => (
+    <RequestDetailsPanel
+      request={selectedRequest}
+      riders={reactiveRiders}
+      activeRequests={requests || []}
+      onBack={mobile ? () => setSelectedRequestId(null) : undefined}
+      hideMapOnMobile={mobile}
+      mobileLayout={mobile}
+      onManageRoute={(riderId) => {
+        const activeTasks = (requests || []).filter(r =>
+          r.assigned_rider_id === riderId &&
+          isActiveRequest(r)
+        );
+        if (activeTasks.length > 0) {
+          setInterceptData({
+            riderId,
+            requests: activeTasks,
+            note: "",
+            mode: 'route-review'
+          });
+        } else {
+          toast.info("Rider has no active tasks to re-sequence.");
+        }
+      }}
+      onApprove={async (riderId, remark) => {
+        if (!selectedRequest) return;
+        setIsSubmitting(true);
+        try {
+          await approveRequest(selectedRequest.request_id, riderId, remark);
+          toast.success("Request approved and assigned");
+          setSelectedRequestIds([]);
+          refreshData();
+        } catch (err) {
+          toast.error("Failed to approve request");
+        } finally {
+          setIsSubmitting(false);
+        }
+      }}
+      onDecline={async (remark) => {
+        setIsSubmitting(true);
+        try {
+          await disapproveRequest(selectedRequestId!, remark);
+          toast.error("Request declined");
+          setSelectedRequestIds([]);
+          refreshData();
+        } catch (err) {
+          toast.error("Failed to decline request");
+        } finally {
+          setIsSubmitting(false);
+        }
+      }}
+      isSubmitting={isSubmitting}
+      readOnly={Boolean(selectedRequest && !['pending', 'active'].includes(getAccountingBucket(selectedRequest)))}
+    />
+  );
 
   return (
     <div className="h-full flex flex-col bg-slate-50/50">
       {/* Dynamic Header */}
-      <div className="shrink-0 h-12 bg-white border-b border-slate-100 flex items-center justify-between px-4 z-30">
+      <div className="hidden md:flex shrink-0 h-12 bg-white border-b border-slate-100 items-center justify-between px-4 z-30">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
@@ -446,7 +628,7 @@ export function DispatchConsole() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleRefresh}
+            onClick={() => void handleRefresh()}
             disabled={isRefreshing}
             className="h-7 w-7 rounded-lg hover:bg-slate-50 transition-all border-none"
           >
@@ -463,12 +645,15 @@ export function DispatchConsole() {
             </span>
           </div>
 
-          <NotificationBell />
+          <NotificationBell onOpenRequest={onOpenRequest} />
         </div>
       </div>
 
       {/* Main Console Layout */}
+      {requestsLoading && <p role="status" className="shrink-0 px-4 py-2 text-sm text-slate-600">Refreshing requests…</p>}
+      {requestsError && <p role="alert" className="shrink-0 px-4 py-2 text-sm text-red-700">{requestsError} <button onClick={() => void handleRefresh(false)} className="underline">Retry</button></p>}
       <div className="flex-1 min-h-0 overflow-hidden">
+        {!isMobile && <div className="h-full">
         <ResizablePanelGroup direction="horizontal" className="h-full">
           <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
             <div className="h-full flex flex-col bg-white">
@@ -490,14 +675,14 @@ export function DispatchConsole() {
                           setBatchRejectType("return");
                           setShowBatchReject(true);
                         }}
-                        className="h-6 px-2 rounded-md text-white hover:bg-white/10 text-[8px] font-black uppercase tracking-widest"
+                        className="h-6 px-2 rounded-md text-white hover:bg-pink-500 focus-visible:bg-pink-500 active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
                       >
                         Revision
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => setShowBatchApprove(true)}
-                        className="h-6 px-3 rounded-md bg-pink-500 hover:bg-pink-600 text-white text-[8px] font-black uppercase tracking-widest shadow-md"
+                        className="h-6 px-3 rounded-md border border-transparent bg-transparent text-white hover:bg-pink-500 hover:border-pink-500 focus-visible:bg-pink-500 focus-visible:border-pink-500 active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
                       >
                         Approve & Enforce
                       </Button>
@@ -508,27 +693,30 @@ export function DispatchConsole() {
                           setBatchRejectType("cancel");
                           setShowBatchReject(true);
                         }}
-                        className="h-6 px-2 rounded-md text-rose-400 hover:bg-rose-50/10 text-[8px] font-black uppercase tracking-widest"
+                        className="h-6 px-2 rounded-md text-rose-400 hover:bg-pink-500 hover:text-white focus-visible:bg-pink-500 focus-visible:text-white active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
                       >
-                        Cancel
+                        Batch Cancel
                       </Button>
                     </div>
                   </div>
                 </div>
               )}
 
+              {filterTab === "active" && renderActiveRouteActions()}
+
               <RequestList
-                requests={requests || []}
+                requests={requests}
                 filteredRequests={filteredRequests}
                 selectedId={selectedRequestId}
                 onSelect={(id) => setSelectedRequestId(id)}
-                selectedIds={selectedRequestIds}
-                onToggleSelect={toggleSelection}
+                selectedIds={filterTab === "active" ? activeSelectedIds : selectedRequestIds}
+                onToggleSelect={filterTab === "active" ? toggleActiveSelection : toggleSelection}
+                activeSelectionEnabled={filterTab === "active" && (!isMobile || activeSelectionMode)}
                 onSelectAll={selectAll}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 filter={filterTab}
-                onFilterChange={handleFilterChange} counts={stats}
+                onFilterChange={handleFilterChange} counts={displayStats}
               />
             </div>
           </ResizablePanel>
@@ -546,81 +734,167 @@ export function DispatchConsole() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="h-full"
                 >
-                  <RequestDetailsPanel
-                    request={selectedRequest}
-                    riders={reactiveRiders}
-                    activeRequests={requests || []}
-                    onManageRoute={(riderId) => {
-                      // Trigger sequencer for existing tasks
-                      const activeTasks = (requests || []).filter(r => 
-                        r.assigned_rider_id === riderId && 
-                        isActiveRequest(r)
-                      );
-                      if (activeTasks.length > 0) {
-                        setInterceptData({
-                          riderId,
-                          requests: activeTasks,
-                          note: "", // No note needed for simple re-sequence
-                          mode: 'manage'
-                        });
-                      } else {
-                        toast.info("Rider has no active tasks to re-sequence.");
-                      }
-                    }}
-                    onApprove={async (riderId, remark) => {
-                      if (!selectedRequest) return;
-                      
-                      // Find existing active tasks for this rider
-                      const activeTasks = (requests || []).filter(r => 
-                        r.assigned_rider_id === riderId && 
-                        isActiveRequest(r) &&
-                        r.request_id !== selectedRequest.request_id
-                      );
-
-                      if (activeTasks.length > 0) {
-                        setInterceptData({
-                          riderId,
-                          requests: [...activeTasks, selectedRequest],
-                          note: remark,
-                          mode: 'approve'
-                        });
-                      } else {
-                        // Direct approval if no active tasks
-                        setIsSubmitting(true);
-                        try {
-                          await approveRequest(selectedRequest.request_id, riderId, remark);
-                          toast.success("Request approved and assigned");
-                          setSelectedRequestIds([]);
-                          refreshData();
-                        } catch (err) {
-                          toast.error("Failed to approve request");
-                        } finally {
-                          setIsSubmitting(false);
-                        }
-                      }
-                    }}
-                    onDecline={async (remark) => {
-                      setIsSubmitting(true);
-                      try {
-                        await disapproveRequest(selectedRequestId!, remark);
-                        toast.error("Request declined");
-                        setSelectedRequestIds([]);
-                        refreshData();
-                      } catch (err) {
-                        toast.error("Failed to decline request");
-                      } finally {
-                        setIsSubmitting(false);
-                      }
-                    }}
-                    isSubmitting={isSubmitting}
-                    readOnly={filterTab === "completed"}
-                  />
+                  {renderRequestDetails()}
                 </motion.div>
               </AnimatePresence>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+        </div>}
+
+        {/* Mobile flow: AdminLayout provides the mobile header, followed by tabs, cards, and details. */}
+        {isMobile && <div className="h-full min-h-0 overflow-hidden bg-slate-50/50">
+          <div className="h-full min-h-0 flex flex-col">
+                <div className="h-full min-h-0 flex flex-col bg-slate-50/50">
+                  <div className="shrink-0 px-3 pt-3 pb-2 bg-white border-b border-slate-100">
+                    <DispatchStatusTabs
+                      selected={filterTab}
+                      counts={{
+                        all: stats.total,
+                        pending: stats.pending,
+                        active: stats.active,
+                        overdue: displayStats.overdue,
+                        completed: stats.done,
+                      }}
+                      onChange={handleFilterChange}
+                    />
+                    <div className="mt-2 flex items-center justify-between px-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                        Scroll to browse requests
+                      </p>
+                      {filterTab === "active" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-pressed={activeSelectionMode}
+                          onClick={() => {
+                            if (activeSelectionMode) clearActiveSelection();
+                            setActiveSelectionMode((enabled) => !enabled);
+                          }}
+                          className="min-h-11 rounded-lg px-3 text-xs font-bold focus-visible:ring-2 focus-visible:ring-emerald-600"
+                        >
+                          {activeSelectionMode ? "Done selecting" : "Select tasks"}
+                        </Button>
+                      )}
+                      <span className="text-[9px] font-bold text-slate-300">
+                        {filteredRequests.length} request{filteredRequests.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {filterTab === "active" && renderActiveRouteActions()}
+
+                  {selectedRequestIds.length > 0 && filterTab === "pending" && (
+                    <div className="shrink-0 px-3 py-2 bg-slate-900">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCheck className="text-white h-3 w-3" />
+                          <p className="text-[9px] font-black text-white uppercase tracking-widest">
+                            {selectedRequestIds.length} selected
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setBatchRejectType("return");
+                              setShowBatchReject(true);
+                            }}
+                            aria-label="Revision"
+                            title="Revision"
+                            className="group h-8 w-8 rounded-md p-0 text-white hover:bg-pink-500 focus-visible:bg-pink-500 active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
+                          >
+                            <RotateCcw className="h-4 w-4 fill-transparent transition-colors group-hover:fill-current group-focus-visible:fill-current group-active:fill-current" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setShowBatchApprove(true)}
+                            aria-label="Approve and Enforce"
+                            title="Approve and Enforce"
+                            className="group h-8 w-8 rounded-md border border-transparent bg-transparent p-0 text-white hover:bg-pink-500 hover:border-pink-500 focus-visible:bg-pink-500 focus-visible:border-pink-500 active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
+                          >
+                            <CheckCheck className="h-4 w-4 fill-transparent transition-colors group-hover:fill-current group-focus-visible:fill-current group-active:fill-current" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setBatchRejectType("cancel");
+                              setShowBatchReject(true);
+                            }}
+                            aria-label="Batch Cancel"
+                            title="Batch Cancel"
+                            className="group h-8 w-8 rounded-md text-rose-300 hover:bg-pink-500 hover:text-white focus-visible:bg-pink-500 focus-visible:text-white active:bg-pink-600 text-[8px] font-black uppercase tracking-widest"
+                          >
+                            <Ban className="h-4 w-4 fill-transparent transition-colors group-hover:fill-current group-focus-visible:fill-current group-active:fill-current" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-3">
+                    {filteredRequests.length === 0 ? (
+                      <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-center">
+                        <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3">
+                          <LayoutDashboard className="h-5 w-5 text-slate-200" />
+                        </div>
+                        <p className="text-sm font-black text-slate-400">No {filterTab === "completed" ? "done" : filterTab} requests</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-300">New requests will appear here.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredRequests.map((request) => (
+                          <div key={request.request_id}>
+                            <RequestCard
+                              request={request}
+                              className="max-w-none"
+                              isSelected={selectedRequestId === request.request_id}
+                              onClick={() => {
+                                setSelectedRequestId(request.request_id);
+                                setIsMobileDetailsOpen(true);
+                              }}
+                              isMultiSelected={filterTab === "active"
+                                ? activeSelectedIds.includes(request.request_id)
+                                : selectedRequestIds.includes(request.request_id)}
+                              onToggleSelection={filterTab === "pending"
+                                ? toggleSelection
+                                : filterTab === "active" && activeSelectionMode && isRouteReorderableTask(request)
+                                  ? toggleActiveSelection
+                                  : undefined}
+                              isActiveTab={filterTab === "active" || filterTab === "overdue"}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+        </div>}
       </div>
+
+      <Dialog
+        open={isMobile && isMobileDetailsOpen && Boolean(selectedRequest)}
+        onOpenChange={(open) => {
+          setIsMobileDetailsOpen(open);
+          if (!open) setSelectedRequestId(null);
+        }}
+      >
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 pb-[env(safe-area-inset-bottom)] sm:h-[min(92dvh,760px)] sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-2xl sm:border sm:p-0 sm:pb-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Request details</DialogTitle>
+            <DialogDescription>
+              Review and manage the selected delivery request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {selectedRequest && renderRequestDetails(true)}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Layer 2 Modals */}
       <EnhancedBatchApproveModal
@@ -632,14 +906,20 @@ export function DispatchConsole() {
         isSubmitting={isSubmitting}
       />
 
-      {/* Single Approval Interceptor Modal */}
+      {/* Optional route review uses the existing rider and never asks for a second assignment. */}
       <EnhancedBatchApproveModal
         isOpen={!!interceptData}
-        onClose={() => setInterceptData(null)}
+        onClose={() => {
+          setInterceptData(null);
+          clearActiveSelection();
+          setActiveSelectionMode(false);
+        }}
         selectedRequests={interceptData?.requests || []}
         riders={reactiveRiders}
         onConfirm={handleInterceptConfirm}
         isSubmitting={isSubmitting}
+        mode="route-review"
+        fixedRiderId={interceptData?.riderId}
       />
 
       {deviationData && (
