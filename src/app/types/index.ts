@@ -8,13 +8,15 @@ export interface User {
   name: string;
   role: UserRole;
   department?: string; // Only for personnel
+  avatar_id?: string | null;
 }
 
 // Delivery Request Status
-export type RequestStatus = 'pending' | 'approved' | 'disapproved' | 'returned_for_revision';
+export type RequestStatus = 'submitted_waiting' | 'pending' | 'approved' | 'disapproved' | 'returned_for_revision' | 'cancelled';
 
 // Delivery Status (for riders)
-export type DeliveryStatus = 'assigned' | 'in_progress' | 'completed' | 'failed';
+export type DeliveryStatus = 'pending' | 'assigned' | 'in_progress' | 'pending_review' | 'completed' | 'delivered' | 'failed' | 'cancelled' | 'disapproved';
+export type OverdueAction = 'contact_rider' | 'track_rider' | 'check_signal';
 
 // Type of Request
 export type RequestType = 
@@ -155,6 +157,8 @@ export interface DeliveryRequest {
   request_id: string;
   requester_id: string;
   created_at: string;
+  updated_at?: string;
+  approved_at?: string;
   completed_at?: string;
   admin_remark?: string;
   personnel_instructions?: string;
@@ -189,6 +193,14 @@ export interface DeliveryRequest {
   is_optimistic?: boolean;
   exceptions?: string[];
   exception_severity?: 'warning' | 'critical';
+  is_overdue?: boolean;
+  state?: 'Normal' | 'At Risk' | 'Overdue';
+  scheduled_end_at?: string | null;
+  remaining_minutes?: number;
+  overdue_minutes?: number;
+  overdue_label?: string;
+  overdue_reason?: 'past_due' | 'end_of_day' | null;
+  recommended_action?: OverdueAction | null;
   
   // Live Tracking coordinates
   current_lat?: number;

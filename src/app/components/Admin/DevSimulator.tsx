@@ -4,7 +4,6 @@ import { Button } from '../ui/button';
 import { 
   Terminal, 
   Clock, 
-  Trash2, 
   AlertCircle, 
   Zap, 
   ChevronUp, 

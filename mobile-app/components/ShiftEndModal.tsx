@@ -9,12 +9,12 @@ import {
   Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
+import { scale, verticalScale, normalizeFontSize } from '@/utils/responsive';
 
 interface ShiftEndModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => Promise<boolean>;
 }
 
 export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, onConfirm }) => {
@@ -22,9 +22,12 @@ export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, 
 
   const handleConfirm = async () => {
     setLoading(true);
-    await onConfirm();
-    setLoading(false);
-    onClose();
+    try {
+      const succeeded = await onConfirm();
+      if (succeeded) onClose();
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,9 +38,9 @@ export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, 
             <View style={styles.successIcon}>
               <MaterialIcons name="check-circle" size={40} color="#10B981" />
             </View>
-            <Text style={styles.title}>Finish Shift?</Text>
+            <Text style={styles.title}>End Shift?</Text>
             <Text style={styles.subtitle}>
-              You have finished all of today's tasks. Great job! Are you sure you want to go off-duty?
+            This closes your work shift and records your end time. You can still change online availability without ending your shift.
             </Text>
           </View>
 
@@ -48,7 +51,7 @@ export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, 
             </View>
             <View style={styles.statItem}>
               <MaterialIcons name="visibility-off" size={20} color="#64748B" />
-              <Text style={styles.statText}>Go Invisible</Text>
+              <Text style={styles.statText}>Close Work Shift</Text>
             </View>
           </View>
 
@@ -58,7 +61,7 @@ export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, 
               disabled={loading}
               style={[styles.btn, styles.cancelBtn]}
             >
-              <Text style={styles.cancelBtnText}>Stay Online</Text>
+              <Text style={styles.cancelBtnText}>Keep Shift Open</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -71,7 +74,7 @@ export const ShiftEndModal: React.FC<ShiftEndModalProps> = ({ visible, onClose, 
               ) : (
                 <>
                   <MaterialIcons name="power-settings-new" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.confirmBtnText}>Go Off-Duty</Text>
+                  <Text style={styles.confirmBtnText}>End Shift</Text>
                 </>
               )}
             </TouchableOpacity>

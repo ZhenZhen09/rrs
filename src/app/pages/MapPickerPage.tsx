@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { MapPickerContent } from "../components/MapPicker";
 import { type Location as MapLocation } from "../types";

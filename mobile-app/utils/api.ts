@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Config } from '@/constants/Config';
-import { AuthManager } from '@/utils/AuthManager';
+import { AuthManager, getLastRefreshFailure } from '@/utils/AuthManager';
+import { getBearerToken, isCurrentAuthenticatedRequest } from '@/utils/authRequestGuard';
 
 let isRefreshing = false;
 let failedQueue: any[] = [];
@@ -19,10 +20,15 @@ const processQueue = (error: any, token: string | null = null) => {
 
 let onAuthFailure: (() => void) | null = null;
 
-const handleAuthFailure = async () => {
+const handleAuthFailure = async (reason?: unknown, expectedToken?: string) => {
+  if (expectedToken) {
+    const currentToken = await AuthManager.getAccessToken();
+    if (!isCurrentAuthenticatedRequest(expectedToken, currentToken)) return;
+  }
   if (hasHandledAuthFailure) return;
 
   hasHandledAuthFailure = true;
+  console.warn('[AUTH] Session invalidated', reason);
   await AuthManager.clearSession();
   onAuthFailure?.();
 };
@@ -42,7 +48,9 @@ export const resetAuthStatus = () => {
 export const wakeUpServer = async () => { try { await api.get('/api/ping', { timeout: 45000 }); } catch (error) {} };
 
 api.interceptors.request.use(async (config) => {
-  const token = await AuthManager.getAccessToken();
+  // Refresh proactively so normal requests do not send a known-expired JWT
+  // and trigger a preventable 401/retry cycle.
+  const token = await AuthManager.getValidToken();
   if (token && token.includes('.') && !token.startsWith('rider_')) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -53,12 +61,35 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use((response) => response, async (error) => {
   const originalRequest = error.config;
 
+  if (error.response?.status === 403) {
+    console.warn('[AUTH] Request forbidden', {
+      url: originalRequest?.url,
+      method: originalRequest?.method,
+      code: error.response?.data?.code,
+      error: error.response?.data?.error,
+    });
+  }
+
   if (!originalRequest || error.response?.status !== 401) {
     return Promise.reject(error);
   }
 
+  const requestToken = getBearerToken(originalRequest.headers);
+  const currentToken = await AuthManager.getAccessToken();
+  if (!isCurrentAuthenticatedRequest(requestToken, currentToken)) {
+    return Promise.reject(error);
+  }
+
+  console.warn('[AUTH] Request rejected with 401', {
+    url: originalRequest.url,
+    method: originalRequest.method,
+    code: error.response?.data?.code,
+    error: error.response?.data?.error,
+    retry: Boolean(originalRequest._retry),
+  });
+
   if (originalRequest.url?.includes('/api/auth/refresh')) {
-    await handleAuthFailure();
+    await handleAuthFailure({ source: 'refresh_endpoint', response: error.response?.data });
     return Promise.reject(error);
   }
 
@@ -80,15 +111,31 @@ api.interceptors.response.use((response) => response, async (error) => {
 
     try {
       const newAT = await AuthManager.refreshAccessToken();
-      if (!newAT) throw new Error('Refresh failed');
+      if (!newAT) {
+        const failure = getLastRefreshFailure();
+        const refreshError = new Error(
+          `Refresh failed: ${failure?.message || 'no replacement access token was returned'}`,
+        );
+        (refreshError as any).refreshFailure = failure;
+        throw refreshError;
+      }
 
       processQueue(null, newAT);
       originalRequest.headers = originalRequest.headers ?? {};
       originalRequest.headers['Authorization'] = 'Bearer ' + newAT;
       return api(originalRequest);
-    } catch (refreshError) {
+    } catch (refreshError: any) {
       processQueue(refreshError, null);
-      await handleAuthFailure();
+      const failure = (refreshError as any)?.refreshFailure || getLastRefreshFailure();
+      if (failure?.kind === 'network') {
+        console.warn('[AUTH] Keeping session after transient refresh failure', failure);
+        return Promise.reject(refreshError);
+      }
+      await handleAuthFailure({
+        source: 'access_token_refresh',
+        request: originalRequest.url,
+        error: refreshError?.message || refreshError,
+      }, requestToken ?? undefined);
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

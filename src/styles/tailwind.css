@@ -2,3 +2,8 @@
 @source '../**/*.{js,ts,jsx,tsx}';
 
 @import 'tw-animate-css';
+
+/* Keep weekly schedule cells limited to the five operational fields shown to admins. */
+.weekly-schedule-request-cell > p:nth-of-type(n + 6) {
+  display: none;
+}

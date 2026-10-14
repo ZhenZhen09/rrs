@@ -1,0 +1,18 @@
+/* Keep mobile page transitions responsive without disabling functional loading feedback. */
+@media (max-width: 767px) {
+  .admin-pwa-shell :where(.animate-in, .animate-out) {
+    animation-delay: 0ms !important;
+    animation-duration: 180ms !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-pwa-shell :where(.animate-in, .animate-out) {
+    animation-delay: 0ms !important;
+    animation-duration: 1ms !important;
+  }
+
+  .admin-pwa-shell :where(.transition-all, .transition-colors, .transition-transform) {
+    transition-duration: 1ms !important;
+  }
+}

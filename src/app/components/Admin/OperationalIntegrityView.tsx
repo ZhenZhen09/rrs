@@ -1,15 +1,10 @@
 import React from 'react';
 import { 
   ShieldAlert, 
-  Clock, 
   BarChart, 
   Zap, 
   Camera, 
   AlertTriangle, 
-  TrendingUp, 
-  Users,
-  CheckCircle2,
-  XCircle,
   GripVertical
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
@@ -17,8 +12,7 @@ import { Badge } from '../ui/badge';
 import { cn } from '../ui/utils';
 import { 
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, Legend
-} from 'recharts';
+  Tooltip, ResponsiveContainer, Cell} from 'recharts';
 import { format } from 'date-fns';
 
 interface OperationalIntegrityViewProps {
@@ -45,10 +39,10 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* KPI ROW: INTEGRITY SCORES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {data.integrityScores.slice(0, 4).map((s: any) => (
           <Card key={s.id} className="rounded-2xl border-none shadow-sm bg-white overflow-hidden group">
-            <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
+            <CardHeader className="p-3 md:p-4 pb-0 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Rider Integrity</p>
               <Badge className={cn(
                 "h-4 px-1.5 text-[8px] font-black uppercase border-none",
@@ -58,7 +52,7 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
                 {s.score > 80 ? 'EXEMPLARY' : s.score > 50 ? 'WATCHLIST' : 'CRITICAL'}
               </Badge>
             </CardHeader>
-            <CardContent className="p-4 pt-2">
+            <CardContent className="p-3 md:p-4 pt-2">
               <div className="flex items-baseline justify-between">
                 <h4 className="text-sm font-black text-slate-900 truncate pr-2">{s.name}</h4>
                 <span className="text-2xl font-black tracking-tighter text-slate-900">{s.score}%</span>
@@ -96,7 +90,24 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="space-y-2 p-3 md:hidden">
+              {data.tacticalLeaves.length > 0 ? data.tacticalLeaves.map((l: any, i: number) => (
+                <div key={`mobile-tactical-${i}`} className="rounded-xl border border-rose-100 bg-rose-50/30 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-black text-slate-900">{l.rider_name}</p>
+                      <p className="mt-1 text-[8px] font-bold uppercase text-slate-400">Assignment at {format(new Date(l.view_timestamp), 'HH:mm')}</p>
+                    </div>
+                    <Badge className="shrink-0 bg-slate-100 text-slate-600 border-none text-[8px] font-black uppercase h-5">{l.status}</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[9px]">
+                    <div><p className="text-[7px] font-black uppercase tracking-widest text-slate-400">Time gap</p><p className="mt-1 font-black text-rose-600">{Math.abs(l.gap_minutes)}m</p></div>
+                    <div><p className="text-[7px] font-black uppercase tracking-widest text-slate-400">Reason</p><p className="mt-1 truncate font-bold italic text-slate-500">{l.reason || 'No reason provided'}</p></div>
+                  </div>
+                </div>
+              )) : <div className="px-3 py-10 text-center text-slate-300 font-black uppercase tracking-[0.2em] italic text-[10px]">No tactical signatures detected</div>}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest">
                   <tr>
@@ -120,7 +131,7 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
                         <span className="text-xs font-black text-rose-600">{Math.abs(l.gap_minutes)}m</span>
                       </td>
                       <td className="px-4 py-4 max-w-[200px]">
-                        <p className="text-[9px] font-bold text-slate-500 italic truncate">"{l.reason || 'No reason provided'}"</p>
+                        <p className="text-[9px] font-bold text-slate-500 italic truncate">&quot;{l.reason || 'No reason provided'}&quot;</p>
                       </td>
                     </tr>
                   )) : (
@@ -210,7 +221,7 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
                       <p className="text-[11px] font-black text-slate-900">{dev.rider_name}</p>
                       <span className="text-[8px] font-black text-slate-400">{format(new Date(dev.timestamp), 'HH:mm • MMM d')}</span>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-600 leading-relaxed mb-2">"{dev.reason}"</p>
+                    <p className="text-[10px] font-bold text-slate-600 leading-relaxed mb-2">&quot;{dev.reason}&quot;</p>
                     <div className="flex items-center gap-3">
                       <Badge className="bg-slate-100 text-slate-500 border-none text-[7px] font-black uppercase tracking-tighter">REQ-#{dev.request_id?.slice(-6).toUpperCase() || 'NA'}</Badge>
                       {dev.has_photo && (
@@ -244,7 +255,18 @@ export const OperationalIntegrityView: React.FC<OperationalIntegrityViewProps> =
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-1">
-            <div className="overflow-x-auto">
+            <div className="space-y-2 p-3 md:hidden">
+              {data.ghostMiles.length > 0 ? data.ghostMiles.map((r: any, i: number) => {
+                const score = Math.round(100 - (r.idle_incidents * 5 + r.approved_skips * 3));
+                return (
+                  <div key={`mobile-ghost-${i}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                    <div className="min-w-0"><p className="truncate text-[10px] font-black text-slate-900">{r.rider_name}</p><p className="mt-1 text-[8px] font-bold text-slate-400">Idle {r.idle_incidents} · Skips {r.approved_skips}</p></div>
+                    <div className="text-right"><p className={cn("text-sm font-black", score > 90 ? "text-emerald-600" : score > 70 ? "text-amber-600" : "text-rose-600")}>{score}%</p><p className="text-[7px] font-black uppercase tracking-widest text-slate-400">Route score</p></div>
+                  </div>
+                );
+              }) : <div className="px-3 py-10 text-center text-slate-300 font-black uppercase tracking-[0.2em] italic text-[10px]">No route data</div>}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest">
                   <tr>

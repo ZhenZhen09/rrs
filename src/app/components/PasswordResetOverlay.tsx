@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Eye, EyeOff, CheckCircle2, ShieldCheck, XCircle, Delete } from 'lucide-react';
 import { Button } from './ui/button';
@@ -9,13 +9,13 @@ import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 
 interface Props {
   visible: boolean;
-  userId: string;
+  challenge: string;
   userRole: string; // 'rider', 'personnel', 'admin'
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function PasswordResetOverlay({ visible, userId, userRole, onClose, onSuccess }: Props) {
+export function PasswordResetOverlay({ visible, challenge, userRole, onClose, onSuccess }: Props) {
   const isRider = userRole === 'rider';
   
   const [password, setPassword] = useState('');
@@ -24,14 +24,16 @@ export function PasswordResetOverlay({ visible, userId, userRole, onClose, onSuc
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Reset state when visibility changes
-  useEffect(() => {
+  const [previouslyVisible, setPreviouslyVisible] = useState(visible);
+  // Adjust the form before rendering a newly opened overlay; preserve its exit animation.
+  if (visible !== previouslyVisible) {
+    setPreviouslyVisible(visible);
     if (visible) {
       setPassword('');
       setConfirmPassword('');
       setError('');
     }
-  }, [visible]);
+  }
 
   const validation = {
     length: isRider ? password.length === 4 : password.length >= 8,
@@ -59,7 +61,7 @@ export function PasswordResetOverlay({ visible, userId, userRole, onClose, onSuc
       const response = await fetch('/api/auth/update-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, newPassword: password }),
+        body: JSON.stringify({ challenge, newPassword: password }),
         credentials: 'include'
       });
 

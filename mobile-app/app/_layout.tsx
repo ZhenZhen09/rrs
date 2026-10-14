@@ -1,14 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
+import { Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import BugsnagPerformance from '@bugsnag/expo-performance';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
@@ -16,13 +15,18 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { LocationProvider } from '@/context/LocationContext';
 import { BugsnagFallback } from '@/components/ui/BugsnagFallback';
-import { queryClient } from '@/utils/queryClient';
 import { BugsnagErrorBoundary } from '@/utils/bugsnag';
+import { queryClient } from '@/utils/queryClient';
 import { wakeUpServer } from '@/utils/api';
 import { initSyncManager, stopSyncManager } from '@/services/SyncManager';
 import { RadarBriefing } from '@/components/TacticalBriefing/RadarBriefing';
 import { useDashboard } from '@/hooks/data/useDashboard';
 import { getRiderTaskTab } from '@/utils/taskFilters';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { syncActiveDeliveryNotifications } from '@/services/deliveryNotifications';
+import { DashboardTransitionOverlay } from '@/components/ui/DashboardTransitionOverlay';
+import { getDashboardTransitionState } from '@/utils/dashboardTransition';
+
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -36,10 +40,16 @@ export const unstable_settings = {
 const BRIEFING_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
-  const { isLoading, user } = useAuth();
-  const { tasks } = useDashboard();
+  const { isLoading, isAuthenticating, user } = useAuth();
+  const segments = useSegments();
+  usePushNotifications(user?.id);
+  const { tasks, tasksLoading, tasksFetching, tasksError, retryTasks } = useDashboard();
   const [showBriefing, setShowBriefing] = useState(false);
   const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    void syncActiveDeliveryNotifications(tasks).catch((error) => console.warn('Unable to sync active delivery notification:', error));
+  }, [tasks]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -88,6 +98,14 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
 
   const overdueTasks = tasks.filter(t => getRiderTaskTab(t) === 'overdue');
   const todayTasks = tasks.filter(t => getRiderTaskTab(t) === 'today');
+  const transition = getDashboardTransitionState({
+    isAuthenticating,
+    hasUser: Boolean(user),
+    loginRouteActive: segments[0] === 'login',
+    tasksLoading,
+    tasksFetching,
+    tasksError,
+  });
   
   // Get the very first task in the optimized sequence
   const nextTask = [...overdueTasks, ...todayTasks].sort((a, b) => (a.queue_order || 999) - (b.queue_order || 999))[0] || null;
@@ -97,9 +115,17 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="job/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="conversation/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>
+
+      <DashboardTransitionOverlay
+        visible={transition.visible}
+        error={transition.error}
+        onRetry={() => { void retryTasks(); }}
+      />
 
       {showBriefing && (
         <RadarBriefing 
@@ -146,4 +172,12 @@ function RootLayout() {
   );
 }
 
-export default BugsnagPerformance.withInstrumentedAppStarts(RootLayout);
+let App: any = RootLayout;
+if (Platform.OS !== 'web') {
+  // Keep this native-only module out of the web bundle and web runtime.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const BugsnagPerformance = require('@bugsnag/expo-performance').default;
+  App = BugsnagPerformance.withInstrumentedAppStarts(RootLayout);
+}
+
+export default App;

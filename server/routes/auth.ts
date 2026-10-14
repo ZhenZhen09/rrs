@@ -7,43 +7,65 @@ import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import jwt from 'jsonwebtoken';
 import { onlineRiders } from '../presence';
+import { getRememberMe } from './authSession';
+import { consumeAuthChallenge, findAuthChallenge, issueAuthChallenge } from '../services/authChallenges';
+import { getJwtSecret, getRefreshSecret } from '../config/security';
+import { getDefaultRiderAvatarId } from '../services/riderAvatarCatalog';
+import { getRiderAvatarPreference } from '../services/riderAvatarPreferences';
 
 const router = Router();
 
-// Runtime getter to ensure identical secret with middleware
-const getJwtSecret = () => process.env.JWT_SECRET || 'fallback_secret_for_dev_only';
-const getRefreshSecret = () => process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret_dev';
+const ACCESS_TOKEN_TTL = '1h';
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const REMEMBERED_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const COOKIE_OPTIONS = {
+const getCookieOptions = (maxAge?: number) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days (match Refresh Token)
+  path: '/',
+  ...(maxAge === undefined ? {} : { maxAge })
+});
+
+const getSessionTtl = (rememberMe: boolean) => rememberMe ? REMEMBERED_SESSION_TTL_MS : SESSION_TTL_MS;
+const isMobileClient = (req: Request) => req.headers['x-client-type'] === 'mobile';
+const toUserProfile = async (user: any) => {
+  const { password_hash, mfa_secret, refresh_token, refresh_token_expires_at, ...profile } = user;
+  const avatarId = profile.role === 'rider'
+    ? await getRiderAvatarPreference(String(profile.id))
+    : null;
+  return { ...profile, avatar_id: avatarId || getDefaultRiderAvatarId(String(profile.id)) };
 };
 
-const generateTokens = async (user: any) => {
-  const accessToken = jwt.sign(
-    { 
-      id: user.id, 
-      email: user.email, 
-      role: user.role, 
-      department: user.department,
-      is_on_duty: user.is_on_duty 
-    },
-    getJwtSecret(),
-    { expiresIn: '1h' }
-  );
+const generateAccessToken = (user: any) => jwt.sign(
+  {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    department: user.department,
+    is_on_duty: user.is_on_duty,
+  },
+  getJwtSecret(),
+  { expiresIn: ACCESS_TOKEN_TTL }
+);
+
+const generateTokens = async (user: any, rememberMe: boolean, existingRefreshExpiresAt?: Date) => {
+  const refreshExpiresAt = existingRefreshExpiresAt || new Date(Date.now() + getSessionTtl(rememberMe));
+  const refreshTtlSeconds = Math.max(1, Math.floor((refreshExpiresAt.getTime() - Date.now()) / 1000));
+  const refreshExpiresAtSql = refreshExpiresAt
+    .toISOString().slice(0, 19).replace('T', ' ');
+  const accessToken = generateAccessToken(user);
 
   const refreshToken = jwt.sign(
-    { id: user.id },
+    { id: user.id, rememberMe },
     getRefreshSecret(),
-    { expiresIn: '7d' }
+    { expiresIn: refreshTtlSeconds }
   );
 
   // Store refresh token in DB for rotation and revocation
   await pool.query(
-    'UPDATE users SET refresh_token = ?, refresh_token_expires_at = DATE_ADD(NOW(), INTERVAL 7 DAY) WHERE id = ?',
-    [refreshToken, user.id]
+    'UPDATE users SET refresh_token = ?, refresh_token_expires_at = ? WHERE id = ?',
+    [refreshToken, refreshExpiresAtSql, user.id]
   );
 
   return { accessToken, refreshToken };
@@ -52,7 +74,8 @@ const generateTokens = async (user: any) => {
 // Login
 router.post('/login', validate(loginSchema), async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, rememberMe: requestedRememberMe = false } = req.body || {};
+    const rememberMe = getRememberMe(req, requestedRememberMe);
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -84,37 +107,41 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
 
     // SPECIAL POWER: admin@company.com BYPASSES mandatory reset
     if (!isSuperAdmin && user.require_password_reset) {
+      const challenge = await issueAuthChallenge(user.id, 'password_reset');
       return res.json({ 
         require_password_reset: true, 
-        userId: user.id, 
+        challenge,
+        role: user.role,
         message: 'Must change password before proceeding' 
       });
     }
 
     // Check MFA status
-    if (process.env.NODE_ENV !== 'development' && user.mfa_enabled) {
+    if (!isSuperAdmin && process.env.NODE_ENV !== 'development' && user.mfa_enabled) {
       return res.json({
         mfa_required: true,
-        userId: user.id,
+        challenge: await issueAuthChallenge(user.id, 'mfa_login'),
         message: 'Please enter your Google Authenticator code'
       });
     } else if (process.env.NODE_ENV !== 'development' && !isSuperAdmin && (user.role === 'personnel' || user.role === 'admin')) {
       return res.json({
         mfa_setup_required: true,
-        userId: user.id,
+        challenge: await issueAuthChallenge(user.id, 'mfa_setup'),
         message: 'Security setup required: Please link your Google Authenticator'
       });
     }
 
     // Success: Generate Tokens
-    const { accessToken, refreshToken } = await generateTokens(user);
+    const { accessToken, refreshToken } = await generateTokens(user, rememberMe);
 
     // Set cookie (Secure, HttpOnly for Web)
-    res.cookie('authToken', accessToken, COOKIE_OPTIONS);
+    const sessionCookieAge = rememberMe ? REMEMBERED_SESSION_TTL_MS : undefined;
+    res.cookie('authToken', accessToken, getCookieOptions(sessionCookieAge));
+    res.cookie('refreshToken', refreshToken, getCookieOptions(sessionCookieAge));
 
     // Return user data
-    const { password_hash, mfa_secret, refresh_token, refresh_token_expires_at, ...userProfile } = user;
-    res.json({ ...userProfile, token: accessToken, refreshToken });
+    const userProfile = await toUserProfile(user);
+    res.json(isMobileClient(req) ? { ...userProfile, token: accessToken, refreshToken } : userProfile);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Database or Internal server error' });
@@ -124,7 +151,7 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
 // Refresh Token Endpoint
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body || {};
+    const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
     if (!refreshToken) return res.status(401).json({ error: 'Refresh token required' });
 
     const decoded = jwt.verify(refreshToken, getRefreshSecret()) as any;
@@ -139,10 +166,22 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     const user = users[0];
-    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user);
+    const remainingSessionMs = Math.max(0, new Date(user.refresh_token_expires_at).getTime() - Date.now());
+    const rememberMe = typeof decoded.rememberMe === 'boolean'
+      ? decoded.rememberMe
+      : remainingSessionMs > SESSION_TTL_MS;
+    // Keep the refresh credential stable until its fixed expiry. Rotating a
+    // single per-user token here makes simultaneous tabs invalidate each other.
+    const accessToken = generateAccessToken(user);
+    const currentRefreshToken = refreshToken;
 
-    res.cookie('authToken', accessToken, COOKIE_OPTIONS);
-    res.json({ token: accessToken, refreshToken: newRefreshToken });
+    const sessionCookieAge = rememberMe ? remainingSessionMs : undefined;
+    res.cookie('authToken', accessToken, getCookieOptions(sessionCookieAge));
+    res.cookie('refreshToken', currentRefreshToken, getCookieOptions(sessionCookieAge));
+    const userProfile = await toUserProfile(user);
+    res.json(isMobileClient(req)
+      ? { ...userProfile, token: accessToken, refreshToken: currentRefreshToken }
+      : userProfile);
   } catch (error) {
     console.error('Refresh error:', error);
     res.status(403).json({ error: 'Invalid refresh token' });
@@ -152,9 +191,29 @@ router.post('/refresh', async (req: Request, res: Response) => {
 // Logout
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.body || {};
+    let { userId } = req.body || {};
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    if (refreshToken) {
+      let decoded: any;
+      try {
+        decoded = jwt.verify(refreshToken, getRefreshSecret()) as any;
+      } catch {
+        // Clearing an expired or malformed cookie should still complete logout.
+      }
+      if (decoded?.id) {
+        userId = decoded.id;
+        await pool.query(
+          'UPDATE users SET refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = ? AND refresh_token = ?',
+          [decoded.id, refreshToken]
+        );
+      } else {
+        userId = undefined;
+      }
+    }
     if (userId) {
-      await pool.query('UPDATE users SET refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = ?', [userId]);
+      if (!refreshToken) {
+        await pool.query('UPDATE users SET refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = ?', [userId]);
+      }
 
       if (onlineRiders.has(userId)) {
         onlineRiders.delete(userId);
@@ -169,6 +228,7 @@ router.post('/logout', async (req: Request, res: Response) => {
       }
     }
     res.clearCookie('authToken');
+    res.clearCookie('refreshToken');
     res.json({ success: true });
   } catch (error) {
     console.error('Logout error:', error);
@@ -176,32 +236,82 @@ router.post('/logout', async (req: Request, res: Response) => {
   }
 });
 
-// MFA: Verify and Enable
+// Start MFA enrollment after the password was verified by /login.
+router.post('/mfa/setup-init', async (req: Request, res: Response) => {
+  try {
+    const { challenge: setupChallenge } = req.body || {};
+    if (!setupChallenge) return res.status(401).json({ error: 'Authentication challenge required' });
+
+    const pendingSetup = await findAuthChallenge(setupChallenge, 'mfa_setup');
+    if (!pendingSetup) return res.status(401).json({ error: 'Invalid or expired MFA setup challenge' });
+
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [pendingSetup.userId]);
+    const user = (rows as any[])[0];
+    if (!user || user.mfa_enabled || user.status === 'inactive' || user.email?.toLowerCase() === 'admin@company.com') {
+      return res.status(403).json({ error: 'Account is not eligible for MFA setup' });
+    }
+    if (!['admin', 'personnel'].includes(user.role)) {
+      return res.status(403).json({ error: 'MFA setup is not available for this account' });
+    }
+    if (!await consumeAuthChallenge(setupChallenge, 'mfa_setup')) {
+      return res.status(401).json({ error: 'Invalid or expired MFA setup challenge' });
+    }
+
+    const secret = speakeasy.generateSecret({ name: `Errands (${user.email})` });
+    const challenge = await issueAuthChallenge(user.id, 'mfa_setup_verify', { secret: secret.base32 });
+    const qrCode = await QRCode.toDataURL(secret.otpauth_url!);
+    return res.json({ challenge, qrCode });
+  } catch (error) {
+    console.error('MFA Setup initialization error:', error);
+    return res.status(500).json({ error: 'Failed to initialize MFA setup' });
+  }
+});
+
+// Verify and enable MFA using the server-issued enrollment challenge.
 router.post('/mfa/setup-verify', async (req: Request, res: Response) => {
   try {
-    const { userId, secret, token } = req.body || {};
-    if (!userId || !secret || !token) {
-      return res.status(400).json({ error: 'Missing required MFA fields' });
+    const { challenge: setupChallenge, token, rememberMe: requestedRememberMe = false } = req.body || {};
+    const rememberMe = getRememberMe(req, requestedRememberMe);
+    if (!setupChallenge || !token) return res.status(401).json({ error: 'Authentication challenge required' });
+
+    const pendingSetup = await findAuthChallenge(setupChallenge, 'mfa_setup_verify');
+    if (!pendingSetup || typeof pendingSetup.payload.secret !== 'string') {
+      return res.status(401).json({ error: 'Invalid or expired MFA setup challenge' });
+    }
+    const [rows] = await pool.query(
+      'SELECT * FROM users WHERE id = ? AND (mfa_enabled = 0 OR mfa_enabled IS NULL)',
+      [pendingSetup.userId],
+    );
+    const user = (rows as any[])[0];
+    if (!user || user.status === 'inactive' || user.email?.toLowerCase() === 'admin@company.com') {
+      return res.status(403).json({ error: 'Account is not eligible for MFA setup' });
     }
     const verified = speakeasy.totp.verify({
-      secret: secret,
+      secret: pendingSetup.payload.secret,
       encoding: 'base32',
       token: token,
       window: 1
     });
 
     if (verified) {
-      await pool.query(
-        'UPDATE users SET mfa_secret = ?, mfa_enabled = 1 WHERE id = ?',
-        [secret, userId]
-      );
-
-      const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
-      const user = (rows as any[])[0];
-      const { accessToken, refreshToken } = await generateTokens(user);
-
-      res.cookie('authToken', accessToken, COOKIE_OPTIONS);
-      res.json({ success: true, user, token: accessToken, refreshToken });
+      if (!await consumeAuthChallenge(setupChallenge, 'mfa_setup_verify')) {
+        return res.status(401).json({ error: 'Invalid or expired MFA setup challenge' });
+      }
+      const [updateResult] = await pool.query(
+        'UPDATE users SET mfa_secret = ?, mfa_enabled = 1 WHERE id = ? AND (mfa_enabled = 0 OR mfa_enabled IS NULL)',
+        [pendingSetup.payload.secret, pendingSetup.userId],
+      ) as any[];
+      if (updateResult?.affectedRows !== 1) {
+        return res.status(409).json({ error: 'MFA is already enabled for this account' });
+      }
+      user.mfa_secret = pendingSetup.payload.secret;
+      user.mfa_enabled = 1;
+      const { accessToken, refreshToken } = await generateTokens(user, rememberMe);
+      const sessionCookieAge = rememberMe ? REMEMBERED_SESSION_TTL_MS : undefined;
+      res.cookie('authToken', accessToken, getCookieOptions(sessionCookieAge));
+      res.cookie('refreshToken', refreshToken, getCookieOptions(sessionCookieAge));
+      const userProfile = await toUserProfile(user);
+      res.json(isMobileClient(req) ? { success: true, user: userProfile, token: accessToken, refreshToken } : { success: true, user: userProfile });
     } else {
       res.status(400).json({ error: 'Invalid verification code' });
     }
@@ -211,19 +321,23 @@ router.post('/mfa/setup-verify', async (req: Request, res: Response) => {
   }
 });
 
-// MFA: Verify Login
+// Complete MFA login using the challenge issued after password verification.
 router.post('/mfa/verify-login', async (req: Request, res: Response) => {
   try {
-    const { userId, token } = req.body || {};
-    if (!userId || !token) {
-      return res.status(400).json({ error: 'Missing userId or token' });
-    }
-    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
+    const { challenge: loginChallenge, token, rememberMe: requestedRememberMe = false } = req.body || {};
+    const rememberMe = getRememberMe(req, requestedRememberMe);
+    if (!loginChallenge || !token) return res.status(401).json({ error: 'Authentication challenge required' });
+
+    const pendingLogin = await findAuthChallenge(loginChallenge, 'mfa_login');
+    if (!pendingLogin) return res.status(401).json({ error: 'Invalid or expired MFA login challenge' });
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [pendingLogin.userId]);
     const users = rows as any[];
-    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (users.length === 0) return res.status(401).json({ error: 'Invalid or expired MFA login challenge' });
 
     const user = users[0];
-    if (!user.mfa_secret) return res.status(400).json({ error: 'MFA not setup' });
+    if (user.status === 'inactive' || !user.mfa_enabled || !user.mfa_secret) {
+      return res.status(401).json({ error: 'Invalid or expired MFA login challenge' });
+    }
 
     const verified = speakeasy.totp.verify({
       secret: user.mfa_secret,
@@ -233,9 +347,15 @@ router.post('/mfa/verify-login', async (req: Request, res: Response) => {
     });
 
     if (verified) {
-      const { accessToken, refreshToken } = await generateTokens(user);
-      res.cookie('authToken', accessToken, COOKIE_OPTIONS);
-      res.json({ ...user, token: accessToken, refreshToken });
+      if (!await consumeAuthChallenge(loginChallenge, 'mfa_login')) {
+        return res.status(401).json({ error: 'Invalid or expired MFA login challenge' });
+      }
+      const { accessToken, refreshToken } = await generateTokens(user, rememberMe);
+      const sessionCookieAge = rememberMe ? REMEMBERED_SESSION_TTL_MS : undefined;
+      res.cookie('authToken', accessToken, getCookieOptions(sessionCookieAge));
+      res.cookie('refreshToken', refreshToken, getCookieOptions(sessionCookieAge));
+      const userProfile = await toUserProfile(user);
+      res.json(isMobileClient(req) ? { ...userProfile, token: accessToken, refreshToken } : userProfile);
     } else {
       res.status(400).json({ error: 'Invalid verification code' });
     }
@@ -267,20 +387,43 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
   }
 });
 
-// Update Password
+// Complete a forced password change using the challenge issued after password verification.
 router.post('/update-password', async (req: Request, res: Response) => {
   try {
-    const { userId, newPassword } = req.body || {};
-    if (!userId || !newPassword) {
-      return res.status(400).json({ error: 'Missing userId or newPassword' });
+    const { challenge: resetChallenge, newPassword } = req.body || {};
+    if (!resetChallenge || typeof newPassword !== 'string') {
+      return res.status(401).json({ error: 'Password reset challenge required' });
+    }
+
+    const pendingReset = await findAuthChallenge(resetChallenge, 'password_reset');
+    if (!pendingReset) return res.status(401).json({ error: 'Invalid or expired password reset challenge' });
+    const [rows] = await pool.query(
+      'SELECT id, email, role, require_password_reset FROM users WHERE id = ?',
+      [pendingReset.userId],
+    );
+    const user = (rows as any[])[0];
+    if (!user || !user.require_password_reset || user.email?.toLowerCase() === 'admin@company.com') {
+      return res.status(401).json({ error: 'Invalid or expired password reset challenge' });
+    }
+
+    const isValidPassword = user.role === 'rider'
+      ? /^\d{4}$/.test(newPassword)
+      : newPassword.length >= 8 && /\d/.test(newPassword) && /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+    if (!isValidPassword) return res.status(400).json({ error: 'New password does not meet the account password requirements' });
+
+    if (!await consumeAuthChallenge(resetChallenge, 'password_reset')) {
+      return res.status(401).json({ error: 'Invalid or expired password reset challenge' });
     }
 
     const hashedPassword = await argon2.hash(newPassword);
     
-    await pool.query(
-      'UPDATE users SET password_hash = ?, require_password_reset = 0, last_password_change = CURRENT_TIMESTAMP WHERE id = ?',
-      [hashedPassword, userId]
-    );
+    const [updateResult] = await pool.query(
+      `UPDATE users SET password_hash = ?, require_password_reset = 0, last_password_change = CURRENT_TIMESTAMP,
+         refresh_token = NULL, refresh_token_expires_at = NULL
+       WHERE id = ? AND require_password_reset = 1`,
+      [hashedPassword, pendingReset.userId],
+    ) as any[];
+    if (updateResult?.affectedRows !== 1) return res.status(401).json({ error: 'Password reset is no longer required' });
 
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {

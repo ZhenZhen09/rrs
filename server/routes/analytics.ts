@@ -1,28 +1,38 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { collatedJsonEquals } from '../utils/sqlCollation';
+import { ACCOUNTING_BUCKET_SQL, buildRequestAccounting } from '../utils/requestAccounting';
+import { getOverdueMetadata } from '../utils/overdue';
+import { authorize } from '../middleware/auth';
 
 const router = Router();
+const PHILIPPINE_TIME_ZONE = 'Asia/Manila';
+const PH_NOW_SQL = "CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')";
+const REPORT_COLUMNS = `request_id, created_at, status, requester_name, requester_department,
+  request_type, pickup_address, pickup_business_name, dropoff_address, dropoff_business_name,
+  personnel_instructions, admin_remark, delivery_status, rider_remark, assigned_rider_name,
+  assigned_rider_id, delivery_date, completed_at, time_window, dropoff_lat, dropoff_lng`;
 
 // Helper to get timeframe filter
 const getDateFilter = (query: any, prefix = '') => {
+  if (query.scope === 'all') return '1 = 1';
   if (query.monthYear && /^\d{4}-\d{2}$/.test(query.monthYear)) {
     return `DATE_FORMAT(${prefix}created_at, '%Y-%m') = '${query.monthYear}'`;
   }
   const timeframe = query.timeframe || 'monthly';
   switch (timeframe) {
     case 'real-time':
-      return `${prefix}created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)`;
+      return `${prefix}created_at > DATE_SUB(${PH_NOW_SQL}, INTERVAL 24 HOUR)`;
     case 'daily':
-      return `DATE(${prefix}created_at) = CURDATE()`;
+      return `DATE(${prefix}created_at) = DATE(${PH_NOW_SQL})`;
     case 'weekly':
-      return `${prefix}created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)`;
+      return `${prefix}created_at > DATE_SUB(${PH_NOW_SQL}, INTERVAL 7 DAY)`;
     default:
-      return `${prefix}created_at > DATE_SUB(NOW(), INTERVAL 30 DAY)`; // Monthly default
+      return `${prefix}created_at > DATE_SUB(${PH_NOW_SQL}, INTERVAL 30 DAY)`; // Monthly default
   }
 };
 
 const getEventTimeFilter = (query: any) => getDateFilter(query).replace(/created_at/g, 'event_time');
-
 const formatDurationSeconds = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0m';
   const h = Math.floor(seconds / 3600);
@@ -48,15 +58,22 @@ const getReliability = (offlineCount: number, totalOfflineSeconds: number) => {
 };
 
 const formatDateLabel = (value: any) => {
-  const date = new Date(value);
+  const date = parsePhilippineDate(value);
   if (Number.isNaN(date.getTime())) return 'Unknown';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { timeZone: PHILIPPINE_TIME_ZONE, month: 'short', day: 'numeric' });
 };
 
 const getDateKey = (value: any) => {
-  const date = new Date(value);
+  const date = parsePhilippineDate(value);
   if (Number.isNaN(date.getTime())) return 'unknown';
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleDateString('en-CA', { timeZone: PHILIPPINE_TIME_ZONE });
+};
+
+const parsePhilippineDate = (value: any) => {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(value) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) {
+    return new Date(`${value.slice(0, 19).replace(' ', 'T')}+08:00`);
+  }
+  return new Date(value);
 };
 
 // 1. Actual vs. Estimated Route Efficiency
@@ -220,38 +237,40 @@ router.get('/exceptions', async (req, res) => {
 });
 
 // 7. Overall Summary Stats
-router.get('/summary-stats', async (req, res) => {
+router.get('/summary-stats', authorize(['admin']), async (req, res) => {
   try {
     const filter = getDateFilter(req.query);
-    const [counts] = await pool.query(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN delivery_status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN delivery_status = 'in_transit' THEN 1 ELSE 0 END) as in_transit,
-        SUM(CASE WHEN delivery_status = 'pending' OR delivery_status = 'assigned' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN delivery_status = 'failed' THEN 1 ELSE 0 END) as failed,
-        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
-      FROM delivery_requests
-      WHERE ${filter}
-    `) as any[];
+    // Counts and ledger are generated from the same database snapshot, not separate samples.
+    const [rows] = await pool.query(`SELECT ${REPORT_COLUMNS} FROM delivery_requests WHERE ${filter} ORDER BY created_at DESC, request_id ASC`) as any[];
+    const now = new Date();
+    const requests = rows.map((row: any) => ({ ...row, ...getOverdueMetadata(row, now) }));
+    const counts = buildRequestAccounting(requests);
     
     const [avgTime] = await pool.query(`
       SELECT AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) / 60 as avg_hours
       FROM delivery_requests
-      WHERE delivery_status = 'completed' AND completed_at IS NOT NULL
+      WHERE (${ACCOUNTING_BUCKET_SQL}) = 'completed' AND completed_at IS NOT NULL
       AND ${filter}
     `) as any[];
 
-    const onTimeRate = 87.5; 
+    const [timeliness] = await pool.query(`SELECT
+      COUNT(*) AS measured,
+      SUM(completed_at < TIMESTAMP(delivery_date, '19:00:00')) AS on_time
+      FROM delivery_requests WHERE (${ACCOUNTING_BUCKET_SQL}) = 'completed'
+      AND completed_at IS NOT NULL AND delivery_date IS NOT NULL AND ${filter}`) as any[];
+    const onTimeRate = timeliness[0].measured ? Number(timeliness[0].on_time) / Number(timeliness[0].measured) * 100 : null;
 
     const [utilization] = await pool.query(`
       SELECT 
-        (SELECT COUNT(DISTINCT assigned_rider_id) FROM delivery_requests WHERE delivery_status IN ('assigned', 'picked_up', 'in_transit') AND ${filter}) / 
-        (SELECT COUNT(*) FROM users WHERE role = 'rider') * 100 as rate
+        (SELECT COUNT(DISTINCT assigned_rider_id) FROM delivery_requests WHERE (${ACCOUNTING_BUCKET_SQL}) = 'active' AND ${filter}) /
+        NULLIF((SELECT COUNT(*) FROM users WHERE role = 'rider'), 0) * 100 as rate
     `) as any[];
 
     res.json({
-      counts: counts[0],
+      counts: { ...counts, in_transit: requests.filter((row: any) => ['in_transit', 'in_progress'].includes(row.delivery_status) && row.status === 'approved').length },
+      requests,
+      scope: { dateBasis: 'created_at', monthYear: req.query.scope === 'all' ? null : req.query.monthYear || null, timeZone: PHILIPPINE_TIME_ZONE },
+      timelinessMeasured: Number(timeliness[0].measured),
       avgTime: avgTime[0].avg_hours || 0,
       onTimeRate,
       utilization: Math.round(utilization[0].rate || 0)
@@ -331,6 +350,94 @@ router.get('/location-insights', async (req, res) => {
   }
 });
 
+// 10. Weekly Scheduling Grid
+router.get('/weekly-schedule', async (req, res) => {
+  const weekStart = String(req.query.weekStart || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    return res.status(400).json({ error: 'weekStart must be a YYYY-MM-DD date.' });
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        dr.request_id,
+        DATE_FORMAT(dr.delivery_date, '%Y-%m-%d') AS delivery_date,
+        dr.time_window,
+        dr.request_type,
+        dr.status,
+        dr.delivery_status,
+        dr.assigned_rider_id,
+        dr.assigned_rider_name,
+        dr.pickup_business_name AS pickup_building_name,
+        dr.dropoff_business_name AS dropoff_building_name,
+        dr.pickup_address,
+        dr.dropoff_address,
+        (SELECT MIN(ss.start_time) FROM shift_sessions ss WHERE ss.rider_id = dr.assigned_rider_id AND DATE(ss.start_time) = dr.delivery_date) AS rider_time_in,
+        dr.approved_at AS accepted_at,
+        (
+          SELECT MIN(sl.timestamp)
+          FROM status_logs sl
+          WHERE sl.request_id COLLATE utf8mb4_unicode_ci = dr.request_id
+            AND sl.status = 'in_progress'
+        ) AS started_at,
+        dr.completed_at AS finished_at,
+        CASE
+          WHEN COALESCE(dr.completed_at, ${PH_NOW_SQL}) >= TIMESTAMP(dr.delivery_date, '19:00:00')
+          THEN TIMESTAMP(dr.delivery_date, '19:00:00')
+          ELSE NULL
+        END AS overdue_at,
+        CASE
+          WHEN dr.completed_at IS NOT NULL
+            AND dr.completed_at >= TIMESTAMP(dr.delivery_date, '19:00:00')
+          THEN TIMESTAMPDIFF(MINUTE, TIMESTAMP(dr.delivery_date, '19:00:00'), dr.completed_at)
+          ELSE NULL
+        END AS overdue_minutes_at_resolution,
+        (
+          SELECT sal.actor_role
+          FROM system_audit_logs sal
+          WHERE sal.resource_type = 'delivery_requests'
+            AND sal.resource_id COLLATE utf8mb4_unicode_ci = dr.request_id
+            AND (
+              (sal.action IN ('update_status', 'cancel_request')
+                AND ${collatedJsonEquals("JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.delivery_status'))", 'dr.delivery_status')}
+                AND JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.delivery_status')) IN ('completed', 'delivered', 'failed', 'cancelled'))
+              OR (sal.action IN ('cancel_request', 'disapprove_request')
+                AND ${collatedJsonEquals("JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.status'))", 'dr.status')}
+                AND dr.status IN ('cancelled', 'disapproved'))
+            )
+          ORDER BY sal.timestamp DESC
+          LIMIT 1
+        ) AS resolved_by_role,
+        (
+          SELECT u.name
+          FROM system_audit_logs sal
+          LEFT JOIN users u ON u.id = sal.actor_id COLLATE utf8mb4_unicode_ci
+          WHERE sal.resource_type = 'delivery_requests'
+            AND sal.resource_id COLLATE utf8mb4_unicode_ci = dr.request_id
+            AND (
+              (sal.action IN ('update_status', 'cancel_request')
+                AND ${collatedJsonEquals("JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.delivery_status'))", 'dr.delivery_status')}
+                AND JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.delivery_status')) IN ('completed', 'delivered', 'failed', 'cancelled'))
+              OR (sal.action IN ('cancel_request', 'disapprove_request')
+                AND ${collatedJsonEquals("JSON_UNQUOTE(JSON_EXTRACT(sal.new_values, '$.status'))", 'dr.status')}
+                AND dr.status IN ('cancelled', 'disapproved'))
+            )
+          ORDER BY sal.timestamp DESC
+          LIMIT 1
+        ) AS resolved_by_name
+      FROM delivery_requests dr
+      WHERE dr.delivery_date >= ?
+        AND dr.delivery_date < DATE_ADD(?, INTERVAL 7 DAY)
+      ORDER BY dr.delivery_date ASC, dr.time_window ASC, dr.created_at ASC
+    `, [weekStart, weekStart]) as any[];
+
+    res.json({ weekStart, requests: rows || [] });
+  } catch (error) {
+    console.error('Error fetching weekly schedule:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // 11. Operational Integrity (Layer 4)
 router.get('/operational-integrity', async (req, res) => {
   try {
@@ -344,7 +451,7 @@ router.get('/operational-integrity', async (req, res) => {
              TIMESTAMPDIFF(MINUTE, me.timestamp, al.created_at) as gap_minutes
       FROM users u
       JOIN attendance_logs al ON u.id = al.rider_id
-      JOIN movement_events me ON u.id = me.rider_id
+      JOIN movement_events me ON u.id = me.rider_id COLLATE utf8mb4_unicode_ci
       WHERE al.status IN ('absent', 'on_leave')
       AND me.event_type = 'assignment'
       AND ABS(TIMESTAMPDIFF(MINUTE, me.timestamp, al.created_at)) < 60
@@ -371,7 +478,7 @@ router.get('/operational-integrity', async (req, res) => {
              JSON_UNQUOTE(JSON_EXTRACT(me.metadata, '$.requestId')) as request_id,
              JSON_UNQUOTE(JSON_EXTRACT(me.metadata, '$.photoUrl')) as has_photo
       FROM movement_events me
-      JOIN users u ON me.rider_id = u.id
+      JOIN users u ON me.rider_id COLLATE utf8mb4_unicode_ci = u.id
       WHERE me.event_type = 'deviation_requested'
       AND ${filter.replace(/created_at/g, 'me.timestamp')}
       ORDER BY me.timestamp DESC
@@ -384,7 +491,7 @@ router.get('/operational-integrity', async (req, res) => {
              COUNT(CASE WHEN me.event_type = 'deviation_resolved' THEN 1 END) as approved_skips,
              COUNT(DISTINCT me.request_id) as total_tasks
       FROM users u
-      LEFT JOIN movement_events me ON u.id = me.rider_id
+      LEFT JOIN movement_events me ON u.id = me.rider_id COLLATE utf8mb4_unicode_ci
       WHERE u.role = 'rider'
       AND ${filter.replace(/created_at/g, 'me.timestamp')}
       GROUP BY u.id, u.name
@@ -398,7 +505,7 @@ router.get('/operational-integrity', async (req, res) => {
                (COUNT(CASE WHEN me.event_type = 'idle_alert' THEN 1 END) * 5)
              ) as score
       FROM users u
-      LEFT JOIN movement_events me ON u.id = me.rider_id
+      LEFT JOIN movement_events me ON u.id = me.rider_id COLLATE utf8mb4_unicode_ci
       WHERE u.role = 'rider'
       GROUP BY u.id, u.name
     `) as any[];
@@ -650,7 +757,11 @@ router.get('/rider-connectivity', async (req, res) => {
 router.get('/monthly-trend', async (req, res) => {
   try {
     const monthYear = req.query.monthYear as string;
-    const monthStr = monthYear || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const monthStr = monthYear || new Intl.DateTimeFormat('en-CA', {
+      timeZone: PHILIPPINE_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date());
     const baseDateStr = `${monthStr}-01`;
     
     const [rows] = await pool.query(`
@@ -658,7 +769,7 @@ router.get('/monthly-trend', async (req, res) => {
         DATE_FORMAT(created_at, '%Y-%m') as month_key,
         DATE_FORMAT(created_at, '%b') as month,
         COUNT(*) as total_tasks,
-        SUM(CASE WHEN delivery_status = 'completed' THEN 1 ELSE 0 END) as completed
+        SUM(CASE WHEN (${ACCOUNTING_BUCKET_SQL}) = 'completed' THEN 1 ELSE 0 END) as completed
       FROM delivery_requests
       WHERE created_at >= DATE_SUB(?, INTERVAL 2 MONTH)
       AND created_at < DATE_ADD(?, INTERVAL 1 MONTH)
@@ -716,7 +827,7 @@ router.get('/failure-reasons', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT rider_remark as reason
       FROM delivery_requests
-      WHERE delivery_status = 'failed' AND ${filter}
+      WHERE (${ACCOUNTING_BUCKET_SQL}) = 'failed' AND ${filter}
     `) as any[];
     
     const reasonCounts: Record<string, number> = {};
@@ -730,8 +841,7 @@ router.get('/failure-reasons', async (req, res) => {
 
     const sortedReasons = Object.entries(reasonCounts)
       .map(([reason, count]) => ({ reason, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count);
 
     res.json(sortedReasons);
   } catch (error) {
@@ -741,26 +851,11 @@ router.get('/failure-reasons', async (req, res) => {
 });
 
 // 17. Export CSV Data
-router.get('/export-csv', async (req, res) => {
+router.get('/export-csv', authorize(['admin']), async (req, res) => {
   try {
     const filter = getDateFilter(req.query);
     const [rows] = await pool.query(`
-      SELECT 
-        request_id,
-        created_at,
-        status,
-        requester_name,
-        requester_department,
-        request_type,
-        pickup_address,
-        pickup_business_name,
-        dropoff_address,
-        dropoff_business_name,
-        personnel_instructions,
-        admin_remark,
-        delivery_status,
-        rider_remark,
-        assigned_rider_name
+      SELECT ${REPORT_COLUMNS}
       FROM delivery_requests
       WHERE ${filter}
       ORDER BY created_at DESC

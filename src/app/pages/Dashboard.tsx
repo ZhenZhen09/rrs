@@ -5,7 +5,7 @@ import { useData } from '../context/DataContext';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Truck, LogOut, Bell, UserCog, Mail, Shield, Building, CheckCheck } from 'lucide-react';
 import { PersonnelDashboard } from './PersonnelDashboard';
@@ -13,6 +13,7 @@ import { AdminLayout } from './Admin/AdminLayout';
 import { RiderDashboard } from './RiderDashboard';
 import { QuickStartGuide } from '../components/QuickStartGuide';
 import { format, parseISO } from 'date-fns';
+import { getRoleHomeRoute } from '../utils/roleRoutes';
 
 export function Dashboard() {
   const { user, logout } = useAuth();
@@ -25,7 +26,7 @@ export function Dashboard() {
   // Redirect to role-specific dashboard if on generic /dashboard
   useEffect(() => {
     if (user && location.pathname === '/dashboard') {
-      navigate(`/${user.role}/dashboard`, { replace: true });
+      navigate(getRoleHomeRoute(user.role), { replace: true });
     }
   }, [user, location.pathname, navigate]);
 
@@ -151,6 +152,7 @@ export function Dashboard() {
                   <SheetHeader>
                     <div className="flex items-center justify-between">
                       <SheetTitle>Notifications</SheetTitle>
+                      <SheetDescription className="sr-only">Recent updates and notifications for your account.</SheetDescription>
                       {unreadCount > 0 && (
                         <Button 
                           variant="ghost" 

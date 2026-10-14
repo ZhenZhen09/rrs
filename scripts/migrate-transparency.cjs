@@ -52,6 +52,24 @@ async function run() {
         INDEX idx_timestamp (timestamp)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    const [movementEventSchema] = await pool.query(`
+      SELECT t.TABLE_COLLATION,
+             SUM(c.COLLATION_NAME <> 'utf8mb4_unicode_ci') AS mismatched_columns
+      FROM information_schema.TABLES t
+      LEFT JOIN information_schema.COLUMNS c
+        ON c.TABLE_SCHEMA = t.TABLE_SCHEMA
+        AND c.TABLE_NAME = t.TABLE_NAME
+        AND c.CHARACTER_SET_NAME IS NOT NULL
+      WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = 'movement_events'
+      GROUP BY t.TABLE_COLLATION
+    `);
+    if (movementEventSchema[0]?.TABLE_COLLATION !== 'utf8mb4_unicode_ci'
+      || Number(movementEventSchema[0]?.mismatched_columns) > 0) {
+      await pool.query(`
+        ALTER TABLE movement_events
+        CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+    }
     console.log('✅ movement_events table created.');
 
     console.log('⭐ Database update complete!');

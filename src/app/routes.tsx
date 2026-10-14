@@ -4,6 +4,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LiveTrackingDashboard } from "./pages/LiveTrackingDashboard";
 import { MapPickerPage } from "./pages/MapPickerPage";
+import { PersonnelV2Page } from "./personnel-v2/PersonnelV2Page";
 
 export const router = createBrowserRouter([
   {
@@ -30,7 +31,15 @@ export const router = createBrowserRouter([
     path: "/personnel/dashboard",
     element: (
       <ProtectedRoute allowedRoles={["personnel"]}>
-        <Dashboard />
+        <Navigate to="/personnel/v2" replace />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/personnel/v2",
+    element: (
+      <ProtectedRoute allowedRoles={["personnel"]}>
+        <PersonnelV2Page />
       </ProtectedRoute>
     ),
   },

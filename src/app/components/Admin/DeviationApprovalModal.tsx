@@ -2,16 +2,12 @@ import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { ShieldAlert, CheckCircle2, XCircle, MapPin, Camera } from 'lucide-react';
-import { cn } from "../ui/utils";
+import { ShieldAlert, CheckCircle2, XCircle, Camera } from 'lucide-react';
 import { toast } from "sonner";
 
 interface DeviationApprovalModalProps {
@@ -83,7 +79,7 @@ export const DeviationApprovalModal: React.FC<DeviationApprovalModalProps> = ({
             <div className="border-t border-slate-200 pt-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Rider Alibi</p>
               <p className="text-sm font-bold text-slate-700 leading-relaxed italic">
-                "{deviationData.reason}"
+                &quot;{deviationData.reason}&quot;
               </p>
             </div>
 

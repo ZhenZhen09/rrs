@@ -1,7 +1,16 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
+import { verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
+import { formatOverdueDuration } from '@/utils/eta';
+
+const formatNotificationMessage = (message: unknown): string => {
+  const text = String(message ?? '');
+  return text.replace(/(overdue by\s+)(\d+)\s+minutes?\b/i, (match, prefix: string, rawMinutes: string) => {
+    const minutes = Number(rawMinutes);
+    return minutes >= 60 ? `${prefix}${formatOverdueDuration(minutes)}` : match;
+  });
+};
 
 interface NotificationModalProps {
   visible: boolean;
@@ -56,10 +65,14 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                         color={notif.type === 'new_assignment' ? '#3B82F6' : '#64748B'} 
                       />
                     </View>
-                    <Text style={styles.time}>{new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <View style={styles.timeWrap}>
+                      {!notif.is_read && <Text style={styles.unreadLabel}>NEW</Text>}
+                      <Text style={styles.time}>{new Date(notif.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                    </View>
                   </View>
+                  <Text style={styles.typeLabel}>{String(notif.type || 'update').replace(/_/g, ' ')}</Text>
                   <Text style={[styles.message, !notif.is_read && styles.unreadMessage]}>
-                    {notif.message}
+                    {formatNotificationMessage(notif.message)}
                   </Text>
                 </TouchableOpacity>
               ))
@@ -138,6 +151,9 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '600',
   },
+  timeWrap: { alignItems: 'flex-end', gap: 3 },
+  unreadLabel: { fontSize: normalizeFontSize(8), color: '#2563EB', fontWeight: '800' },
+  typeLabel: { fontSize: normalizeFontSize(9), color: '#64748B', fontWeight: '800', textTransform: 'uppercase', marginBottom: verticalScale(4) },
   message: {
     fontSize: normalizeFontSize(14),
     color: '#475569',

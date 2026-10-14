@@ -11,6 +11,7 @@ import {
   Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
 import { useLocation } from '@/context/LocationContext';
 
@@ -21,137 +22,110 @@ const ABSENCE_REASONS = [
   { id: 'vacation', label: 'Vacation', icon: 'flight' },
 ];
 
-export const AttendanceGate: React.FC = () => {
-  const { attendanceStatus, checkIn } = useLocation();
-  const [view, setView] = useState<'main' | 'absent'>('main');
+interface AttendanceGateProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export const AttendanceGate: React.FC<AttendanceGateProps> = ({ visible, onClose }) => {
+  const { attendanceStatus, isShiftStatusReady, checkIn } = useLocation();
   const [loading, setLoading] = useState(false);
   const [reason, setReason] = useState('');
   const [selectedReasonId, setSelectedReasonId] = useState('');
 
-  const handleStartShift = async () => {
-    setLoading(true);
-    await checkIn('present');
-    setLoading(false);
+  const closeReport = () => {
+    setReason('');
+    setSelectedReasonId('');
+    onClose();
   };
 
   const handleReportAbsence = async () => {
     if (!selectedReasonId) return;
     setLoading(true);
-    const label = ABSENCE_REASONS.find(r => r.id === selectedReasonId)?.label;
-    const finalReason = reason ? `${label}: ${reason}` : label;
-    await checkIn('absent', finalReason);
-    setLoading(false);
+    try {
+      const label = ABSENCE_REASONS.find(r => r.id === selectedReasonId)?.label;
+      const finalReason = reason ? `${label}: ${reason}` : label;
+      if (await checkIn('absent', finalReason)) closeReport();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (attendanceStatus !== null) return null;
+  if (!isShiftStatusReady || attendanceStatus !== null) return null;
 
   return (
-    <Modal visible={true} animationType="fade" transparent={false}>
+    <Modal testID="attendance-report-modal" visible={visible} animationType="slide" transparent={false} onRequestClose={closeReport}>
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
         >
-          {view === 'main' ? (
-            <View style={styles.inner}>
-              <View style={styles.header}>
-                <View style={styles.iconCircle}>
-                  <MaterialIcons name="wb-sunny" size={40} color="#F59E0B" />
-                </View>
-                <Text style={styles.title}>Good Morning!</Text>
-                <Text style={styles.subtitle}>Please check in to start your shift today.</Text>
-              </View>
-
-              <View style={styles.buttonContainer}>
-                <TouchableOpacity 
-                  onPress={handleStartShift}
-                  disabled={loading}
-                  style={[styles.mainButton, styles.presentButton]}
-                >
-                  {loading ? <ActivityIndicator color="#FFF" /> : (
-                    <>
-                      <MaterialIcons name="check-circle" size={24} color="#FFF" />
-                      <Text style={styles.buttonText}>Start Shift</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={() => setView('absent')}
-                  disabled={loading}
-                  style={[styles.mainButton, styles.absentButton]}
-                >
-                  <MaterialIcons name="event-busy" size={24} color="#64748B" />
-                  <Text style={[styles.buttonText, { color: '#64748B' }]}>I'm Absent / On Leave</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.inner}>
-              <View style={styles.header}>
-                <TouchableOpacity 
-                  onPress={() => setView('main')}
-                  style={styles.backButton}
-                >
-                  <MaterialIcons name="arrow-back" size={24} color="#64748B" />
-                </TouchableOpacity>
-                <Text style={styles.title}>Report Absence</Text>
-                <Text style={styles.subtitle}>Select a reason for your absence today.</Text>
-              </View>
-
-              <View style={styles.reasonGrid}>
-                {ABSENCE_REASONS.map((r) => (
-                  <TouchableOpacity
-                    key={r.id}
-                    onPress={() => setSelectedReasonId(r.id)}
-                    style={[
-                      styles.reasonCard,
-                      selectedReasonId === r.id && styles.reasonCardSelected
-                    ]}
-                  >
-                    <MaterialIcons 
-                      name={r.icon as any} 
-                      size={24} 
-                      color={selectedReasonId === r.id ? '#3B82F6' : '#94A3B8'} 
-                    />
-                    <Text style={[
-                      styles.reasonLabel,
-                      selectedReasonId === r.id && styles.reasonLabelSelected
-                    ]}>{r.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TextInput
-                placeholder="Additional notes (optional)..."
-                value={reason}
-                onChangeText={setReason}
-                multiline
-                style={styles.input}
-              />
-
-              <TouchableOpacity 
-                onPress={handleReportAbsence}
-                disabled={loading || !selectedReasonId}
-                style={[
-                  styles.submitButton,
-                  (!selectedReasonId || loading) && { opacity: 0.5 }
-                ]}
+          <View style={styles.inner}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Close absence report"
+                onPress={closeReport}
+                disabled={loading}
+                style={styles.backButton}
               >
-                {loading ? <ActivityIndicator color="#FFF" /> : (
-                  <Text style={styles.submitButtonText}>Submit Report</Text>
-                )}
+                <MaterialIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
+              <Text style={styles.title}>Report Absence</Text>
+              <Text style={styles.subtitle}>Select a reason for your absence or leave today.</Text>
             </View>
-          )}
+
+            <View style={styles.reasonGrid}>
+              {ABSENCE_REASONS.map((r) => (
+                <TouchableOpacity
+                  key={r.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedReasonId === r.id }}
+                  onPress={() => setSelectedReasonId(r.id)}
+                  style={[
+                    styles.reasonCard,
+                    selectedReasonId === r.id && styles.reasonCardSelected
+                  ]}
+                >
+                  <MaterialIcons
+                    name={r.icon as any}
+                    size={24}
+                    color={selectedReasonId === r.id ? '#3B82F6' : '#94A3B8'}
+                  />
+                  <Text style={[
+                    styles.reasonLabel,
+                    selectedReasonId === r.id && styles.reasonLabelSelected
+                  ]}>{r.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              placeholder="Additional notes (optional)..."
+              value={reason}
+              onChangeText={setReason}
+              multiline
+              style={styles.input}
+            />
+
+            <TouchableOpacity
+              onPress={handleReportAbsence}
+              disabled={loading || !selectedReasonId}
+              style={[
+                styles.submitButton,
+                (!selectedReasonId || loading) && { opacity: 0.5 }
+              ]}
+            >
+              {loading ? <ActivityIndicator color="#FFF" /> : (
+                <Text style={styles.submitButtonText}>Submit Report</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
 };
-
-// Internal SafeAreaView import to avoid confusion
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 const styles = StyleSheet.create({
   container: {
@@ -172,13 +146,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignSelf: 'flex-start',
-    marginBottom: verticalScale(20),
-  },
-  iconCircle: {
-    width: scale(80),
-    height: scale(80),
-    borderRadius: 40,
-    backgroundColor: '#FEF3C7',
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: verticalScale(20),
@@ -196,35 +165,6 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(8),
     paddingHorizontal: scale(20),
     lineHeight: 22,
-  },
-  buttonContainer: {
-    gap: verticalScale(16),
-  },
-  mainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(18),
-    borderRadius: 16,
-    gap: 12,
-  },
-  presentButton: {
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  absentButton: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  buttonText: {
-    fontSize: normalizeFontSize(16),
-    fontWeight: '800',
-    color: '#FFF',
   },
   reasonGrid: {
     flexDirection: 'row',

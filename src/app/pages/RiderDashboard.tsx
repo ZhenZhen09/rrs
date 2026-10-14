@@ -1,21 +1,20 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
-import { MapPin, Clock, User as UserIcon, Building2, Calendar, Package, TrendingUp, Bike, LayoutDashboard, CalendarClock, History, ChevronRight, Phone, Map as MapIcon, ExternalLink, AlertTriangle, Banknote, FileText, Bell, BellOff } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { MapPin, Building2, Package, TrendingUp, LayoutDashboard, CalendarClock, History, Phone, Map as MapIcon, AlertTriangle, Banknote, FileText } from 'lucide-react';
+import { addDays } from 'date-fns';
 import { formatLocalDate, getLocalDateStr } from '../utils/dateUtils';
 import { DeliveryRequest, DeliveryStatus } from '../types';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
-import { MapPicker } from '../components/MapPicker';
 
 export function RiderDashboard() {
   const { user } = useAuth();
@@ -27,7 +26,6 @@ export function RiderDashboard() {
   const [activeTab, setActiveTab] = useState('today');
   
   // Tracking state
-  const [isTracking, setIsTracking] = useState(false);
   const watchId = useRef<number | null>(null);
   const socketRef = useRef<any>(null);
 
@@ -73,46 +71,13 @@ export function RiderDashboard() {
     return { completed, pending };
   }, [myDeliveries, todayDeliveries]);
 
-  const handleUpdateStatus = async () => {
-    if (!selectedRequest) return;
-    
-    try {
-      await updateDeliveryStatus(selectedRequest.request_id, newStatus, statusNote);
-      toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
-      setShowStatusDialog(false);
-      
-      // Handle tracking transitions
-      if (newStatus === 'in_progress') {
-        startTracking(selectedRequest);
-      } else if (isTracking) {
-        stopTracking();
-      }
-
-      setSelectedRequest(null);
-      setStatusNote('');
-    } catch (error) {
-      toast.error('Failed to update status');
-    }
-  };
-
-  // Auto-resume tracking for in_progress jobs
-  useEffect(() => {
-    if (todayDeliveries.length > 0 && !isTracking) {
-      const activeJob = todayDeliveries.find(req => req.delivery_status === 'in_progress');
-      if (activeJob) {
-        console.log('🔄 Auto-resuming tracking for job:', activeJob.request_id);
-        startTracking(activeJob);
-      }
-    }
-  }, [todayDeliveries, isTracking]);
-
-  const startTracking = (request: DeliveryRequest) => {
+  const startTracking = useCallback((request: DeliveryRequest) => {
+    if (watchId.current !== null) return;
     if (!("geolocation" in navigator)) {
       toast.error("Geolocation is not supported by your browser");
       return;
     }
 
-    setIsTracking(true);
     const socket = socketRef.current;
 
     watchId.current = navigator.geolocation.watchPosition(
@@ -130,16 +95,48 @@ export function RiderDashboard() {
         console.error('Tracking error:', error);
         toast.error('Location tracking error');
       },
-      { enableHighAccuracy: true, distanceFilter: 10 }
+      { enableHighAccuracy: true }
     );
-  };
+  }, [user?.id, user?.name]);
 
   const stopTracking = () => {
     if (watchId.current !== null) {
       navigator.geolocation.clearWatch(watchId.current);
       watchId.current = null;
     }
-    setIsTracking(false);
+  };
+
+  // Auto-resume tracking for in_progress jobs
+  useEffect(() => {
+    if (todayDeliveries.length > 0 && watchId.current === null) {
+      const activeJob = todayDeliveries.find(req => req.delivery_status === 'in_progress');
+      if (activeJob) {
+        console.log('🔄 Auto-resuming tracking for job:', activeJob.request_id);
+        startTracking(activeJob);
+      }
+    }
+  }, [todayDeliveries, startTracking]);
+
+  const handleUpdateStatus = async () => {
+    if (!selectedRequest) return;
+    
+    try {
+      await updateDeliveryStatus(selectedRequest.request_id, newStatus, statusNote);
+      toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
+      setShowStatusDialog(false);
+      
+      // Handle tracking transitions
+      if (newStatus === 'in_progress') {
+        startTracking(selectedRequest);
+      } else {
+        stopTracking();
+      }
+
+      setSelectedRequest(null);
+      setStatusNote('');
+    } catch {
+      toast.error('Failed to update status');
+    }
   };
 
   const getStatusColor = (status?: string) => {
@@ -271,7 +268,7 @@ export function RiderDashboard() {
                        <div className="p-2 bg-white rounded-xl shadow-sm h-fit"><Building2 size={16} className="text-blue-500" /></div>
                        <div>
                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Admin Instructions</p>
-                          <p className="text-sm font-bold text-blue-700 leading-relaxed italic">"{req.admin_remark}"</p>
+                          <p className="text-sm font-bold text-blue-700 leading-relaxed italic">&quot;{req.admin_remark}&quot;</p>
                        </div>
                     </div>
                   )}
@@ -352,7 +349,7 @@ export function RiderDashboard() {
                   <CardTitle className="text-base font-black">To {req.recipient_name}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs font-bold text-slate-500 truncate leading-relaxed">"{req.rider_remark || 'No remarks provided'}"</p>
+                  <p className="text-xs font-bold text-slate-500 truncate leading-relaxed">&quot;{req.rider_remark || 'No remarks provided'}&quot;</p>
                 </CardContent>
               </Card>
             ))

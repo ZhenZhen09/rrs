@@ -18,20 +18,16 @@ import {
   Loader2,
   Target,
   X,
-  Navigation,
-  History,
   Star,
   ArrowRight,
   Search,
   Map as MapIcon,
-  ChevronRight,
   Check,
   MapPinned,
   Info,
   Building2,
   InfoIcon,
 } from "lucide-react";
-import { ScrollArea } from "./ui/scroll-area";
 import { toast } from "sonner";
 
 // Fix default marker icon issue
@@ -123,6 +119,16 @@ function FixMapSize({ watch }: { watch?: any }) {
   return null;
 }
 
+const formatAddress = (fullAddress: string) => {
+    const cleanAddress = fullAddress.replace(/ \(Landmarks:.*?\)/, "");
+    const parts = cleanAddress.split(",");
+    if (parts.length > 1) {
+      return { main: parts[0].trim(), sub: parts.slice(1).join(",").trim() };
+    }
+    return { main: cleanAddress, sub: "" };
+  };
+
+
 export function MapPickerContent({
   onLocationSelect,
   initialLocation,
@@ -156,14 +162,14 @@ export function MapPickerContent({
     sub: string;
   }>(
     initialLocation
-      ? { main: "Loading...", sub: "Please wait" }
+      ? formatAddress(initialLocation.address)
       : defaultAddress,
   );
   const [customAddressName, setCustomAddressName] = useState(
-    initialLocation ? "" : defaultBusinessName,
+    initialLocation ? formatAddress(initialLocation.address).main : defaultBusinessName,
   );
 
-  const [landmarks, setLandmarks] = useState("");
+  const [landmarks, setLandmarks] = useState(initialLocation?.address.match(/\(Landmarks: (.*?)\)/)?.[1] || "");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -175,22 +181,13 @@ export function MapPickerContent({
   const [discoveryResults, setDiscoveryResults] = useState<any[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
 
-  const hasEditedRef = useRef(!initialLocation); // Set to true if using default so it doesn't get overwritten immediately
+  const hasEditedRef = useRef(true); // Set to true if using default so it doesn't get overwritten immediately
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const geocodeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialMount = useRef(true);
 
   const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a"; // Updated Geoapify Key
-
-  const formatAddress = (fullAddress: string) => {
-    const cleanAddress = fullAddress.replace(/ \(Landmarks:.*?\)/, "");
-    const parts = cleanAddress.split(",");
-    if (parts.length > 1) {
-      return { main: parts[0].trim(), sub: parts.slice(1).join(",").trim() };
-    }
-    return { main: cleanAddress, sub: "" };
-  };
 
   // 1. Discovery/Nearby Search Logic
   const fetchNearbyPlaces = async (lat: number, lon: number) => {
@@ -201,13 +198,13 @@ export function MapPickerContent({
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
-    setIsDiscovering(true);
     try {
       // Nearby search for businesses, cafes, offices, etc.
       const response = await fetch(
         `https://api.geoapify.com/v2/places?categories=commercial,catering,education,healthcare,office,entertainment,tourism&filter=circle:${lon},${lat},1000&bias=proximity:${lon},${lat}&limit=10&apiKey=${GEOAPIFY_KEY}`,
         { signal },
       );
+      setIsDiscovering(true);
       const data = await response.json();
       if (data.features) {
         setDiscoveryResults(
@@ -288,28 +285,16 @@ export function MapPickerContent({
 
   useEffect(() => {
     if (isInitialMount.current) {
-      if (initialLocation) {
-        const formatted = formatAddress(initialLocation.address);
-        setAddressDetails(formatted);
-        setCustomAddressName(formatted.main);
-        const landmarkMatch =
-          initialLocation.address.match(/\(Landmarks: (.*?)\)/);
-        if (landmarkMatch && landmarkMatch[1]) setLandmarks(landmarkMatch[1]);
-        hasEditedRef.current = true;
-        fetchNearbyPlaces(initialLocation.lat, initialLocation.lng);
-      } else {
-        // Just fetch nearby places for the default location
-        fetchNearbyPlaces(defaultCenter[0], defaultCenter[1]);
-      }
+      fetchNearbyPlaces(currentPos[0], currentPos[1]);
       isInitialMount.current = false;
       return;
     }
 
     if (geocodeTimeoutRef.current) clearTimeout(geocodeTimeoutRef.current);
-    setIsGeocoding(true);
-    setAddressDetails({ main: "Locating...", sub: "Fetching address details" });
 
     geocodeTimeoutRef.current = setTimeout(async () => {
+      setIsGeocoding(true);
+      setAddressDetails({ main: "Locating...", sub: "Fetching address details" });
       try {
         // Use Geoapify for Reverse Geocoding
         const response = await fetch(
@@ -346,11 +331,13 @@ export function MapPickerContent({
   }, [currentPos[0], currentPos[1]]);
 
   const handleCenterChanged = (lat: number, lng: number) => {
+    setIsGeocoding(true);
     setCurrentPos([lat, lng]);
     hasEditedRef.current = false;
   };
 
   const handleMapClick = (lat: number, lng: number) => {
+    setIsGeocoding(true);
     setMapCenter([lat, lng]);
     setCurrentPos([lat, lng]);
     hasEditedRef.current = false;
@@ -765,7 +752,7 @@ export function MapPicker({
           title={title}
           initialLocation={initialLocation}
           onLocationSelect={onLocationSelect}
-          onClose={() => onOpenChange(false)}
+          onClose={() => onOpenChange?.(false)}
         />
       </DialogContent>
     </Dialog>

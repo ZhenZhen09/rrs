@@ -7,11 +7,7 @@ const filterNotifications = (notifications: any[], user: any, requests: any[]) =
     
     if (n.request_id && Array.isArray(requests)) {
       const request = requests.find(r => r.request_id === n.request_id);
-      if (request && (
-        request.delivery_status === 'completed' || 
-        request.delivery_status === 'failed' ||
-        request.status === 'submitted_waiting'
-      )) {
+      if (request && request.status === 'submitted_waiting') {
         return false;
       }
     }
@@ -35,7 +31,7 @@ describe('Personnel Dashboard: Notification Filtering Audit', () => {
     expect(result[0].id).toBe('n1');
   });
 
-  it('🛑 Hardening: Should hide notifications for COMPLETED jobs', () => {
+  it('keeps completed delivery notifications as readable history', () => {
     const notifications = [
       { id: 'n2', user_id: 'user_123', request_id: 'req_done', message: 'Delivered', type: 'request_approved' }
     ];
@@ -44,10 +40,10 @@ describe('Personnel Dashboard: Notification Filtering Audit', () => {
     ];
     
     const result = filterNotifications(notifications, mockUser, requests);
-    expect(result.length).toBe(0); // Clean UI rule
+    expect(result.length).toBe(1);
   });
 
-  it('🛑 Hardening: Should hide notifications for FAILED jobs', () => {
+  it('keeps failed delivery notifications as readable history', () => {
     const notifications = [
       { id: 'n3', user_id: 'user_123', request_id: 'req_fail', message: 'Failed', type: 'request_disapproved' }
     ];
@@ -56,7 +52,7 @@ describe('Personnel Dashboard: Notification Filtering Audit', () => {
     ];
     
     const result = filterNotifications(notifications, mockUser, requests);
-    expect(result.length).toBe(0);
+    expect(result.length).toBe(1);
   });
 
   it('🛑 Hardening: Should hide notifications for SUBMITTED_WAITING (Internal)', () => {

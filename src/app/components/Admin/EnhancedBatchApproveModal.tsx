@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
+import React, { useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Badge } from "../ui/badge";
-import { CheckCheck, Loader2, GripVertical, Info, Zap, Clock, MapPin } from 'lucide-react';
+import { CheckCheck, Loader2, GripVertical, Info, UserRound } from 'lucide-react';
 import { cn } from "../ui/utils";
-import { DeliveryRequest, User } from "../../../types";
-import { Reorder, useDragControls } from "framer-motion";
+import { DeliveryRequest, User } from "../../types";
+import { formatLocalDate } from "../../utils/dateUtils";
+import { Reorder } from "framer-motion";
+import { getRiderAvailability, isScheduledForToday, type RiderAvailabilityInput } from '../../utils/riderAvailability';
 
 interface EnhancedBatchApproveModalProps {
   isOpen: boolean;
@@ -16,20 +18,34 @@ interface EnhancedBatchApproveModalProps {
   riders: User[];
   onConfirm: (riderId: string, sequence: string[], note: string) => Promise<void>;
   isSubmitting: boolean;
+  mode?: 'batch-assign' | 'route-review';
+  fixedRiderId?: string;
 }
 
 export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps> = ({
+  ...props
+}) => {
+  const [batchRiderId, setBatchRiderId] = useState("");
+  const [batchNote, setBatchNote] = useState("");
+  return <BatchApprovalSequence key={JSON.stringify(props.selectedRequests)} {...props}
+    batchRiderId={batchRiderId} setBatchRiderId={setBatchRiderId}
+    batchNote={batchNote} setBatchNote={setBatchNote} />;
+};
+
+const BatchApprovalSequence = ({
   isOpen,
   onClose,
   selectedRequests,
   riders,
   onConfirm,
-  isSubmitting
+  isSubmitting,
+  mode = 'batch-assign',
+  fixedRiderId,
+  batchRiderId, setBatchRiderId, batchNote, setBatchNote,
+}: EnhancedBatchApproveModalProps & {
+  batchRiderId: string; setBatchRiderId: (id: string) => void;
+  batchNote: string; setBatchNote: (note: string) => void;
 }) => {
-  const [batchRiderId, setBatchRiderId] = useState("");
-  const [batchNote, setBatchNote] = useState("");
-  const [reorderableItems, setReorderableItems] = useState<DeliveryRequest[]>([]);
-  const [missionItems, setMissionItems] = useState<DeliveryRequest[]>([]);
 
   /**
    * LAYER 3: SLA SHIELD (Multi-Factor Scoring Engine)
@@ -80,11 +96,12 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
   };
 
   // Run the SLA Shield on selection
-  useEffect(() => {
-    if (selectedRequests.length > 0) {
-      // Mission Anchor: Pin in_progress tasks at the top
-      const missions = selectedRequests.filter(r => r.delivery_status === 'in_progress');
-      const others = selectedRequests.filter(r => r.delivery_status !== 'in_progress');
+  const startedStatuses = new Set(['in_progress', 'arrived', 'picked_up', 'arrived_at_pickup', 'arrived_at_dropoff']);
+  const missionItems = selectedRequests
+    .filter((request) => startedStatuses.has(request.delivery_status || ''))
+    .sort((a, b) => (a.queue_order || Number.MAX_SAFE_INTEGER) - (b.queue_order || Number.MAX_SAFE_INTEGER));
+  const [reorderableItems, setReorderableItems] = useState<DeliveryRequest[]>(() => {
+      const others = selectedRequests.filter(r => !startedStatuses.has(r.delivery_status || ''));
 
       // Check if items already have a valid queue_order (persisted by Admin)
       const hasExistingOrder = others.some(r => r.queue_order && r.queue_order > 0);
@@ -97,7 +114,7 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
           const orderB = b.queue_order || 999;
           return orderA - orderB;
         });
-        setReorderableItems(sorted);
+        return sorted;
       } else {
         // Use SLA Scoring engine for initial ordering or when adding new pending tasks
         // to intelligently interleave the route.
@@ -106,80 +123,97 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
           priorityScore: calculatePriorityScore(r)
         }));
         const sorted = scored.sort((a, b) => (b as any).priorityScore - (a as any).priorityScore);
-        setReorderableItems(sorted);
+        return sorted;
       }
       
-      setMissionItems(missions);
-    }
-  }, [selectedRequests]);
+  });
+
+  const batchRequiresTodayAvailability = selectedRequests.some((request) => isScheduledForToday(request.delivery_date));
+  const availabilityForRider = (rider: User) =>
+    getRiderAvailability(rider as User & RiderAvailabilityInput, batchRequiresTodayAvailability);
+  const selectedBatchRider = riders.find((rider) => rider.id === batchRiderId);
+  const canAssignBatch = Boolean(selectedBatchRider && availabilityForRider(selectedBatchRider).eligible);
+  const canConfirm = mode === 'route-review' ? Boolean(fixedRiderId) : canAssignBatch;
 
   const handleConfirm = async () => {
-    if (!batchRiderId) return;
+    const riderId = mode === 'route-review' ? fixedRiderId : batchRiderId;
+    if (!riderId) return;
+    if (mode === 'batch-assign' && !canAssignBatch) return;
     const sequence = [...missionItems, ...reorderableItems].map(item => item.request_id);
-    await onConfirm(batchRiderId, sequence, batchNote);
-    onClose();
+    try {
+      await onConfirm(riderId, sequence, batchNote);
+      onClose();
+    } catch {
+      // The caller shows the failure; keep the order open so it can be retried.
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md rounded-[2rem] p-0 overflow-hidden border-none shadow-2xl">
-        <div className="flex flex-col max-h-[85vh]">
+      <DialogContent className="max-w-[calc(100%-1rem)] rounded-2xl p-0 overflow-hidden border-none shadow-2xl sm:max-w-md sm:rounded-[2rem]">
+        <div className="flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[85vh]">
           {/* Header - Scaled Down */}
-          <div className="p-5 bg-white border-b border-slate-50 shrink-0">
+          <div className="p-3.5 bg-white border-b border-slate-50 shrink-0 sm:p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
                 <CheckCheck className="text-pink-500 h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-lg font-[900] text-slate-900 tracking-tight">
-                  The Interceptor <span className="text-slate-400 font-bold ml-1 text-[10px]">(Layer 2)</span>
-                </h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Enforcing sequence: {selectedRequests.length} tasks
-                </p>
+                <DialogTitle className="text-lg font-[900] text-slate-900 tracking-tight">
+                  {mode === 'route-review' ? 'Manage rider route' : 'Assign selected tasks'}
+                </DialogTitle>
+                <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {mode === 'route-review' ? 'Review the rider’s current queue' : `Assign ${selectedRequests.length} selected tasks`}
+                </DialogDescription>
               </div>
             </div>
           </div>
 
           {/* Scrollable Body - Compressed */}
-          <div className="flex-1 overflow-y-auto p-5 pt-0 space-y-6 custom-scrollbar">
-            {/* Step 1: Rider Selection */}
-            <div className="space-y-3 mt-4">
-              <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-0.5">
-                1. Designate Rider
-              </Label>
-              <div className="grid grid-cols-1 gap-1.5">
+          <div className="flex-1 overflow-y-auto p-3.5 pt-0 space-y-4 custom-scrollbar sm:space-y-6 sm:p-5 sm:pt-0">
+            {/* Batch assignment chooses a rider once; route review keeps the current rider fixed. */}
+            {mode === 'batch-assign' ? <div className="space-y-3 mt-3 sm:mt-4">
+                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-0.5">
+                  1. Designate Rider
+                </Label>
+              <div className="space-y-2">
                 {riders.map((rider) => {
-                  const isUnavailable = (rider as any).attendance_status === 'absent' || !(rider as any).is_on_duty;
+                  const availability = availabilityForRider(rider);
+                  const isUnavailable = !availability.eligible;
+                  const online = (rider as User & RiderAvailabilityInput).is_online === true;
                   return (
                     <button
                       key={rider.id}
                       disabled={isUnavailable}
+                      aria-label={`${rider.name}, ${online ? 'online' : 'offline'}${isUnavailable ? `, unavailable: ${availability.blockReason?.toLowerCase()}` : ''}`}
                       onClick={() => setBatchRiderId(rider.id)}
                       className={cn(
-                        "flex items-center justify-between p-2.5 rounded-xl border-2 transition-all text-left",
+                        "flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:ring-offset-2",
                         batchRiderId === rider.id
-                          ? "border-pink-500 bg-pink-50/30 shadow-sm"
-                          : (isUnavailable ? "opacity-30 grayscale cursor-not-allowed border-slate-50" : "border-slate-100 hover:border-slate-200")
+                          ? "border-pink-500 bg-pink-50/50 shadow-sm"
+                          : (isUnavailable ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
                       )}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-white text-[9px] font-black">
-                          {rider.name.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-black text-slate-700 truncate">{rider.name}</p>
-                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">
-                            {isUnavailable ? 'Offline' : 'Active'}
-                          </p>
-                        </div>
+                      <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", batchRiderId === rider.id ? "bg-pink-500 text-white" : "bg-slate-100 text-slate-500")}>
+                        <UserRound className="h-4 w-4" aria-hidden="true" />
                       </div>
-                      {batchRiderId === rider.id && <div className="w-1.5 h-1.5 rounded-full bg-pink-500 mr-1" />}
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                        {rider.name}
+                      </p>
+                      <span className={cn(
+                        "shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide",
+                        online ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
+                      )}>
+                        {online ? 'Online' : 'Offline'}
+                      </span>
+                      {batchRiderId === rider.id && <div className="h-2 w-2 shrink-0 rounded-full bg-pink-500" aria-hidden="true" />}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </div> : <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 sm:mt-4">
+              Rider: {riders.find((rider) => rider.id === fixedRiderId)?.name || fixedRiderId || 'Unknown'}
+            </div>}
 
             {/* Step 2: Sequence Enforcement */}
             <div className="space-y-3">
@@ -196,7 +230,7 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
               <div className="space-y-1.5">
                 {/* Mission Anchor (Pinned in_progress tasks) */}
                 {missionItems.map((request, index) => (
-                  <div key={request.request_id} className="relative flex items-center gap-3 p-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 shadow-sm transition-all group mt-3">
+                  <div key={request.request_id} className="relative flex items-center gap-2 p-2 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 shadow-sm transition-all group mt-3 sm:gap-3 sm:p-2.5">
                     {/* Rank Indicator - Top Left */}
                     <div className="absolute -top-3 -left-3 w-7 h-7 rounded-lg bg-emerald-500 text-white text-[11px] font-black flex items-center justify-center shadow-md z-10 border-[3px] border-white">
                       {index + 1}
@@ -204,30 +238,27 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
 
                     <div className="w-1 shrink-0" /> {/* Spacer */}
                     
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="text-[10px] font-black text-slate-900 truncate">#{request.request_id.slice(-6).toUpperCase()}</p>
-                          <Badge className="bg-emerald-100 text-emerald-700 text-[7px] h-3.5 px-1 font-black uppercase border-none shrink-0">
-                            IN PROGRESS
-                          </Badge>
-                        </div>
-                        <div className="px-1 py-0.5 bg-slate-900 rounded-md">
-                          <span className="text-[7px] font-black text-white">PINNED</span>
-                        </div>
+                    <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
+                      <div className="min-w-0">
+                        <p className="text-[7px] font-black uppercase tracking-tighter text-slate-400">Building Name</p>
+                        <p className="truncate text-[10px] font-black text-slate-900">{request.dropoff_location.businessName || "General Pickup"}</p>
                       </div>
-                      <p className="text-[8px] font-bold text-slate-400 truncate">
-                        {request.pickup_address}
-                      </p>
+                      <div className="row-span-4 text-right">
+                        <Badge className="border-none bg-emerald-100 text-[7px] font-black uppercase text-emerald-700">IN PROGRESS</Badge>
+                        <p className="mt-1 text-[7px] font-black uppercase tracking-tighter text-slate-400">Urgency</p>
+                        <p className="text-[8px] font-black uppercase tracking-tighter text-slate-700">{request.urgency_level}</p>
+                        <p className="mt-1 text-[7px] font-black uppercase tracking-tighter text-slate-400">Transaction</p>
+                        <p className="text-[8px] font-black uppercase tracking-tighter text-slate-700">#{request.request_id.slice(-6).toUpperCase()}</p>
+                      </div>
+                      <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Date to complete / Time:</span>{" "}{formatLocalDate(request.delivery_date, "MMM d, yyyy")} / {request.time_window}</p>
+                      <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Requestor:</span>{" "}{request.requester_name || "Unknown"}</p>
+                      <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Department:</span>{" "}{request.requester_department || "OPS"}</p>
                     </div>
                   </div>
                 ))}
 
-                <Reorder.Group axis="y" values={reorderableItems} onReorder={setReorderableItems} className="space-y-4 mt-4">
+                <Reorder.Group axis="y" values={reorderableItems} onReorder={setReorderableItems} className="space-y-2.5 mt-3 sm:space-y-4 sm:mt-4">
                   {reorderableItems.map((request, index) => {
-                    const score = (request as any).priorityScore || 0;
-                    const isUrgent = request.urgency_level === 'Urgent';
-                    const isTimePressed = score > 60;
                     const isNew = request.delivery_status === 'pending';
 
                     // Adjust visual index to account for mission items
@@ -248,49 +279,31 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
                         </div>
 
                         <div className={cn(
-                          "flex items-center gap-3 p-2.5 rounded-xl border-2 transition-all group",
+                          "flex items-center gap-2 p-2 rounded-xl border-2 transition-all group sm:gap-3 sm:p-2.5",
                           isNew ? "border-pink-200 bg-pink-50/10 shadow-sm" : 
                           (visualIndex === 1 ? "border-emerald-100 bg-emerald-50/10 shadow-sm" : "border-slate-100 bg-white")
                         )}>
                           <GripVertical className="text-slate-200 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
                           
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-0.5">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <p className="text-[10px] font-black text-slate-900 truncate">#{request.request_id.slice(-6).toUpperCase()}</p>
-                                {isNew && (
-                                  <Badge className="bg-pink-500 text-white text-[7px] h-3.5 px-1 font-black uppercase border-none shrink-0 shadow-sm animate-pulse">
-                                    NEW
-                                  </Badge>
-                                )}
-                                <Badge className={cn(
-                                  "text-[7px] h-3.5 px-1 font-black uppercase border-none shrink-0",
-                                  request.requester_department === 'Finance' ? "bg-amber-100 text-amber-700" :
-                                  request.requester_department === 'Regulatory' ? "bg-indigo-100 text-indigo-700" :
-                                  "bg-slate-100 text-slate-600"
-                                )}>
-                                  {request.requester_department || 'OPS'}
-                                </Badge>
-                              </div>
+                          <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
+                            <div className="min-w-0">
+                              <p className="text-[7px] font-black uppercase tracking-tighter text-slate-400">Building Name</p>
+                              <p className="truncate text-[10px] font-black text-slate-900">{request.dropoff_location.businessName || "General Pickup"}</p>
+                            </div>
                               
-                              {/* LAYER 3: Score Visualization */}
-                              <div className="flex items-center gap-1 shrink-0">
-                                {isUrgent && <Zap size={10} className="text-amber-500 fill-amber-500" />}
-                                {isTimePressed && <Clock size={10} className="text-rose-500" />}
-                                <div className="px-1 py-0.5 bg-slate-900 rounded-md">
-                                  <span className="text-[7px] font-black text-white">{score}</span>
-                                </div>
+                              <div className="row-span-4 text-right">
+                                {isNew && <Badge className="border-none bg-pink-500 text-[7px] font-black uppercase text-white shadow-sm animate-pulse">NEW</Badge>}
+                                <p className="mt-1 text-[7px] font-black uppercase tracking-tighter text-slate-400">Urgency</p>
+                                <p className="text-[8px] font-black uppercase tracking-tighter text-slate-700">{request.urgency_level}</p>
+                                <p className="mt-1 text-[7px] font-black uppercase tracking-tighter text-slate-400">Transaction</p>
+                                <p className="text-[8px] font-black uppercase tracking-tighter text-slate-700">#{request.request_id.slice(-6).toUpperCase()}</p>
                               </div>
-                            </div>
                             
-                            <div className="flex items-center justify-between">
-                              <p className="text-[8px] font-bold text-slate-400 truncate pr-4">
-                                {request.pickup_address}
-                              </p>
-                              <span className="text-[7px] font-black text-slate-300 uppercase tracking-tighter shrink-0">
-                                {request.urgency_level}
-                              </span>
-                            </div>
+                            <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Date to complete / Time:</span>{" "}
+                              {formatLocalDate(request.delivery_date, "MMM d, yyyy")} · {request.time_window}
+                            </p>
+                            <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Requestor:</span>{" "}{request.requester_name || "Unknown"}</p>
+                            <p className="min-w-0 truncate text-[8px] font-bold text-slate-500"><span className="font-black uppercase tracking-tighter text-slate-400">Department:</span>{" "}{request.requester_department || "OPS"}</p>
                           </div>
                         </div>
                       </Reorder.Item>
@@ -303,7 +316,7 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
             {/* Step 3: Instructions */}
             <div className="space-y-3">
               <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-0.5">
-                3. Admin Remark
+                {mode === 'route-review' ? 'Route note' : 'Admin remark'}
               </Label>
               <Textarea
                 placeholder="Optional notes..."
@@ -325,13 +338,13 @@ export const EnhancedBatchApproveModal: React.FC<EnhancedBatchApproveModalProps>
             </Button>
             <Button
               onClick={handleConfirm}
-              disabled={!batchRiderId || isSubmitting}
+              disabled={!canConfirm || isSubmitting}
               className="h-10 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest text-[9px] shadow-lg shadow-slate-900/10 active:scale-95 transition-all"
             >
               {isSubmitting ? (
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />
               ) : null}
-              Enforce & Approve
+              {mode === 'route-review' ? 'Save route order' : 'Assign tasks'}
             </Button>
           </DialogFooter>
         </div>

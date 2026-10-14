@@ -5,7 +5,7 @@ import {
   Clock,
   Truck,
   User,
-  CheckCheck,
+  Check,
   Building2,
   Calendar,
   AlertCircle,
@@ -18,9 +18,12 @@ import { formatDateTime } from "../../../utils/dateUtils";
 import { motion } from "framer-motion";
 
 import { getGroupedStatus } from "../../../utils/statusMapping";
+import { getAccountingBucket } from '../../../utils/requestAccounting';
+import { formatOverdueDuration } from '../../../utils/eta';
 
 interface RequestCardProps {
   request: DeliveryRequest;
+  className?: string;
   isSelected: boolean;
   onClick: () => void;
   isMultiSelected?: boolean;
@@ -30,6 +33,7 @@ interface RequestCardProps {
 
 export const RequestCard: React.FC<RequestCardProps> = ({
   request,
+  className,
   isSelected,
   onClick,
   isMultiSelected = false,
@@ -52,6 +56,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
     }
 
     const group = getGroupedStatus(status, deliveryStatus);
+    const bucket = getAccountingBucket({ status, delivery_status: deliveryStatus });
     const isAdminOverride = request.rider_remark?.includes('[Admin update by');
     const riderName = request.assigned_rider_name?.split(" ")[0] || "RIDER";
     const displayName = isAdminOverride ? "ADMIN" : riderName;
@@ -68,7 +73,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         };
       case 'failed':
         return {
-          label: (request.assigned_rider_id && !isAdminOverride) ? `FAILED (${riderName})${remark}` : `FAILED (${displayName})${remark}`,
+          label: bucket === 'cancelled' ? 'CANCELLED' : (request.assigned_rider_id && !isAdminOverride) ? `FAILED (${riderName})${remark}` : `FAILED (${displayName})${remark}`,
           color: "text-rose-500",
           dot: "bg-rose-500",
           pulse: false,
@@ -101,10 +106,10 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         };
       default:
         return {
-          label: "PENDING",
+          label: bucket === 'revision' ? 'FOR REVISION' : bucket === 'other' ? 'UNCLASSIFIED' : "PENDING",
           color: "text-amber-500",
           dot: "bg-amber-500",
-          pulse: true,
+          pulse: bucket === 'pending',
           icon: <Clock size={10} className="text-amber-500" />
         };
     }
@@ -120,14 +125,14 @@ export const RequestCard: React.FC<RequestCardProps> = ({
     <motion.div
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      className={cn("w-full max-w-[350px] relative", isActiveTab && "mt-3")}
+      className={cn("w-full max-w-[350px] relative", className, isActiveTab && "mt-3")}
     >
       {/* Rank Indicator - Top Left (Active Tab Only) */}
       {isActiveTab && request.queue_order && (
         <div className={cn(
           "absolute -top-2.5 -left-2.5 w-6 h-6 rounded-lg text-white text-[10px] font-black flex items-center justify-center shadow-md z-[60] border-2 border-white",
           request.queue_order === 1 ? "bg-emerald-500" : "bg-slate-900"
-        )}>
+        )} aria-label={`Queue position ${request.queue_order} for ${request.assigned_rider_name || 'assigned rider'}`} title={`Queue position ${request.queue_order} for ${request.assigned_rider_name || 'assigned rider'}`}>
           {request.queue_order}
         </div>
       )}
@@ -173,22 +178,21 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           <div className="flex items-center gap-1.5">
             {onToggleSelection && (
               <button
+                type="button"
+                aria-label={`${isMultiSelected ? 'Deselect' : 'Select'} request ${request.request_id}`}
+                aria-pressed={isMultiSelected}
                 className={cn(
-                  "w-6 h-6 rounded border flex items-center justify-center transition-all",
+                  "flex h-11 w-11 items-center justify-center rounded-md border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 active:scale-95 md:h-6 md:w-6",
                   isMultiSelected
-                    ? "bg-slate-900 border-slate-900"
-                    : "bg-white border-slate-100 hover:border-slate-200",
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                    : "border-slate-400 bg-white text-transparent hover:border-emerald-500 hover:bg-emerald-50",
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleSelection(request.request_id);
                 }}
               >
-                {isMultiSelected ? (
-                  <CheckCheck className="h-3 w-3 text-white" strokeWidth={4} />
-                ) : (
-                  <div className="w-2 h-2 rounded-full border border-slate-100" />
-                )}
+                {isMultiSelected && <Check data-checkbox-check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
               </button>
             )}
           </div>
@@ -226,8 +230,9 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </span>
               <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1 leading-none">
                 BY:{" "}
-                {(request.on_behalf_of || request.requester_name).toUpperCase()}
+                {(request.on_behalf_of || request.requester_name || 'Unknown requester').toUpperCase()}
                 {request.on_behalf_of &&
+                  request.requester_name &&
                   request.on_behalf_of !== request.requester_name && (
                     <span className="opacity-60 ml-1 italic">
                       ({request.requester_name.split(" ")[0]})
@@ -246,6 +251,19 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               {request.time_window}
             </span>
           </div>
+
+          {(request.state === 'At Risk' || request.state === 'Overdue' || request.is_overdue) && (
+            <div className={cn("flex items-center gap-3 rounded-md px-2 py-1.5 border", request.state === 'At Risk' ? 'bg-amber-50 border-amber-100' : 'bg-rose-50 border-rose-100')}>
+              <div className="w-4 flex justify-center shrink-0">
+                <AlertCircle size={14} className={request.state === 'At Risk' ? 'text-amber-600' : 'text-rose-600'} />
+              </div>
+              <span className={cn("text-[10px] font-black uppercase tracking-tight", request.state === 'At Risk' ? 'text-amber-700' : 'text-rose-700')}>
+                {request.state === 'At Risk' ? 'AT RISK' : 'OVERDUE'}
+                {request.scheduled_end_at && ` · Due ${formatDateTime(request.scheduled_end_at, 'h:mm a')}`}
+                {request.state === 'At Risk' ? ` · ${request.remaining_minutes ?? 0} min remaining` : ` · ${request.overdue_label || `${formatOverdueDuration(request.overdue_minutes ?? 0)} overdue`}`}
+              </span>
+            </div>
+          )}
 
           {/* Row 4: Approved At (Active/Done only) */}
           {(isActiveTab ||

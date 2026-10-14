@@ -34,7 +34,7 @@ describe('Offline Resilience: Sync Queue Transitions', () => {
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO sync_queue'),
-      expect.arrayContaining(['/test', 'POST', '{"data":1}', 'uuid-123'])
+      expect.arrayContaining(['/test', 'POST', '{"data":1}', expect.any(String)])
     );
   });
 

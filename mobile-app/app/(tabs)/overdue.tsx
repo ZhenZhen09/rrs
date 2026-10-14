@@ -1,20 +1,22 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
-import { formatDisplayDate } from '@/utils/dateUtils';
+import { scale, verticalScale } from '@/utils/responsive';
 import { getRiderTaskTab, isTaskLocked } from '@/utils/taskFilters';
-import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useDashboard } from '@/hooks/data/useDashboard';
 import { NotificationModal } from '@/components/NotificationModal';
+import { ShiftControlDrawer } from '@/components/ShiftControlDrawer';
+import { TaskTabEmptyState } from '@/components/TaskTabEmptyState';
+import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
+import { OverdueTaskCard } from '@/components/jobs/OverdueTaskCard';
 
 export default function OverdueScreen() {
   // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
   const { 
+    user,
     tasks: allTasks,
     loading,
     refreshing,
@@ -35,20 +37,26 @@ export default function OverdueScreen() {
       const orderA = a.queue_order || 999;
       const orderB = b.queue_order || 999;
       if (orderA !== orderB) return orderA - orderB;
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <RiderSurfaceGradient />
       <ScreenHeader 
+        variant="hero"
         title="Overdue Tasks"
         subtitle="Items from previous days"
         badgeLabel="OVERDUE"
         badgeStatus="danger"
         onNotifPress={() => setIsNotifOpen(true)}
+        onSettingsPress={() => router.push('/settings')}
         onLogoutPress={handleLogout}
+        profileName={user?.name}
+        profileAvatarId={user?.avatar_id ?? user?.avatarId}
         unreadCount={unreadCount}
       />
+      <ShiftControlDrawer tasks={allTasks} />
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -60,69 +68,25 @@ export default function OverdueScreen() {
             <SkeletonCard />
           </>
         ) : tasks.length === 0 ? (
-          <View style={styles.empty}>
-            <MaterialIcons name="check-circle" size={64} color="#E2E8F0" />
-            <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptyText}>You have no overdue tasks.</Text>
-          </View>
+          <TaskTabEmptyState
+            variant="overdue"
+            icon={<MaterialIcons name="check-circle" size={40} color="#10B981" />}
+            title="All caught up!"
+            message="You have no overdue tasks."
+          />
         ) : (
           tasks.map((task, index) => {
             const isLocked = isTaskLocked(task, allTasks);
             
             return (
-              <Card key={task.request_id} style={[styles.card, isLocked && styles.lockedCard]}>
-                <TouchableOpacity
-                  testID={`overdue_task_card_${index}`}
-                  activeOpacity={0.7}
-                  disabled={isLocked}
-                  onPress={() => router.push(`/job/${task.request_id}`)}
-                >
-                  <View style={styles.cardHeader}>
-                    <View>
-                      <Text style={styles.dateLabel}>SCHEDULED FOR</Text>
-                      <Text style={styles.dateText}>{task?.delivery_date ? formatDisplayDate(task.delivery_date) : 'N/A'}</Text>
-                    </View>
-                    <Badge label="LATE" status="danger" />
-                  </View>
-
-                  <View style={styles.divider} />
-
-                  <View style={styles.details}>
-                    <View style={styles.locationRow}>
-                      <MaterialIcons name="location-on" size={16} color={isLocked ? "#94A3B8" : "#EF4444"} />
-                      <Text style={[styles.address, isLocked && styles.lockedText]} numberOfLines={1}>{task?.dropoff_location?.address || 'Address unavailable'}</Text>
-                    </View>
-                    <View style={styles.recipientRow}>
-                      <MaterialIcons name="person" size={16} color="#64748B" />
-                      <Text style={[styles.recipient, isLocked && styles.lockedText]}>{task?.recipient_name || 'No recipient'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.footer}>
-                    <Text style={[styles.timeWindow, isLocked && styles.lockedText]}>{task?.time_window || 'No time set'}</Text>
-                    <View style={styles.action}>
-                      {isLocked ? (
-                        <>
-                          <MaterialIcons name="lock" size={14} color="#94A3B8" />
-                          <Text style={[styles.actionText, { color: '#94A3B8', marginLeft: 4 }]}>LOCKED</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={styles.actionText}>View</Text>
-                          <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
-                        </>
-                      )}
-                    </View>
-                  </View>
-
-                  {isLocked && (
-                    <View style={styles.lockOverlay}>
-                      <MaterialIcons name="lock" size={16} color="#94A3B8" />
-                      <Text style={styles.lockOverlayText}>FOLLOW SEQUENCE</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Card>
+              <OverdueTaskCard
+                key={task.request_id}
+                task={task}
+                index={index}
+                allTasks={allTasks}
+                isLocked={isLocked}
+                onPress={() => router.push(`/job/${task.request_id}`)}
+              />
             );
           })
         )}
@@ -142,130 +106,11 @@ export default function OverdueScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     padding: scale(20),
     paddingBottom: verticalScale(40),
+    flexGrow: 1,
   },
-  card: {
-    marginBottom: verticalScale(16),
-    padding: moderateScale(16),
-    borderLeftWidth: 4,
-    borderLeftColor: '#EF4444',
-  },
-  lockedCard: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    borderLeftColor: '#94A3B8',
-    opacity: 0.8,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: verticalScale(12),
-  },
-  dateLabel: {
-    fontSize: normalizeFontSize(10),
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
-  },
-  dateText: {
-    fontSize: normalizeFontSize(14),
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: verticalScale(2),
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: verticalScale(12),
-  },
-  details: {
-    marginBottom: verticalScale(12),
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: verticalScale(6),
-  },
-  address: {
-    fontSize: normalizeFontSize(14),
-    color: '#475569',
-    marginLeft: scale(8),
-    flex: 1,
-  },
-  recipientRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recipient: {
-    fontSize: normalizeFontSize(14),
-    color: '#64748B',
-    marginLeft: scale(8),
-  },
-  lockedText: {
-    color: '#94A3B8',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: moderateScale(10),
-    borderRadius: moderateScale(8),
-  },
-  timeWindow: {
-    fontSize: normalizeFontSize(12),
-    fontWeight: '600',
-    color: '#475569',
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionText: {
-    fontSize: normalizeFontSize(12),
-    fontWeight: '700',
-    color: '#3B82F6',
-    marginRight: scale(4),
-  },
-  lockOverlay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(8),
-    marginTop: verticalScale(12),
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-  },
-  lockOverlayText: {
-    fontSize: normalizeFontSize(10),
-    fontWeight: '900',
-    color: '#94A3B8',
-    marginLeft: scale(6),
-    letterSpacing: 1,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(60),
-  },
-  emptyTitle: {
-    fontSize: normalizeFontSize(18),
-    fontWeight: '700',
-    color: '#64748B',
-    marginTop: verticalScale(16),
-  },
-  emptyText: {
-    fontSize: normalizeFontSize(14),
-    color: '#94A3B8',
-    marginTop: verticalScale(4),
-    textAlign: 'center',
-  }
 });

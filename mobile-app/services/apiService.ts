@@ -2,7 +2,27 @@ import { api } from '@/utils/api';
 import { Job } from '@/types';
 import { addToQueue } from './syncQueue';
 import { getDb } from './localDb';
-import * as Crypto from 'expo-crypto';
+import { RouteEstimate } from '@/utils/eta';
+
+const createRequestId = () => {
+  const cryptoObject = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  return cryptoObject?.randomUUID
+    ? cryptoObject.randomUUID()
+    : `request-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+export const getDeliveryEta = async (
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  requestId?: string,
+): Promise<RouteEstimate> => {
+  const response = await api.post('/api/routing/eta', {
+    origin,
+    destination,
+    requestId,
+  });
+  return response.data;
+};
 
 export const getTasks = async (): Promise<Job[]> => {
   try {
@@ -44,7 +64,7 @@ export const getJobDetails = async (id: string): Promise<Job> => {
 };
 
 export const updateJobStatus = async (id: string, status: string, remark: string) => {
-  const idempotencyKey = Crypto.randomUUID();
+  const idempotencyKey = createRequestId();
   const payload = {
     status,
     remark,
@@ -90,13 +110,23 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   return api.put(`/api/notifications/read-all/${userId}`);
 };
 
-export const updateDutyStatus = async (userId: string, is_on_duty: boolean, reason?: string) => {
-  return api.post(`/api/users/${userId}/duty`, { is_on_duty, reason });
+export const updateDutyStatus = async (userId: string, is_on_duty: boolean) => {
+  return api.post(`/api/users/${userId}/duty`, { is_on_duty });
 };
 
-export const submitAttendance = async (userId: string, status: 'present' | 'absent' | 'on_leave', reason?: string) => {
-  return api.post(`/api/users/${userId}/attendance`, { status, reason });
+export const endShift = async (userId: string, operation_id: string, reason?: string) => {
+  return api.post(`/api/users/${userId}/shift/end`, { operation_id, reason });
 };
+
+export const submitAttendance = async (userId: string, status: 'present' | 'absent' | 'on_leave', reason?: string, operation_id?: string) => {
+  const response = await api.post(`/api/users/${userId}/attendance`, { status, reason, operation_id });
+  if (status === 'present' && (!response.data?.success || !response.data?.session?.start_time)) {
+    throw new Error('The server did not confirm your shift start. Please try again.');
+  }
+  return response;
+};
+
+export const getMyShiftSession = async () => (await api.get('/api/users/me/shift-session')).data;
 
 export const getMyAttendance = async () => {
   const res = await api.get('/api/users/me/attendance');

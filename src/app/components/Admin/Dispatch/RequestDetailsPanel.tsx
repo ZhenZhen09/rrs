@@ -4,32 +4,20 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Textarea } from '../../ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { 
   MapPin, 
   User, 
-  Phone, 
   FileText, 
   Check, 
-  X, 
-  ChevronRight, 
   ChevronLeft,
   RotateCcw,
-  Box, 
-  Info, 
-  Clock,
   LayoutDashboard,
   ShieldCheck,
-  Package,
   Loader2,
   Bike,
-  MessageSquare,
   AlertOctagon,
-  WifiOff,
   Activity,
   Sparkles,
-  Calendar,
-  Ban
 } from 'lucide-react';
 import { DispatchMapView } from './DispatchMapView';
 import { RiderSelectionList } from './RiderSelectionList';
@@ -38,6 +26,10 @@ import { formatLocalDate, formatDateTime } from '../../../utils/dateUtils';
 import { cn } from '../../ui/utils';
 import { useData } from '../../../context/DataContext';
 import { toast } from 'sonner';
+import { LiveTrackingDashboard } from '../../../pages/LiveTrackingDashboard';
+import { getTrackingOpenMode } from '../../../utils/trackingNavigation';
+import { getAccountingBucket } from '../../../utils/requestAccounting';
+import { getRiderAvailability, isScheduledForToday, type RiderAvailabilityInput } from '../../../utils/riderAvailability';
 
 import { 
   AlertDialog,
@@ -60,56 +52,56 @@ interface RequestDetailsPanelProps {
   onBack?: () => void;
   onManageRoute?: (riderId: string) => void;
   readOnly?: boolean;
+  hideMapOnMobile?: boolean;
+  mobileLayout?: boolean;
 }
 
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { TimelineComponent } from './TimelineComponent';
 import { Settings } from 'lucide-react';
 
 export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   request,
   riders,
-  activeRequests,
   onApprove,
-  onDecline,
   isSubmitting,
   onBack,
   onManageRoute,
-  readOnly = false
+  readOnly = false,
+  hideMapOnMobile = false,
 }) => {
-  const { updateDeliveryStatus, cancelRequest, returnForRevision } = useData();
+  const { updateDeliveryStatus, returnForRevision } = useData();
+  const navigate = useNavigate();
   const [selectedRiderId, setSelectedRiderId] = useState('');
   const [adminNote, setAdminNote] = useState('');
-  const [riderSortBy, setRiderSortBy] = useState('nearest');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [closureReason, setClosureReason] = useState('');
   const [selectedCommonReasons, setSelectedCommonReasons] = useState<string[]>([]);
-  const [timeline, setTimeline] = useState<any[]>([]);
-  const [loadingTimeline, setLoadingTimeline] = useState(false);
+  const [timelineResult, setTimelineResult] = useState<{ requestId: string; items: any[] } | null>(null);
+  const requestId = request?.request_id;
+  const timeline = timelineResult && timelineResult.requestId === requestId ? timelineResult.items : [];
+  const loadingTimeline = Boolean(requestId && timelineResult?.requestId !== requestId);
+  const [mobileTrackingRequestId, setMobileTrackingRequestId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean, status: string | null }>({
     open: false,
     status: null
   });
 
-  const fetchTimeline = async () => {
-    if (!request?.request_id) return;
-    setLoadingTimeline(true);
-    try {
-      const res = await fetch(`/api/requests/${request.request_id}/timeline`);
-      const data = await res.json();
-      setTimeline(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Failed to fetch timeline', e);
-    } finally {
-      setLoadingTimeline(false);
-    }
-  };
-
   useEffect(() => {
-    if (request?.request_id) {
-      fetchTimeline();
-    }
-  }, [request?.request_id]);
+    if (!requestId) return;
+    let cancelled = false;
+    fetch(`/api/requests/${requestId}/timeline`)
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled) setTimelineResult({ requestId, items: Array.isArray(data) ? data : [] });
+      })
+      .catch(error => {
+        console.error('Failed to fetch timeline', error);
+        if (!cancelled) setTimelineResult({ requestId, items: [] });
+      });
+    return () => { cancelled = true; };
+  }, [requestId]);
 
   const COMMON_REASONS = [
     "Rider forgot to click complete",
@@ -128,6 +120,16 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     });
   };
 
+  const openTracking = (requestId: string) => {
+    const isMobileViewport = window.matchMedia?.('(max-width: 767px)').matches ?? false;
+    if (getTrackingOpenMode(isMobileViewport) === 'embedded') {
+      setMobileTrackingRequestId(requestId);
+      return;
+    }
+
+    navigate(`/admin/tracking/${encodeURIComponent(requestId)}`);
+  };
+
   if (!request) {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-slate-50/30 p-6 text-center">
@@ -140,35 +142,26 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     );
   }
 
-  const isPending = request.status === 'pending';
-  const isApproved = request.status === 'approved';
-  const isDisapproved = request.status === 'disapproved';
-  const isReturned = request.status === 'returned_for_revision';
-  const isCancelled = request.status === 'cancelled';
-  const isCompleted = request.delivery_status === 'completed';
-  const isFailed = request.delivery_status === 'failed';
-  const isTerminal = isDisapproved || isCompleted || isFailed || isCancelled;
-  const canTrackAssignedRider = isApproved &&
-    Boolean(request.assigned_rider_id) &&
-    !['completed', 'failed', 'cancelled', 'disapproved'].includes(request.delivery_status || '');
-
-  const handleCancelRequest = async () => {
-    if (!adminNote) {
-      toast.error("Please provide a cancellation reason in the Admin Note field.");
-      return;
-    }
-    
-    setUpdatingStatus(true);
-    try {
-      await cancelRequest(request.request_id, adminNote);
-      toast.success("Request cancelled successfully.");
-      if (onBack) onBack();
-    } catch (err) {
-      toast.error("Failed to cancel request.");
-    } finally {
-      setUpdatingStatus(false);
-    }
+  const selectedRider = riders.find((rider) => rider.id === selectedRiderId);
+  const isSameDay = isScheduledForToday(request.delivery_date);
+  const canAssignSelectedRider = Boolean(
+    selectedRider && getRiderAvailability(selectedRider as UserType & RiderAvailabilityInput, isSameDay).eligible,
+  );
+  const assignSelectedRider = () => {
+    if (!selectedRider || !canAssignSelectedRider) return;
+    onApprove(selectedRider.id, adminNote);
   };
+
+  const bucket = getAccountingBucket(request);
+  const isPending = bucket === 'pending' || (bucket === 'active' && request.status === 'pending' && request.delivery_status === 'pending_review');
+  const isApproved = request.status === 'approved';
+  const isDisapproved = bucket === 'declined';
+  const isReturned = bucket === 'revision';
+  const isCancelled = bucket === 'cancelled';
+  const isCompleted = bucket === 'completed';
+  const isFailed = bucket === 'failed';
+  const isTerminal = ['completed', 'failed', 'cancelled', 'declined'].includes(bucket);
+  const canTrackAssignedRider = bucket === 'active' && Boolean(request.assigned_rider_id);
 
   const handleReturnForRevision = async () => {
     if (!adminNote) {
@@ -266,7 +259,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     }
     return (
       <Badge variant="outline" className="font-black text-[8px] tracking-widest px-2 shrink-0 bg-blue-50 text-blue-600 border-blue-100">
-        APPROVED
+        {bucket === 'other' ? 'UNCLASSIFIED' : 'APPROVED'}
       </Badge>
     );
   };
@@ -292,41 +285,36 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {isApproved && !isTerminal ? (
-            <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-              <Check className="h-2.5 w-2.5 text-emerald-600" />
-              <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Confirmed</span>
-            </div>
-          ) : null}
-          
-          {!readOnly && !isTerminal && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleCancelRequest}
-              disabled={updatingStatus || !adminNote}
-              className="h-7 px-2 text-rose-500 hover:bg-rose-50 rounded-md text-[8px] font-black uppercase tracking-widest border border-rose-100"
-            >
-              {updatingStatus ? <Loader2 size={10} className="animate-spin" /> : <Ban size={10} className="mr-1" />}
-              Cancel Request
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-auto min-h-0 pb-16">
         <div className="p-3 md:p-5 space-y-3 md:space-y-5">
+          {request.is_overdue && !isTerminal && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 flex items-start gap-3">
+              <div className="h-8 w-8 shrink-0 rounded-lg bg-rose-100 flex items-center justify-center">
+                <AlertOctagon className="h-4 w-4 text-rose-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-rose-700">Overdue · {request.overdue_label || 'Needs attention'}</p>
+                <p className="mt-1 text-[10px] font-bold text-rose-800">
+                  Recommended next step: {(request.recommended_action || 'contact_rider').replace('_', ' ')}.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Map Section */}
-          <div className="h-[180px] md:h-[220px] w-full shrink-0 rounded-lg overflow-hidden border border-slate-100">
-            <DispatchMapView 
-              requestId={request.request_id}
-              origin={request.pickup_location} 
-              destination={request.dropoff_location} 
-              current={request.current_lat && request.current_lng ? { lat: request.current_lat, lng: request.current_lng } : null}
-            />
-          </div>
+          {!hideMapOnMobile && (
+            <div className="h-[180px] md:h-[220px] w-full shrink-0 rounded-lg overflow-hidden border border-slate-100">
+              <DispatchMapView
+                requestId={request.request_id}
+                origin={request.pickup_location}
+                destination={request.dropoff_location}
+                current={request.current_lat && request.current_lng ? { lat: request.current_lat, lng: request.current_lng } : null}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-5">
             {/* Logistics Left Side */}
@@ -417,7 +405,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                     <div className="p-2.5 bg-rose-50 rounded-lg border border-rose-100 space-y-1">
                       <p className="text-[7px] font-black text-rose-400 uppercase tracking-widest">Admin Reason</p>
                       <p className="text-[9px] font-bold text-rose-800 leading-tight italic">
-                        "{request.admin_remark}"
+                        &quot;{request.admin_remark}&quot;
                       </p>
                     </div>
                   )}
@@ -463,7 +451,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                       {request.rider_remark && (
                         <div className="bg-white/5 p-2.5 rounded border border-white/10 mt-1">
                            <p className="text-[10px] font-bold text-white/95 leading-tight italic break-words">
-                             "{request.rider_remark.replace(/\[Admin update by.*?\]\s*/, '')}"
+                             &quot;{request.rider_remark.replace(/\[Admin update by.*?\]\s*/, '')}&quot;
                            </p>
                         </div>
                       )}
@@ -510,8 +498,9 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                         size="sm" 
                         onClick={handleReturnForRevision}
                         disabled={updatingStatus || !adminNote}
-                        className="h-5 px-1.5 text-indigo-600 hover:bg-indigo-50 text-[7px] font-black uppercase tracking-widest"
+                        className="h-7 px-2.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm"
                       >
+                        <RotateCcw className="h-2.5 w-2.5 mr-1" />
                         Request Revision
                       </Button>
                     )}
@@ -538,25 +527,19 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                 <>
                   <RiderSelectionList 
                     riders={riders}
-                    activeRequests={activeRequests}
                     selectedRiderId={selectedRiderId}
                     onSelect={setSelectedRiderId}
-                    pickupLocation={{ lat: request.pickup_location.lat, lng: request.pickup_location.lng }}
-                    sortBy={riderSortBy}
-                    onSortChange={setRiderSortBy}
                     deliveryDate={request.delivery_date}
-                    timeWindow={request.time_window}
-                    currentRequestId={request.request_id}
                   />
 
                   {selectedRiderId && (
                     <div className="pt-1 animate-in slide-in-from-bottom-2 duration-300">
                       <Button
-                        onClick={() => onApprove(selectedRiderId, adminNote)}
-                        disabled={isSubmitting}
+                        onClick={assignSelectedRider}
+                        disabled={isSubmitting || !canAssignSelectedRider}
                         className="w-full h-10 rounded-lg bg-primary hover:bg-primary/90 text-white font-black text-[9px] uppercase tracking-widest shadow-md"
                       >
-                        {isSubmitting ? 'Assigning...' : `Assign to ${riders.find(r => r.id === selectedRiderId)?.name.split(' ')[0]}`}
+                        {isSubmitting ? 'Assigning...' : `Assign to ${selectedRider?.name.split(' ')[0] ?? 'Rider'}`}
                       </Button>
                     </div>
                   )}
@@ -570,7 +553,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                     </h3>
 
                     {/* LAYER 2: Re-sequence Trigger (Only for Queued Active Tasks) */}
-                    {onManageRoute && request.assigned_rider_id && !isTerminal && request.delivery_status !== 'in_progress' && (
+                    {!readOnly && onManageRoute && request.assigned_rider_id && bucket === 'active' && request.delivery_status !== 'in_progress' && (
                       <Button
                         size="sm"
                         onClick={() => onManageRoute(request.assigned_rider_id!)}
@@ -625,7 +608,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
 
                   {canTrackAssignedRider && (
                     <Button 
-                      onClick={() => window.open(`/admin/tracking/${request.request_id}`, '_blank')}
+                      onClick={() => openTracking(request.request_id)}
                       className="w-full h-10 rounded-lg bg-[#00B14F] hover:bg-[#009e46] text-white font-[900] text-[7px] uppercase tracking-[0.2em] shadow-md flex items-center justify-center gap-1.5"
                     >
                       <Bike className="h-3 w-3" strokeWidth={3} />
@@ -649,64 +632,69 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           }
         }}
       >
-        <AlertDialogContent className="rounded-xl border-none shadow-2xl max-w-sm w-[95vw] max-h-[90vh] overflow-y-auto z-[9999] scale-95 md:scale-100 transition-transform">
+        <AlertDialogContent className="rounded-xl border-none shadow-2xl max-w-sm w-[95vw] max-h-[90vh] overflow-y-auto scale-95 md:scale-100 transition-transform">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-[900] text-slate-900">Confirm Update</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-500 text-xs font-bold space-y-4">
-              <p>Mark this delivery as <span className={cn("uppercase", confirmModal.status === 'completed' ? "text-emerald-600" : "text-rose-600")}>{confirmModal.status}</span>?</p>
-              
-              <div className="space-y-3 text-left bg-slate-50/50 p-3 rounded-lg border border-slate-100">
-                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Common Reasons</p>
-                <div className="grid grid-cols-1 gap-2">
-                  {COMMON_REASONS.map(reason => (
-                    <div 
-                      key={reason} 
-                      onClick={() => handleToggleCommonReason(reason)}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-all",
-                        selectedCommonReasons.includes(reason) 
-                          ? "bg-slate-900 border-slate-900 text-white shadow-sm" 
-                          : "bg-white border-slate-100 hover:border-slate-200 text-slate-600"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-3 h-3 rounded border flex items-center justify-center shrink-0",
-                        selectedCommonReasons.includes(reason) ? "bg-white border-white" : "border-slate-300"
-                      )}>
-                        {selectedCommonReasons.includes(reason) && <Check size={8} className="text-slate-900" strokeWidth={5} />}
-                      </div>
-                      <span className="text-[9px] font-bold leading-none">{reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-2 text-left">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Custom Reason / Adjust Text
-                </label>
-                <Textarea 
-                  placeholder="Explain why this transaction is being closed..."
-                  value={closureReason}
-                  onChange={(e) => setClosureReason(e.target.value)}
-                  className="min-h-[70px] rounded-lg border-slate-100 bg-slate-50 font-bold text-xs resize-none p-3 shadow-none focus-visible:ring-1 focus-visible:ring-slate-200 text-slate-900"
-                />
-                <p className={cn(
-                  "text-[8px] font-black uppercase tracking-tighter px-1 transition-colors",
-                  closureReason.length >= 10 ? "text-emerald-500" : "text-slate-400"
-                )}>
-                  {closureReason.length}/10 characters minimum
-                </p>
-              </div>
+            <AlertDialogDescription className="text-slate-500 text-xs font-bold">
+              Mark this delivery as <span className={cn("uppercase", confirmModal.status === 'completed' ? "text-emerald-600" : "text-rose-600")}>{confirmModal.status}</span>?
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-4 text-slate-500 text-xs font-bold">
+            <div className="space-y-3 text-left bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Common Reasons</p>
+              <div className="grid grid-cols-1 gap-2">
+                {COMMON_REASONS.map(reason => (
+                  <button
+                    key={reason}
+                    type="button"
+                    aria-pressed={selectedCommonReasons.includes(reason)}
+                    onClick={() => handleToggleCommonReason(reason)}
+                    className={cn(
+                      "flex min-h-11 w-full items-center gap-2 rounded-md border p-2 text-left transition-all",
+                      selectedCommonReasons.includes(reason)
+                        ? "bg-slate-900 border-slate-900 text-white shadow-sm"
+                        : "bg-white border-slate-100 hover:border-slate-200 text-slate-600"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-3 h-3 rounded border flex items-center justify-center shrink-0",
+                      selectedCommonReasons.includes(reason) ? "bg-white border-white" : "border-slate-300"
+                    )}>
+                      {selectedCommonReasons.includes(reason) && <Check size={8} className="text-slate-900" strokeWidth={5} />}
+                    </div>
+                    <span className="text-[9px] font-bold leading-none">{reason}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2 text-left">
+              <label htmlFor="closure-reason" className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                Custom Reason / Adjust Text
+              </label>
+              <Textarea
+                id="closure-reason"
+                placeholder="Explain why this transaction is being closed..."
+                value={closureReason}
+                onChange={(e) => setClosureReason(e.target.value)}
+                className="min-h-[70px] rounded-lg border-slate-100 bg-slate-50 font-bold text-xs resize-none p-3 shadow-none focus-visible:ring-1 focus-visible:ring-slate-200 text-slate-900"
+              />
+              <p className={cn(
+                "text-[8px] font-black uppercase tracking-tighter px-1 transition-colors",
+                closureReason.length >= 10 ? "text-emerald-500" : "text-slate-400"
+              )}>
+                {closureReason.length}/10 characters minimum
+              </p>
+            </div>
+          </div>
           <AlertDialogFooter className="mt-2 gap-2 pb-2">
-            <AlertDialogCancel className="rounded-lg font-black text-[9px] uppercase tracking-widest border-slate-100 h-9">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="min-h-11 rounded-lg border-slate-100 font-black text-[9px] uppercase tracking-widest">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => confirmModal.status && handleStatusChange(confirmModal.status)}
               disabled={updatingStatus || closureReason.length < 10}
               className={cn(
-                "rounded-lg font-black text-[9px] uppercase tracking-widest h-9 text-white border-none shadow-md",
+                "min-h-11 rounded-lg border-none text-white font-black text-[9px] uppercase tracking-widest shadow-md",
                 confirmModal.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600" : "bg-rose-500 hover:bg-rose-600",
                 (updatingStatus || closureReason.length < 10) && "opacity-50 cursor-not-allowed"
               )}
@@ -716,6 +704,14 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {mobileTrackingRequestId && (
+        <LiveTrackingDashboard
+          requestId={mobileTrackingRequestId}
+          embedded
+          onClose={() => setMobileTrackingRequestId(null)}
+        />
+      )}
     </div>
   );
 };

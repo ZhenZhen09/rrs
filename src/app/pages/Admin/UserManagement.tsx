@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import {
   Search,
@@ -8,25 +8,13 @@ import {
   Key,
   Shield,
   ShieldOff,
-  Building,
-  Mail,
-  CheckCircle2,
-  XCircle,
-  UserCog,
-  Users,
   Copy,
   Check,
   BadgeCheck,
-  Clock,
   Trash2,
-  AlertTriangle,
 } from "lucide-react";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -50,7 +38,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -64,7 +51,6 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { toast } from "sonner";
-import { Alert, AlertDescription } from "../../components/ui/alert";
 import { cn } from "../../components/ui/utils";
 import { DEPARTMENTS } from "../../types";
 
@@ -112,8 +98,19 @@ export function UserManagement() {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    let active = true;
+    fetch("/api/users", { credentials: 'include' })
+      .then(async res => {
+        if (!active) return;
+        if (res.status === 401) { logout(); return; }
+        if (res.ok) {
+          const data = await res.json();
+          if (active) setUsers(Array.isArray(data) ? data : data.data || []);
+        }
+      })
+      .catch(() => { if (active) toast.error("Failed to load users"); });
+    return () => { active = false; };
+  }, [logout]);
 
   const handleManualProvision = async () => {
     try {
@@ -369,7 +366,67 @@ export function UserManagement() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="space-y-2 p-2 md:hidden">
+          {filteredUsers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 px-3 py-12 text-center text-[9px] font-black uppercase tracking-widest text-slate-400">
+              No users found
+            </div>
+          ) : (
+            filteredUsers.map((user) => (
+              <Card key={`mobile-${user.id}`} className="rounded-lg border-slate-100 p-2.5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-600">
+                      {(user.name || "??").substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-black text-slate-900">{user.name || "Unknown User"}</p>
+                      <p className="truncate text-[9px] font-bold text-slate-400">{user.email}</p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className={`shrink-0 capitalize font-black text-[7px] px-1.5 py-0.5 ${getRoleBadgeColor(user.role)}`}>
+                    {user.role}
+                  </Badge>
+                </div>
+
+                <div className="mt-2 flex min-h-9 items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className={cn("flex items-center gap-1 rounded-md px-1.5 py-1", user.mfa_enabled ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400")}>
+                      {user.mfa_enabled ? <Shield className="h-2.5 w-2.5" /> : <ShieldOff className="h-2.5 w-2.5" />}
+                      <span className="text-[7px] font-black uppercase">MFA {user.mfa_enabled ? "On" : "Off"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Switch
+                        checked={user.status === "active"}
+                        onCheckedChange={() => handleStatusToggle(user)}
+                        aria-label={`Toggle ${user.name || 'user'} account status`}
+                      />
+                      <span className={cn("text-[7px] font-black uppercase", user.status === "active" ? "text-emerald-600" : "text-slate-400")}>
+                        {user.status === "active" ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-lg px-2 text-[8px] font-black uppercase tracking-widest" aria-label={`Open actions for ${user.name || 'user'}`}>
+                        <MoreHorizontal className="mr-1 h-3 w-3" /> Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 rounded-md border-slate-100 shadow-xl p-0.5">
+                      <DropdownMenuItem onSelect={() => { setActiveUser(user); setModalView("reset"); }} className="rounded py-1.5 text-[9px] font-black uppercase tracking-widest"><Key className="mr-1.5 h-3 w-3 text-slate-400" /> Reset PWD</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => { setActiveUser(user); setEditData({ role: user.role, department: user.department || "" }); setModalView("role"); }} className="rounded py-1.5 text-[9px] font-black uppercase tracking-widest"><BadgeCheck className="mr-1.5 h-3 w-3 text-slate-400" /> Change Role</DropdownMenuItem>
+                      {user.mfa_enabled && <DropdownMenuItem onSelect={() => handleResetMFA(user)} className="rounded py-1.5 text-[9px] font-black uppercase tracking-widest text-amber-600"><ShieldOff className="mr-1.5 h-3 w-3" /> Reset MFA</DropdownMenuItem>}
+                      <DropdownMenuSeparator className="bg-slate-50 my-0.5" />
+                      <DropdownMenuItem onSelect={() => { setActiveUser(user); setModalView("delete"); }} className="rounded py-1.5 text-[9px] font-black uppercase tracking-widest text-rose-500"><Trash2 className="mr-1.5 h-3 w-3" /> Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader className="bg-slate-50/30">
               <TableRow className="hover:bg-slate-50 border-slate-50 h-8">
@@ -762,7 +819,7 @@ export function UserManagement() {
             </p>
             <div className="space-y-1">
               <Label className="text-[8px] font-black uppercase text-slate-400">
-                Type "{(activeUser?.name || "").replace(/\s+/g, "_")}_Delete" to confirm
+                Type &quot;{(activeUser?.name || "").replace(/\s+/g, "_")}_Delete&quot; to confirm
               </Label>
               <Input
                 className="h-7 rounded text-[10px] font-bold"

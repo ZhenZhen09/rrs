@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { refreshSession } from '../utils/authSession';
+import { clearPersonnelV2Draft } from '../personnel-v2/draftStorage';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<{ 
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ 
     success: boolean; 
     requirePasswordReset?: boolean; 
-    userId?: string; 
+    challenge?: string;
     role?: string;
     error?: string;
     mfa_required?: boolean;
@@ -22,23 +24,56 @@ const API_URL = '/api';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const storedUser = localStorage.getItem('currentUser');
+    const storedUser = localStorage.getItem('rememberedUser') || sessionStorage.getItem('sessionUser');
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const login = async (email: string, password: string): Promise<{ 
-    success: boolean; 
-    requirePasswordReset?: boolean; 
-    userId?: string; 
-    error?: string;
-    mfa_required?: boolean;
-    mfa_setup_required?: boolean;
-  }> => {
+  useEffect(() => {
+    let active = true;
+    let retryDelayMs = 1000;
+    let retryTimeout: number | undefined;
+    const restoreSession = async () => {
+      const result = await refreshSession();
+      if (!active) return;
+      if (result.status === 'valid') {
+        retryDelayMs = 1000;
+        const restoredUser = result.user as User;
+        setUser(restoredUser);
+        const storage = localStorage.getItem('rememberedUser') ? localStorage : sessionStorage;
+        storage.setItem(storage === localStorage ? 'rememberedUser' : 'sessionUser', JSON.stringify(restoredUser));
+      } else if (result.status === 'expired') {
+        retryDelayMs = 1000;
+        const storedUserJson = localStorage.getItem('rememberedUser') || sessionStorage.getItem('sessionUser');
+        let expiredUserId: string | undefined;
+        try {
+          expiredUserId = storedUserJson ? (JSON.parse(storedUserJson) as User).id : undefined;
+        } catch {
+          expiredUserId = undefined;
+        }
+        clearPersonnelV2Draft(expiredUserId, localStorage);
+        setUser(null);
+        localStorage.removeItem('rememberedUser');
+        sessionStorage.removeItem('sessionUser');
+      } else {
+        retryTimeout = window.setTimeout(() => { void restoreSession(); }, retryDelayMs);
+        retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
+      }
+    };
+    void restoreSession();
+    const refreshInterval = window.setInterval(() => { void restoreSession(); }, 45 * 60 * 1000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+      if (retryTimeout !== undefined) window.clearTimeout(retryTimeout);
+    };
+  }, []);
+
+  const login: AuthContextType['login'] = async (email, password, rememberMe = false) => {
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
         credentials: 'include'
       });
       
@@ -49,19 +84,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { 
             success: false, 
             requirePasswordReset: true, 
-            userId: data.userId,
+            challenge: data.challenge,
             role: data.role
           };
         }
         if (data.mfa_required) {
-          return { success: false, mfa_required: true, userId: data.userId };
+          return { success: false, mfa_required: true, challenge: data.challenge };
         }
         if (data.mfa_setup_required) {
-          return { success: false, mfa_setup_required: true, userId: data.userId };
+          return { success: false, mfa_setup_required: true, challenge: data.challenge };
         }
         
+        if (user?.id && user.id !== data.id) {
+          clearPersonnelV2Draft(user.id, localStorage);
+        }
         setUser(data);
-        localStorage.setItem('currentUser', JSON.stringify(data));
+        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('sessionUser');
+        localStorage.removeItem('rememberedUser');
+        const storage = rememberMe ? localStorage : sessionStorage;
+        storage.setItem(rememberMe ? 'rememberedUser' : 'sessionUser', JSON.stringify(data));
         return { success: true };
       }
       return { success: false, error: data.error || 'Login failed' };
@@ -72,6 +114,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    clearPersonnelV2Draft(user?.id, localStorage);
+    // Prevent a shared device from receiving the previous account's browser pushes.
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager?.getSubscription();
+        if (subscription) {
+          await fetch('/api/notifications/web-push/subscribe', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ endpoint: subscription.endpoint }),
+          });
+          await subscription.unsubscribe();
+        }
+      }
+    } catch (err) {
+      console.warn('Browser notification cleanup failed:', err);
+    }
     try {
       await fetch(`${API_URL}/auth/logout`, { 
         method: 'POST',
@@ -82,6 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('rememberedUser');
+    sessionStorage.removeItem('sessionUser');
   };
 
   const createAccount = async (email: string, password: string, role: 'personnel' | 'rider'): Promise<boolean> => {
@@ -95,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const newUser = await response.json();
         setUser(newUser);
-        localStorage.setItem('currentUser', JSON.stringify(newUser));
+        sessionStorage.setItem('sessionUser', JSON.stringify(newUser));
         return true;
       }
       return false;

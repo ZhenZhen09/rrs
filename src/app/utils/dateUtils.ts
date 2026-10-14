@@ -32,7 +32,7 @@ export const getLocalDateStr = (date: Date = new Date()): string => {
   return `${y}-${m}-${d}`;
 };
 
-export const formatDateTime = (dateStr: string, formatStr: string = 'MMM d, yyyy h:mm a'): string => {
+export const formatDateTime = (dateStr: string | null | undefined, formatStr: string = 'MMM d, yyyy h:mm a'): string => {
   if (!dateStr) return 'N/A';
   try {
     let date: Date;

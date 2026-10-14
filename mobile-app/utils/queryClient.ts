@@ -47,8 +47,12 @@ const asyncStoragePersister = createAsyncStoragePersister({
   storage: AsyncStorage,
 });
 
-persistQueryClient({
-  queryClient,
-  persister: asyncStoragePersister,
-  maxAge: 1000 * 60 * 60 * 24, // Persist for 24 hours
-});
+// Expo Router statically renders routes in a Node environment where browser
+// storage is unavailable. Hydrate/persist only after a real browser exists.
+if (typeof window !== 'undefined') {
+  persistQueryClient({
+    queryClient,
+    persister: asyncStoragePersister,
+    maxAge: 1000 * 60 * 60 * 24, // Persist for 24 hours
+  });
+}

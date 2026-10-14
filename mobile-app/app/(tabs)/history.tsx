@@ -10,12 +10,16 @@ import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useDashboard } from '@/hooks/data/useDashboard';
 import { NotificationModal } from '@/components/NotificationModal';
+import { ShiftControlDrawer } from '@/components/ShiftControlDrawer';
+import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
 
 export default function HistoryScreen() {
   // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
   const { 
+    user,
+    tasks: activeTasks,
     historyTasks: tasks,
-    loading,
+    historyLoading: loading,
     refreshing,
     onRefresh,
     notifications,
@@ -30,15 +34,21 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <RiderSurfaceGradient />
       <ScreenHeader 
+        variant="hero"
         title="Delivery History"
         subtitle="Your completed and past tasks"
         badgeLabel="ARCHIVE"
         badgeStatus="info"
         onNotifPress={() => setIsNotifOpen(true)}
+        onSettingsPress={() => router.push('/settings')}
         onLogoutPress={handleLogout}
+        profileName={user?.name}
+        profileAvatarId={user?.avatar_id ?? user?.avatarId}
         unreadCount={unreadCount}
       />
+      <ShiftControlDrawer tasks={activeTasks} />
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -72,7 +82,7 @@ export default function HistoryScreen() {
                     </Text>
                   </View>
                   <Badge 
-                    label={task.delivery_status.toUpperCase()} 
+                    label={(task.delivery_status || 'unknown').toUpperCase()}
                     status={task.delivery_status === 'completed' || task.delivery_status === 'delivered' ? 'success' : 'danger'} 
                   />
                 </View>
@@ -108,7 +118,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     padding: scale(20),

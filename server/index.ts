@@ -16,14 +16,26 @@ import authRoutes from './routes/auth';
 import requestRoutes from './routes/requests';
 import riderTaskRoutes from './routes/riderTasks';
 import notificationRoutes from './routes/notifications';
+import conversationRoutes, { resolveRequestConversation } from './routes/conversations';
 import userRoutes from './routes/users';
 import analyticsRoutes from './routes/analytics';
+import routingRoutes from './routes/routing';
 import { pool } from './db';
 import { authenticate } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
 import { onlineRiders, updateRiderPresence, removeRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate, pruneTrackingState, riderLatestState } from './locationTracking';
 import { getLatestOfflineIncident, recordConnectivityLog } from './services/connectivityLogger';
+import { ensureWebPushTable, startWebPushWorker } from './services/webPush';
+import { publishSavedWebPushNotification } from './services/deliveryNotifications';
+import { ensureLocationEventReceiptsTable } from './services/locationEventReceipts';
+import { ensureMessagingTables } from './services/messaging';
+import { canAccessConversation } from './services/messaging';
+import { ensureAuthChallengesTable } from './services/authChallenges';
+import { startProactiveOverdueWorker } from './services/proactiveOverdue';
+import { getJwtSecret, validateProductionSecurityConfig } from './config/security';
+
+validateProductionSecurityConfig();
 
 Bugsnag.start({
   apiKey: process.env.BUGSNAG_API_KEY || '37b188b8dd7ad62347e11722b1b9036f',
@@ -91,6 +103,7 @@ const authRateLimiter = rateLimit({
 app.use('/api/auth/login', authRateLimiter);
 app.use('/api/auth/signup', authRateLimiter);
 app.use('/api/auth/mfa', authRateLimiter);
+app.use('/api/auth/update-password', authRateLimiter);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -118,8 +131,7 @@ io.use((socket: any, next) => {
   }
 
   try {
-    const secret = process.env.JWT_SECRET || 'fallback_secret_for_dev_only';
-    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as any;
+    const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as any;
     socket.user = decoded; // Store decoded user for room authorization
     next();
   } catch (err) {
@@ -182,13 +194,26 @@ class RequestWatchdog {
           const notifMessage = `New request from ${req.requester_name} (${req.requester_department})`;
           
           for (const admin of admins) {
+            const [existingNotifications] = await pool.query(
+              `SELECT id FROM notifications
+               WHERE user_id = ? AND type = 'request_submitted' AND request_id = ?
+               LIMIT 1`,
+              [admin.id, req.request_id],
+            ) as any[];
+            if (existingNotifications.length > 0) continue;
+
             const notifId = `notif_${Date.now()}_wd_${Math.random().toString(36).substring(2, 7)}`;
             await pool.query(
               'INSERT INTO notifications (id, user_id, message, type, request_id) VALUES (?, ?, ?, ?, ?)',
               [notifId, admin.id, notifMessage, 'request_submitted', req.request_id]
             );
-            this.io.to(admin.id).emit('notification-added', { 
-              id: notifId, message: notifMessage, type: 'request_submitted', request_id: req.request_id 
+            await publishSavedWebPushNotification({
+              id: notifId, user_id: admin.id, message: notifMessage,
+              type: 'request_submitted', request_id: String(req.request_id),
+            });
+            this.io.to(admin.id).emit('notification-added', {
+              id: notifId, user_id: admin.id, message: notifMessage,
+              type: 'request_submitted', request_id: req.request_id,
             });
           }
           
@@ -408,6 +433,26 @@ io.on('connection', (socket: any) => {
     console.warn(`🛑 Blocked unknown room join attempt by ${socket.user.id} to ${room}`);
   });
 
+  socket.on('join-conversation', async (conversationId: string, acknowledge?: (result: { ok: boolean; error?: string }) => void) => {
+    if (typeof conversationId !== 'string' || conversationId.length < 1 || conversationId.length > 191) {
+      acknowledge?.({ ok: false, error: 'Invalid conversation id' });
+      return;
+    }
+    try {
+      const allowed = await canAccessConversation(conversationId, socket.user.id);
+      if (!allowed) {
+        console.warn(`🛑 Unauthorized conversation join attempt by ${socket.user.id} to ${conversationId}`);
+        acknowledge?.({ ok: false, error: 'Conversation access is not permitted.' });
+        return;
+      }
+      socket.join(`conversation_${conversationId}`);
+      acknowledge?.({ ok: true });
+    } catch (error) {
+      console.error('[MESSAGING] Conversation room authorization failed:', error);
+      acknowledge?.({ ok: false, error: 'Unable to authorize conversation.' });
+    }
+  });
+
   socket.on('join', (userID: string) => {
     // Standard Security Practice: Prevent rider from spoofing another user's room
     if (userID !== socket.user.id && socket.user.role !== 'admin') {
@@ -490,11 +535,27 @@ io.on('connection', (socket: any) => {
 
 app.set('io', io);
 app.use('/api/auth', authRoutes);
+app.use('/api/conversations', authenticate, idempotency, conversationRoutes);
+app.get('/api/requests/:id/conversation', authenticate, idempotency, resolveRequestConversation);
 app.use('/api/users', authenticate, idempotency, userRoutes);
 app.use('/api/requests', authenticate, idempotency, requestRoutes);
 app.use('/api/rider/tasks', authenticate, idempotency, riderTaskRoutes);
 app.use('/api/notifications', authenticate, idempotency, notificationRoutes);
 app.use('/api/analytics', authenticate, idempotency, analyticsRoutes);
+app.use('/api/routing', authenticate, routingRoutes);
+
+ensureWebPushTable()
+  .then(() => startWebPushWorker())
+  .catch((error) => console.error('[WEB PUSH] Startup initialization failed:', error));
+
+ensureLocationEventReceiptsTable()
+  .catch((error) => console.error('[LOCATION EVENTS] Startup initialization failed:', error));
+
+ensureMessagingTables()
+  .catch((error) => console.error('[MESSAGING] Startup initialization failed:', error));
+
+ensureAuthChallengesTable()
+  .catch((error) => console.error('[AUTH CHALLENGES] Startup initialization failed:', error));
 
 const clientDistPath = path.resolve(__dirname, '..', '..', 'dist');
 const clientIndexPath = path.join(clientDistPath, 'index.html');
@@ -510,6 +571,7 @@ if (fs.existsSync(clientIndexPath)) {
 
 const watchdog = new RequestWatchdog(io);
 watchdog.start();
+startProactiveOverdueWorker(io);
 
 if (bugsnagMiddleware) {
   app.use(bugsnagMiddleware.errorHandler);

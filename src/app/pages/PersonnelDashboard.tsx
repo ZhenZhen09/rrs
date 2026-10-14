@@ -38,8 +38,6 @@ import {
   User as UserIcon,
   Phone,
   Package,
-  CheckCircle2,
-  XCircle,
   Loader2,
   Bike,
   ListFilter,
@@ -48,31 +46,20 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
-  Banknote,
   FileText,
   Building2,
   Info,
   Check,
   ShieldCheck,
-  ShoppingCart,
-  Briefcase,
-  FileSignature,
-  Wallet,
-  ClipboardCheck,
-  Truck,
-  MoveRight,
-  Landmark,
   RotateCcw,
   Zap,
 } from "lucide-react";
-import { format } from "date-fns";
 import { formatLocalDate, formatDateTime } from "../utils/dateUtils";
 import {
   TIME_SLOTS,
   type Location,
   DeliveryRequest,
   RequestType,
-  REQUEST_CATEGORIES,
 } from "../types";
 import { toast } from "sonner";
 import {
@@ -89,19 +76,6 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "../components/ui/command";
 import { cn } from "../components/ui/utils";
 import { CategoryPicker } from "../components/ui/CategoryPicker";
 import { getTypeIcon, getTypeColor } from "../utils/categoryUtils";
@@ -229,17 +203,13 @@ export function PersonnelDashboard() {
   const [taskInstructions, setTaskInstructions] = useState("");
 
   // Availability Intelligence State
-  const [slotAvailability, setSlotAvailability] = useState<
-    Record<string, number>
-  >({});
+  const [availability, setAvailability] = useState<{ date: string; slots: Record<string, number> }>({ date: "", slots: {} });
+  const slotAvailability = availability.date === deliveryDate ? availability.slots : {};
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
 
   // Fetch availability when date changes
   useEffect(() => {
-    if (!deliveryDate) {
-      setSlotAvailability({});
-      return;
-    }
+    if (!deliveryDate) return;
 
     const fetchAvailability = async () => {
       setIsLoadingAvailability(true);
@@ -253,7 +223,7 @@ export function PersonnelDashboard() {
           data.forEach((item: any) => {
             mapping[item.time_window] = item.count;
           });
-          setSlotAvailability(mapping);
+          setAvailability({ date: deliveryDate, slots: mapping });
         }
       } catch (err) {
         console.error("Failed to fetch availability:", err);
@@ -290,7 +260,7 @@ export function PersonnelDashboard() {
     setPickupContactName(req.pickup_contact_name || "");
     setPickupContactMobile(req.pickup_contact_mobile || "");
     setRecipientName(req.recipient_name);
-    setRecipientContact(req.recipient_contact);
+    setRecipientContact(req.recipient_contact || '');
     setRequestType(req.request_type as RequestType);
     setUrgencyLevel(req.urgency_level as any);
     setOnBehalfOf(req.on_behalf_of || user?.name || "");
@@ -332,9 +302,9 @@ export function PersonnelDashboard() {
     );
   };
 
-  const myRequests = (Array.isArray(requests) ? requests : []).filter(
+  const myRequests = useMemo(() => (Array.isArray(requests) ? requests : []).filter(
     (req) => req.requester_id === user?.id,
-  );
+  ), [requests, user?.id]);
 
   const activeRequests = myRequests.filter(
     (req) =>
@@ -342,9 +312,7 @@ export function PersonnelDashboard() {
         req.status === "approved" ||
         req.status === "submitted_waiting") &&
       req.delivery_status !== "completed" &&
-      req.delivery_status !== "failed" &&
-      req.status !== "disapproved" &&
-      req.status !== "returned_for_revision",
+      req.delivery_status !== "failed",
   );
 
   const revisionRequests = myRequests.filter(
@@ -436,7 +404,7 @@ export function PersonnelDashboard() {
       setShowConfirmModal(false);
       setShowNewRequest(false);
       resetForm();
-    } catch (err) {
+    } catch {
       toast.error("Failed to process request. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -454,7 +422,7 @@ export function PersonnelDashboard() {
         setStatusLogs(data);
         setShowLogsModal(true);
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load history logs");
     }
   };
@@ -546,24 +514,6 @@ export function PersonnelDashboard() {
     );
   };
 
-  const getUrgencyBadge = (urgency?: string) => {
-    switch (urgency) {
-      case "Urgent":
-        return (
-          <Badge className="bg-rose-500 text-white border-none flex items-center gap-1 px-2 py-0.5 rounded-md font-black text-[8px] uppercase tracking-widest shadow-lg shadow-rose-500/20">
-            Urgent
-          </Badge>
-        );
-      case "High":
-        return (
-          <Badge className="bg-orange-500 text-white border-none px-2 py-0.5 rounded-md font-black text-[8px] uppercase tracking-widest shadow-lg shadow-orange-500/20">
-            High
-          </Badge>
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="space-y-6 pb-12 px-2 md:px-4">
@@ -1402,10 +1352,10 @@ export function PersonnelDashboard() {
                         Administrator Feedback
                       </p>
                       <p className="text-xs font-bold text-amber-700/80 mt-1.5 leading-relaxed italic">
-                        "
+                        &quot;
                         {request.admin_remark ||
                           "Please review and update your request details."}
-                        "
+                        &quot;
                       </p>
                     </div>
                   </div>
@@ -1582,7 +1532,7 @@ export function PersonnelDashboard() {
                             </div>
                             {request.rider_remark && (
                               <p className="text-[10px] font-medium text-slate-500 italic max-w-[180px] leading-tight border-l-2 border-slate-100 pl-2 py-0.5">
-                                "{request.rider_remark}"
+                                &quot;{request.rider_remark}&quot;
                               </p>
                             )}
                           </div>

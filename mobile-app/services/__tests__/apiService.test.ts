@@ -1,4 +1,11 @@
-import { getHistoryTasks, getTasks, updateJobStatus } from '../apiService';
+jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+
+import { getHistoryTasks, getTasks, submitAttendance, updateJobStatus } from '../apiService';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({
@@ -7,6 +14,12 @@ jest.mock('@/utils/api', () => ({
     put: jest.fn(),
     post: jest.fn(),
   },
+}));
+jest.mock('../localDb', () => ({
+  getDb: jest.fn().mockResolvedValue({
+    runAsync: jest.fn(),
+    getFirstAsync: jest.fn(),
+  }),
 }));
 
 describe('apiService', () => {
@@ -33,6 +46,25 @@ describe('apiService', () => {
     });
   });
 
+  it('submits present attendance with the stable start operation id', async () => {
+    const response = { data: { success: true, session: { id: 'shift-1', start_time: '2026-10-09 08:00:00' }, is_on_duty: true } };
+    (api.post as jest.Mock).mockResolvedValue(response);
+
+    await expect(submitAttendance('rider-1', 'present', undefined, 'start-op-1')).resolves.toBe(response);
+    expect(api.post).toHaveBeenCalledWith('/api/users/rider-1/attendance', {
+      status: 'present',
+      reason: undefined,
+      operation_id: 'start-op-1',
+    });
+  });
+
+  it('rejects a present response that does not confirm a persisted shift session', async () => {
+    (api.post as jest.Mock).mockResolvedValue({ data: { success: true, is_on_duty: true } });
+
+    await expect(submitAttendance('rider-1', 'present', undefined, 'start-op-1'))
+      .rejects.toThrow('The server did not confirm your shift start. Please try again.');
+  });
+
   describe('getHistoryTasks', () => {
     it('should fetch paginated rider history', async () => {
       const mockData = [{ id: '1', request_id: 'req_1' }];
@@ -49,10 +81,11 @@ describe('apiService', () => {
       (api.put as jest.Mock).mockResolvedValue({ data: { success: true } });
 
       await updateJobStatus('req_1', 'in_progress', 'Starting');
-      expect(api.put).toHaveBeenCalledWith('/api/requests/req_1/status', expect.objectContaining({
-        status: 'in_progress',
-        remark: 'Starting',
-      }));
+      expect(api.put).toHaveBeenCalledWith(
+        '/api/requests/req_1/status',
+        expect.objectContaining({ status: 'in_progress', remark: 'Starting' }),
+        expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } }),
+      );
     });
   });
 });

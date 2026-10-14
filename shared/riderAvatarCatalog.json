@@ -1,0 +1,10 @@
+[
+  { "id": "avatar_01", "seed": "rider-avatar-01", "file": "avatar_01.png" },
+  { "id": "avatar_02", "seed": "rider-avatar-02", "file": "avatar_02.png" },
+  { "id": "avatar_03", "seed": "rider-avatar-03", "file": "avatar_03.png" },
+  { "id": "avatar_04", "seed": "rider-avatar-04", "file": "avatar_04.png" },
+  { "id": "avatar_05", "seed": "rider-avatar-05", "file": "avatar_05.png" },
+  { "id": "avatar_06", "seed": "rider-avatar-06", "file": "avatar_06.png" },
+  { "id": "avatar_07", "seed": "rider-avatar-07", "file": "avatar_07.png" },
+  { "id": "avatar_08", "seed": "rider-avatar-08", "file": "avatar_08.png" }
+]

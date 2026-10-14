@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ export const AttendanceLockout: React.FC<AttendanceLockoutProps> = ({ status, on
         setFeedbackMsg(`Still marked as ${nextStatus.toUpperCase()}. Contact Admin if this is an error.`);
         setTimeout(() => setFeedbackMsg(''), 5000);
       }
-    } catch (error) {
+    } catch {
       setFeedbackMsg('Failed to check status. Please try again.');
       setTimeout(() => setFeedbackMsg(''), 5000);
     } finally {

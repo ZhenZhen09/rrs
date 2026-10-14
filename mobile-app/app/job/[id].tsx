@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Alert, BackHandler, Linking, Dimensions, Animated, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Alert, BackHandler, Linking, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { scale, moderateScale, verticalScale, normalizeFontSize } from '@/utils/responsive';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { SequentialLockPanel } from '@/components/jobs/SequentialLockPanel';
 import { useJobDetails } from '@/hooks/data/useJobDetails';
 import { useLocation } from '@/context/LocationContext';
 
 import { LEAFLET_JS, LEAFLET_CSS } from '@/constants/LeafletAssets';
+import { OSM_TILE_ATTRIBUTION, OSM_TILE_URL } from '@/utils/mapConfig';
+import { formatDuration, formatEtaTime } from '@/utils/eta';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,13 +32,15 @@ export default function JobDetailsScreen() {
     handleUpdateStatus,
     handleSubmitStatus,
     router,
-    isTracking,
     isStartingDelivery,
-    isSelfUpdated,
     sequentialEnforcement,
+    eta,
+    etaStatus,
+    etaError,
+    etaRefreshing,
   } = useJobDetails();
 
-  const { isLocked: isSequentiallyLocked, activeTask, queuePosition, totalInQueue } = sequentialEnforcement;
+  const { isLocked: isSequentiallyLocked, activeTask } = sequentialEnforcement;
 
   const { backgroundPermissionGranted, isSocketConnected, lastLocation, refreshCurrentLocation, simulateLocation } = useLocation();
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -47,9 +50,9 @@ export default function JobDetailsScreen() {
   const [offCourseCount, setOffCourseCount] = useState(0);
   const [isSimulating, setIsSimulating] = useState(false);
   const simulationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const remoteTerminalAlertedRef = useRef<string | null>(null);
 
   const deliveryStatus = job?.delivery_status?.toLowerCase();
+  const isActiveSequenceLock = isSequentiallyLocked && !['completed', 'failed', 'cancelled'].includes(deliveryStatus || '');
   const isNavigationMode = deliveryStatus === 'in_progress';
 
   const startSimulation = (mode: 'normal' | 'deviate' = 'normal') => {
@@ -155,6 +158,8 @@ export default function JobDetailsScreen() {
         const data = await response.json();
 
         if (data.code === 'Ok' && data.routes && data.routes[0]) {
+          // Load the decoder only when a route is fetched to keep initial screen loading lean.
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const polyline = require('polyline');
           const points = polyline.decode(data.routes[0].geometry);
           const path = points.map((p: any) => ({ latitude: p[0], longitude: p[1] }));
@@ -166,14 +171,18 @@ export default function JobDetailsScreen() {
         console.warn('Road snap error:', e);
       }
     }
-  }, [job?.delivery_status, job?.pickup_location, job?.dropoff_location, lastLocation?.lat, lastLocation?.lng]);
+  }, [job, lastLocation?.lat, lastLocation?.lng]);
 
   useEffect(() => {
-    if (job && roadPath.length === 0) loadRoads();
+    if (job && roadPath.length === 0) {
+      // The route fetch updates state after an external network response.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadRoads();
+    }
   }, [job, loadRoads, roadPath.length]);
 
   // --- AUTOMATIC REROUTING LOGIC ---
-  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const getDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // meters
     const φ1 = lat1 * Math.PI/180;
     const φ2 = lat2 * Math.PI/180;
@@ -184,15 +193,15 @@ export default function JobDetailsScreen() {
               Math.sin(Δλ/2) * Math.sin(Δλ/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
-  };
+  }, []);
 
-  const distToSegment = (p: {lat: number, lng: number}, v: {lat: number, lng: number}, w: {lat: number, lng: number}) => {
+  const distToSegment = useCallback((p: {lat: number, lng: number}, v: {lat: number, lng: number}, w: {lat: number, lng: number}) => {
     const l2 = Math.pow(getDistance(v.lat, v.lng, w.lat, w.lng), 2);
     if (l2 === 0) return getDistance(p.lat, p.lng, v.lat, v.lng);
     let t = ((p.lat - v.lat) * (w.lat - v.lat) + (p.lng - v.lng) * (w.lng - v.lng)) / l2;
     t = Math.max(0, Math.min(1, t));
     return getDistance(p.lat, p.lng, v.lat + t * (w.lat - v.lat), v.lng + t * (w.lng - v.lng));
-  };
+  }, [getDistance]);
 
   useEffect(() => {
     if (!isNavigationMode || roadPath.length < 2 || !lastLocation?.lat || isSimulating) return;
@@ -209,14 +218,16 @@ export default function JobDetailsScreen() {
     }
 
     if (minReach > 50) { // 50 meters off-track
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOffCourseCount(prev => prev + 1);
     } else {
       setOffCourseCount(0);
     }
-  }, [lastLocation, roadPath, isNavigationMode, isSimulating]);
+  }, [lastLocation, roadPath, isNavigationMode, isSimulating, distToSegment]);
 
   useEffect(() => {
     if (offCourseCount >= 3) { // Consistent off-track for ~15 seconds (assuming 5s updates)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadRoads();
     }
   }, [offCourseCount, loadRoads]);
@@ -244,9 +255,7 @@ export default function JobDetailsScreen() {
 
     return null;
   }, [
-    job?.request_id,
-    job?.current_location?.lat,
-    job?.current_location?.lng,
+    job,
     lastLocation?.lat,
     lastLocation?.lng,
     lastLocation?.heading,
@@ -266,11 +275,7 @@ export default function JobDetailsScreen() {
           heading: null,
         }
       : null;
-  }, [
-    job?.request_id,
-    job?.current_location?.lat,
-    job?.current_location?.lng,
-  ]);
+  }, [job]);
 
   const pushMapStateToWebView = useCallback((force = false) => {
     if (!webViewRef.current || !job) return;
@@ -302,7 +307,7 @@ export default function JobDetailsScreen() {
       }
       true;
     `);
-  }, [job?.request_id, mapRiderPosition, roadPath, isNavigationMode]);
+  }, [job, mapRiderPosition, roadPath, isNavigationMode]);
 
   useEffect(() => {
     pushMapStateToWebView();
@@ -320,12 +325,12 @@ export default function JobDetailsScreen() {
       } else if (data.type === 'DEBUG') {
         console.log('🐞 WebView Debug:', data.msg);
       }
-    } catch (e) {}
+    } catch {}
   };
 
   const snapPoints = useMemo(() => ['35%', '90%'], []);
 
-  const handleBackPress = () => {
+  const handleBackPress = useCallback(() => {
     const s = job?.delivery_status?.toLowerCase();
     if (s === 'in_progress' || s === 'assigned') {
       Alert.alert("Active Delivery", "Delivery is on going, please stay on the page.", [{ text: "OK" }]);
@@ -333,22 +338,22 @@ export default function JobDetailsScreen() {
     }
     router.back();
     return true;
-  };
+  }, [job?.delivery_status, router]);
 
   useEffect(() => {
     const bh = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => bh.remove();
-  }, [job?.delivery_status]);
+  }, [handleBackPress]);
 
   const pickup = useMemo(() => ({ 
     latitude: Number(job?.pickup_location?.lat || 0), 
     longitude: Number(job?.pickup_location?.lng || 0) 
-  }), [job?.pickup_location]);
+  }), [job]);
 
   const dropoff = useMemo(() => ({ 
     latitude: Number(job?.dropoff_location?.lat || 0), 
     longitude: Number(job?.dropoff_location?.lng || 0) 
-  }), [job?.dropoff_location]);
+  }), [job]);
 
   const isLocked = ['assigned', 'in_progress'].includes(deliveryStatus || '');
   
@@ -418,9 +423,10 @@ export default function JobDetailsScreen() {
             fadeAnimation: true
           }).setView([${pickup.latitude}, ${pickup.longitude}], 14);
           
-          // CartoDB Voyager - Mobile optimized
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            maxZoom: 20
+          // Match the web admin and mobile-admin: OpenStreetMap tiles require no provider API key.
+          L.tileLayer('${OSM_TILE_URL}', {
+            maxZoom: 19,
+            attribution: '${OSM_TILE_ATTRIBUTION}'
           }).addTo(map);
 
           const pickupIcon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#10B981;' class='marker-pin'></div>", iconSize: [30, 42], iconAnchor: [15, 42] });
@@ -698,7 +704,7 @@ export default function JobDetailsScreen() {
       </body>
     </html>
   `;
-  }, [job?.request_id, pickup.latitude, pickup.longitude, dropoff.latitude, dropoff.longitude, carMarkerSvg, initialRiderForHtml]);
+  }, [job, pickup.latitude, pickup.longitude, dropoff.latitude, dropoff.longitude, carMarkerSvg, initialRiderForHtml]);
 
   if (loading && !job) {
     return (
@@ -797,8 +803,52 @@ export default function JobDetailsScreen() {
         <BottomSheetScrollView contentContainerStyle={styles.drawerInner}>
           <View style={styles.header}>
             <View><Text style={styles.label}>TRANSACTION ID</Text><Text style={styles.idText}>#{job.request_id.slice(-8).toUpperCase()}</Text></View>
-            <Badge label={(job.delivery_status || 'PENDING').toUpperCase()} status={job.delivery_status === 'in_progress' ? 'warning' : job.delivery_status === 'completed' ? 'success' : 'info'} />
+            <View style={styles.headerStatusColumn}>
+              <Badge label={(job.delivery_status || 'PENDING').toUpperCase()} status={job.delivery_status === 'in_progress' ? 'warning' : job.delivery_status === 'completed' ? 'success' : 'info'} />
+            </View>
           </View>
+
+          {isActiveSequenceLock && (
+            <SequentialLockPanel
+              activeRequestId={activeTask?.request_id}
+              onBackToTasks={() => router.replace('/(tabs)')}
+              onRequestSequenceSkip={() => {
+                Alert.alert(
+                  "Request Deviation",
+                  "You are about to skip the assigned sequence. This requires Admin approval and a valid photo alibi (Traffic, Roadblock, etc.).",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Continue", onPress: () => {
+                      // Trigger deviation workflow
+                      Alert.alert("Notice", "Camera access requested for alibi proof.");
+                    }}
+                  ]
+                );
+              }}
+            />
+          )}
+
+          {deliveryStatus === 'in_progress' && (
+            <View style={styles.headerEta} accessibilityRole="summary">
+              <MaterialIcons name="schedule" size={17} color="#2563EB" />
+              <Text style={styles.headerEtaLabel}>ETA</Text>
+              {etaStatus === 'available' && eta ? (
+                <>
+                  <Text style={styles.headerEtaTime}>{formatEtaTime(new Date(eta.calculatedAt).getTime(), eta.durationSeconds)}</Text>
+                  <Text style={styles.headerEtaMeta}>· {formatDuration(eta.durationSeconds)} away</Text>
+                </>
+              ) : (
+                <Text style={styles.headerEtaMeta}>{etaRefreshing ? 'Calculating...' : etaError ? 'Unavailable' : 'Waiting for location'}</Text>
+              )}
+            </View>
+          )}
+          {deliveryStatus === 'completed' && job.completed_at && (
+            <View style={[styles.headerEta, styles.headerCompletedEta]} accessibilityRole="summary">
+              <MaterialIcons name="check-circle" size={17} color="#059669" />
+              <Text style={[styles.headerEtaLabel, { color: '#047857' }]}>COMPLETED</Text>
+              <Text style={styles.headerEtaTime}>{new Date(job.completed_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+            </View>
+          )}
 
           <View style={styles.destinationBox}>
             <MaterialIcons name="place" size={24} color="#3B82F6" />
@@ -847,50 +897,8 @@ export default function JobDetailsScreen() {
               <Text style={styles.oneLiner}><Text style={styles.boldLabel}>Scheduled: </Text>{job.time_window}</Text>
               <Text style={styles.oneLiner}><Text style={styles.boldLabel}>Urgency: </Text><Text style={{ color: '#EF4444', fontWeight: '800' }}>{job.urgency_level.toUpperCase()}</Text></Text>
 
-              <View style={styles.classificationActionArea}>
-                {isSequentiallyLocked && !['completed', 'failed', 'cancelled'].includes(deliveryStatus || '') ? (
-                  <View style={styles.lockedContainer}>
-                    <View style={styles.lockedHeader}>
-                      <MaterialIcons name="lock" size={20} color="#F59E0B" />
-                      <Text style={styles.lockedTitle}>SEQUENTIAL LOCK ACTIVE</Text>
-                    </View>
-                    <Text style={styles.lockedText}>
-                      Admin has optimized your route. Please complete your current task first:
-                      {"\n"}
-                      <Text style={{ color: '#0F172A', fontWeight: '900' }}>
-                        #{activeTask?.request_id.slice(-8).toUpperCase()}
-                      </Text>
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.deviationBtn}
-                      onPress={() => {
-                        Alert.alert(
-                          "Request Deviation",
-                          "You are about to skip the assigned sequence. This requires Admin approval and a valid photo alibi (Traffic, Roadblock, etc.).",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            { text: "Continue", onPress: () => {
-                              // Trigger deviation workflow
-                              Alert.alert("Notice", "Camera access requested for alibi proof.");
-                            }}
-                          ]
-                        );
-                      }}
-                    >
-                      <MaterialIcons name="alt-route" size={16} color="#64748B" />
-                      <Text style={styles.deviationBtnText}>REQUEST SEQUENCE SKIP</Text>
-                    </TouchableOpacity>
-
-                    {/* NEW: Scaled Down Back Button for Locked Tasks */}
-                    <TouchableOpacity 
-                      style={[styles.deviationBtn, { backgroundColor: '#64748B', borderColor: '#475569', marginTop: 12 }]} 
-                      onPress={() => router.replace('/(tabs)')}
-                    >
-                      <MaterialIcons name="arrow-back" size={14} color="white" />
-                      <Text style={[styles.deviationBtnText, { color: 'white' }]}>BACK TO TASKS</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
+              <View style={isActiveSequenceLock ? undefined : styles.classificationActionArea}>
+                {!isActiveSequenceLock && (
                   <>
                     {(['assigned', 'pending'].includes(job.delivery_status?.toLowerCase()) || isStartingDelivery) && (
                       <TouchableOpacity
@@ -979,7 +987,13 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 12, height: 32, borderRadius: 16, justifyContent: 'center', elevation: 4 },
   statusText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   drawerInner: { padding: 24, paddingBottom: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  headerStatusColumn: { alignItems: 'flex-end', marginLeft: 12 },
+  headerEta: { flexDirection: 'row', alignItems: 'center', minHeight: 36, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginTop: -10, marginBottom: 14, gap: 7 },
+  headerCompletedEta: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  headerEtaLabel: { fontSize: 9, fontWeight: '900', color: '#1D4ED8', letterSpacing: 0.5 },
+  headerEtaTime: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
+  headerEtaMeta: { flex: 1, fontSize: 10, color: '#475569', fontWeight: '700' },
   label: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.5 },
   idText: { fontSize: 22, fontWeight: '900', color: '#0F172A', marginTop: 2 },
   destinationBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 16, borderRadius: 20, marginBottom: 24 },
@@ -1009,6 +1023,11 @@ const styles = StyleSheet.create({
   greyText: { fontSize: 12, color: '#64748B', marginTop: 2 },
   oneLiner: { fontSize: 14, color: '#475569', marginBottom: 8 },
   boldLabel: { fontWeight: '700', color: '#0F172A' },
+  etaCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 16, padding: 14, marginTop: 12 },
+  completedEtaCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  etaLabel: { fontSize: 10, fontWeight: '900', color: '#1D4ED8', letterSpacing: 0.8 },
+  etaTime: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginTop: 2 },
+  etaMeta: { fontSize: 11, color: '#475569', fontWeight: '600', marginTop: 2 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -1022,50 +1041,4 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, fontSize: 14, color: '#0F172A', minHeight: 100, borderWidth: 1, borderColor: '#F1F5F9' },
   submitBtn: { height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 },
   submitBtnText: { color: 'white', fontWeight: '800', fontSize: 15 },
-  // LAYER 2 STYLES
-  lockedContainer: { 
-    backgroundColor: '#FFFBEB', 
-    borderWidth: 2, 
-    borderColor: '#FEF3C7', 
-    borderRadius: 24, 
-    padding: 20, 
-    alignItems: 'center' 
-  },
-  lockedHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 8, 
-    marginBottom: 12 
-  },
-  lockedTitle: { 
-    color: '#92400E', 
-    fontSize: 12, 
-    fontWeight: '900', 
-    letterSpacing: 1 
-  },
-  lockedText: { 
-    color: '#B45309', 
-    fontSize: 13, 
-    fontWeight: '600', 
-    textAlign: 'center', 
-    lineHeight: 20,
-    marginBottom: 20
-  },
-  deviationBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 6, 
-    paddingVertical: 10, 
-    paddingHorizontal: 16, 
-    borderRadius: 12, 
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#E2E8F0'
-  },
-  deviationBtnText: { 
-    color: '#64748B', 
-    fontSize: 10, 
-    fontWeight: '800', 
-    letterSpacing: 0.5 
-  }
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, MapPin, Power, Activity, ShieldAlert, WifiOff } from 'lucide-react';
+import { Clock, MapPin, Power, Activity, WifiOff } from 'lucide-react';
 import { cn } from '../../ui/utils';
 
 interface MovementEvent {

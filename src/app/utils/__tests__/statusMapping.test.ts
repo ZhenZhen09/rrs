@@ -16,6 +16,10 @@ describe('Enterprise Status Mapping Audit', () => {
       expect(isPendingRequest({ status: 'pending', delivery_status: 'pending_review' })).toBe(false);
     });
 
+    it('✅ Includes the short submitted queue because admins can return it for revision', () => {
+      expect(isPendingRequest({ status: 'submitted_waiting' })).toBe(true);
+    });
+
     it('🛑 NEGATIVE: Rejects other statuses', () => {
       expect(isPendingRequest({ status: 'approved' })).toBe(false);
       expect(isPendingRequest({ status: 'cancelled' })).toBe(false);
