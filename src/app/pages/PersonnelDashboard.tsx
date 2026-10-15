@@ -351,9 +351,10 @@ export function PersonnelDashboard() {
       !timeWindow ||
       !pickupLocation ||
       !dropoffLocation ||
-      !recipientName
+      !recipientName ||
+      !recipientContact.trim()
     ) {
-      toast.error("Please fill in all required fields");
+      toast.error(!recipientContact.trim() ? "Recipient contact number is required" : "Please fill in all required fields");
       return;
     }
 
@@ -918,10 +919,13 @@ export function PersonnelDashboard() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[11px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">
-                        Contact Number
+                        Contact Number (Required)
                       </Label>
                       <Input
                         placeholder="+63 9xx xxx xxxx"
+                        type="tel"
+                        required
+                        aria-required="true"
                         className="h-14 rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none border-2 focus:border-indigo-500/20 focus:ring-0 text-sm font-bold"
                         value={recipientContact}
                         onChange={(e) => setRecipientContact(e.target.value)}
