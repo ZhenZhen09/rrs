@@ -19,7 +19,7 @@ export const createRequestSchema = z.object({
   pickup_contact_name: z.string().optional().nullable(),
   pickup_contact_mobile: z.string().optional().nullable(),
   recipient_name: z.string().min(1, 'Recipient name is required'),
-  recipient_contact: z.string().optional().nullable(),
+  recipient_contact: z.string().trim().min(1, 'Recipient contact is required'),
   request_type: z.string().min(1, 'Request type is required'),
   urgency_level: z.string().min(1, 'Urgency level is required'),
   on_behalf_of: z.string().optional().nullable(),

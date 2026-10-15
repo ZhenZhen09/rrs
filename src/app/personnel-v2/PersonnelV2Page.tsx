@@ -371,12 +371,14 @@ export function PersonnelV2Page() {
     if (step === 1 && (!draft.category || !draft.date || !draft.slot)) return toast.error("Complete the request details first");
     if (step === 2 && (!draft.pickup || !draft.dropoff)) return toast.error("Choose both route locations first");
     if (step === 3 && !draft.recipient.trim()) return toast.error("Add a recipient name first");
+    if (step === 3 && !draft.recipientContact.trim()) return toast.error("Add the recipient's contact number first");
     setStep((current) => Math.min(4, current + 1) as Step);
   };
 
   const handleSubmitRequest = async () => {
     if (!isOnline) return toast.error("Reconnect to the internet before submitting a request");
     if (!draft.pickup || !draft.dropoff || !draft.recipient.trim()) return toast.error("Complete the request before submitting");
+    if (!draft.recipientContact.trim()) return toast.error("Add the recipient's contact number first");
     if (isSubmitting) return;
 
     setIsSubmitting(true);
@@ -421,6 +423,7 @@ export function PersonnelV2Page() {
     if (!revisionRequest) return handleSubmitRequest();
     if (!isOnline) return toast.error("Reconnect to the internet before submitting a revision");
     if (!draft.pickup || !draft.dropoff || !draft.recipient.trim()) return toast.error("Complete the revision before submitting");
+    if (!draft.recipientContact.trim()) return toast.error("Add the recipient's contact number first");
     if (isSubmitting) return;
 
     setIsSubmitting(true);
@@ -562,7 +565,7 @@ export function PersonnelV2Page() {
 
                 {step === 2 && <div><div className="mb-5 grid gap-4 md:grid-cols-2"><LocationCard label="1 · Pickup" tone="green" location={draft.pickup} onClick={() => setMapTarget("pickup")} /><LocationCard label="2 · Destination" tone="blue" location={draft.dropoff} onClick={() => setMapTarget("dropoff")} /></div>{draft.pickup && draft.dropoff ? <RoutePreview pickup={draft.pickup} dropoff={draft.dropoff} /> : <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 p-6"><div className="absolute inset-0 opacity-40 [background-image:linear-gradient(#cbd5e1_1px,transparent_1px),linear-gradient(90deg,#cbd5e1_1px,transparent_1px)] [background-size:32px_32px]" /><div className="relative flex min-h-44 flex-col items-center justify-center text-center"><Route className="mb-2 h-8 w-8 text-emerald-600" /><p className="font-bold text-slate-800">Your route preview appears here</p><p className="mt-1 text-xs text-slate-500">Select both points to verify the exact pickup and delivery path.</p></div></div>}</div>}
 
-                {step === 3 && <div className="grid gap-5 md:grid-cols-2"><Field label="Recipient name"><Input value={draft.recipient} onChange={(e) => updateDraft({ recipient: e.target.value })} placeholder="Full name" className="h-12 rounded-xl" /></Field><Field label="Recipient contact"><Input value={draft.recipientContact} onChange={(e) => updateDraft({ recipientContact: e.target.value })} placeholder="+63 9xx xxx xxxx" className="h-12 rounded-xl" /></Field><Field label="Pickup contact"><Input value={draft.pickupContact} onChange={(e) => updateDraft({ pickupContact: e.target.value })} placeholder="Name and number at pickup point" className="h-12 rounded-xl" /></Field><Field label="Instructions" hint="Optional · include entrance, floor, or landmark"><Textarea value={draft.instructions} onChange={(e) => updateDraft({ instructions: e.target.value })} placeholder="e.g. Receive at the main lobby..." className="min-h-24 rounded-xl" /></Field></div>}
+                {step === 3 && <div className="grid gap-5 md:grid-cols-2"><Field label="Recipient name"><Input value={draft.recipient} onChange={(e) => updateDraft({ recipient: e.target.value })} placeholder="Full name" className="h-12 rounded-xl" /></Field><Field label="Recipient contact (required)"><Input type="tel" required aria-required="true" value={draft.recipientContact} onChange={(e) => updateDraft({ recipientContact: e.target.value })} placeholder="+63 9xx xxx xxxx" className="h-12 rounded-xl" /></Field><Field label="Pickup contact"><Input value={draft.pickupContact} onChange={(e) => updateDraft({ pickupContact: e.target.value })} placeholder="Name and number at pickup point" className="h-12 rounded-xl" /></Field><Field label="Instructions" hint="Optional · include entrance, floor, or landmark"><Textarea value={draft.instructions} onChange={(e) => updateDraft({ instructions: e.target.value })} placeholder="e.g. Receive at the main lobby..." className="min-h-24 rounded-xl" /></Field></div>}
 
                 {step === 4 && <Review draft={draft} onEdit={(target) => setStep(target)} />}
                 <div className="mt-8 flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-5 sm:flex-row"><Button variant="ghost" disabled={step === 1} onClick={() => setStep((current) => Math.max(1, current - 1) as Step)} className="rounded-xl text-slate-500"><ChevronLeft className="mr-2 h-4 w-4" />Back</Button>{step < 4 ? <Button onClick={next} className="rounded-xl bg-emerald-600 px-6 hover:bg-emerald-700">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={() => setShowSubmitConfirm(true)} disabled={isSubmitting || !isOnline} className="rounded-xl bg-slate-900 px-6 hover:bg-slate-800"><Send className="mr-2 h-4 w-4" />{revisionRequest ? "Submit revision" : "Submit request"}</Button>}</div>
