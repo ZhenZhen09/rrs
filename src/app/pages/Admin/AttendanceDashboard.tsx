@@ -53,15 +53,21 @@ interface AttendanceRecord {
   rider_id: string;
   rider_name: string;
   rider_email: string;
+  is_on_duty: boolean;
   status: 'present' | 'absent' | 'on_leave' | null;
   reason: string | null;
   check_in_time: string | null;
+  absence_source?: 'manual' | 'automatic_no_show' | null;
+  auto_absent_at?: string | null;
+  late_checkin_approved_by?: string | null;
+  late_checkin_approved_by_name?: string | null;
+  late_checkin_approved_at?: string | null;
   off_duty_time?: string | null;
   created_at: string | null;
   active_task_count: number;
   handover_reason?: string | null;
   integrity_score: number;
-  sessions?: Array<{ id: string; start_time: string; end_time: string | null; session_state: 'open' | 'closed' | 'legacy_unknown'; duration_minutes: number | null; handover_reason: string | null; active_task_count_at_end: number | null }>;
+  sessions?: Array<{ id: string; start_time: string; end_time: string | null; session_state: 'open' | 'closed' | 'legacy_unknown'; end_source?: 'manual' | 'scheduled' | 'legacy'; duration_minutes: number | null; handover_reason: string | null; active_task_count_at_end: number | null }>;
   total_worked_minutes?: number;
 }
 
@@ -71,6 +77,7 @@ export const AttendanceDashboard: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [approvalInProgress, setApprovalInProgress] = useState<string | null>(null);
   const attendanceRequestId = useRef(0);
   const hasManuallySelectedDate = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,8 +154,12 @@ export const AttendanceDashboard: React.FC = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleInstantUpdate = () => {
+    const handleInstantUpdate = (event?: { type?: string; riderName?: string; is_on_duty?: boolean }) => {
       console.log('🔄 AttendanceDashboard: Real-time update detected, syncing...');
+      if (event?.type === 'duty' && typeof event.is_on_duty === 'boolean') {
+        const riderName = event.riderName || 'Rider';
+        toast.info(`${riderName} is now ${event.is_on_duty ? 'On duty' : 'Off duty'}`);
+      }
       fetchAttendance(true); // Silent refresh
     };
 
@@ -207,38 +218,87 @@ export const AttendanceDashboard: React.FC = () => {
     }
   };
 
+  const approveLateCheckIn = async (record: AttendanceRecord) => {
+    setApprovalInProgress(record.rider_id);
+    try {
+      const response = await fetch(`/api/users/attendance/${record.rider_id}/late-check-in-approval`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || 'Unable to approve late check-in');
+      toast.success(`Late check-in approved for ${record.rider_name}`);
+      await fetchAttendance(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to approve late check-in');
+    } finally {
+      setApprovalInProgress(null);
+    }
+  };
+
   const openConflictModal = (riderId: string, riderName: string) => {
     setSelectedRider({ id: riderId, name: riderName });
     setIsConflictModalOpen(true);
   };
 
-  const getStatusBadge = (status: AttendanceRecord['status'], riderId: string) => {
-    switch (status) {
+  const getStatusBadge = (record: AttendanceRecord) => {
+    switch (record.status) {
       case 'present':
-        return <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[9px] px-2 py-0.5">PRESENT</Badge>;
+        return (
+          <div className="flex flex-col gap-2 items-start">
+            <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[9px] px-2 py-0.5">{record.absence_source === 'automatic_no_show' ? 'PRESENT · LATE' : 'PRESENT'}</Badge>
+            {record.absence_source === 'automatic_no_show' && record.late_checkin_approved_at && (
+              <span className="text-[9px] font-semibold text-sky-700">
+                Approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
+              </span>
+            )}
+          </div>
+        );
       case 'absent':
         return (
           <div className="flex flex-col gap-2 items-start">
-            <Badge className="bg-rose-50 text-rose-600 border-rose-100 font-black text-[9px] px-2 py-0.5">ABSENT</Badge>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => clearAbsence(riderId)}
-              className="h-6 rounded-md bg-slate-900 text-white hover:bg-black font-black text-[7px] uppercase tracking-widest px-2"
-            >
-              Clear Absence
-            </Button>
+            <Badge className="bg-rose-50 text-rose-600 border-rose-100 font-black text-[9px] px-2 py-0.5">
+              {record.absence_source === 'automatic_no_show' ? 'ABSENT · AUTO NO-SHOW' : 'ABSENT'}
+            </Badge>
+            {record.absence_source === 'automatic_no_show' ? (
+              record.late_checkin_approved_at ? (
+                <span className="text-[9px] font-semibold text-sky-700">
+                  Late check-in approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
+                </span>
+              ) : selectedDate === getPhilippineDateString() ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={approvalInProgress === record.rider_id}
+                  onClick={() => void approveLateCheckIn(record)}
+                  className="h-7 rounded-md bg-sky-700 px-2 text-[8px] font-black uppercase tracking-wide text-white hover:bg-sky-800"
+                >
+                  {approvalInProgress === record.rider_id ? 'Approving…' : 'Approve late check-in'}
+                </Button>
+              ) : null
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => clearAbsence(record.rider_id)}
+                className="h-6 rounded-md bg-slate-900 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-black"
+              >
+                Clear Absence
+              </Button>
+            )}
           </div>
         );
       case 'on_leave':
         return (
           <div className="flex flex-col gap-2 items-start">
             <Badge className="bg-amber-50 text-amber-600 border-amber-100 font-black text-[9px] px-2 py-0.5">ON LEAVE</Badge>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => clearAbsence(riderId)}
-              className="h-6 rounded-md bg-slate-900 text-white hover:bg-black font-black text-[7px] uppercase tracking-widest px-2"
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => clearAbsence(record.rider_id)}
+              className="h-6 rounded-md bg-slate-900 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-black"
             >
               Clear Absence
             </Button>
@@ -248,6 +308,15 @@ export const AttendanceDashboard: React.FC = () => {
         return <Badge className="bg-slate-50 text-slate-400 border-slate-100 font-black text-[9px] px-2 py-0.5">NO REPORT</Badge>;
     }
   };
+
+  const getDutyBadge = (isOnDuty: boolean) => (
+    <Badge className={cn(
+      'border font-black text-[9px] px-2 py-0.5',
+      isOnDuty ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'
+    )}>
+      {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}
+    </Badge>
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-slate-50/50">
@@ -431,10 +500,14 @@ export const AttendanceDashboard: React.FC = () => {
                           <p className="truncate text-[9px] font-bold text-slate-400">{record.rider_email}</p>
                         </div>
                       </div>
-                      <div className="shrink-0">{getStatusBadge(record.status, record.rider_id)}</div>
+                      <div className="shrink-0">{getStatusBadge(record)}</div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5">
+                      <div>
+                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Duty status</p>
+                        <div className="mt-1">{getDutyBadge(record.is_on_duty)}</div>
+                      </div>
                       <div>
                         <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Shift start</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-700">{formatShiftStart(record)}</p>
@@ -466,7 +539,7 @@ export const AttendanceDashboard: React.FC = () => {
                           <div key={session.id} className="rounded-lg bg-slate-50 px-2 py-1 text-[9px] text-slate-600">
                             {formatPhilippineTime(session.start_time)} – {session.end_time ? formatPhilippineTime(session.end_time) : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}
                             <span className="ml-2 font-bold">{session.session_state === 'closed' && session.end_time ? `${Math.floor((session.duration_minutes || 0) / 60)}h ${(session.duration_minutes || 0) % 60}m` : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}</span>
-                            {session.handover_reason && <p className="text-rose-600">Handover: {session.handover_reason} ({session.active_task_count_at_end} tasks)</p>}
+                            {session.end_source === 'scheduled' ? <p className="text-amber-700">Automatically ended · {session.active_task_count_at_end || 0} tasks need review</p> : session.handover_reason && <p className="text-rose-600">Handover: {session.handover_reason} ({session.active_task_count_at_end} tasks)</p>}
                           </div>
                         ))}
                       </div>
@@ -507,11 +580,12 @@ export const AttendanceDashboard: React.FC = () => {
 
           {/* Desktop/tablet records table */}
           <div className="hidden flex-1 overflow-auto md:block">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead className="sticky top-0 bg-white z-10">
                 <tr className="border-b border-slate-50">
                   <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Rider Information</th>
                   <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Duty status</th>
                   <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Discipline</th>
                   <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Shift Start</th>
                   <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Shift End</th>
@@ -523,14 +597,14 @@ export const AttendanceDashboard: React.FC = () => {
               <tbody className="divide-y divide-slate-50">
                 {attendanceError ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
+                    <td colSpan={9} className="py-20 text-center">
                       <ShieldAlert className="h-12 w-12 text-rose-100 mx-auto mb-4" />
                       <p className="text-rose-600 font-bold uppercase tracking-widest text-[10px]">Attendance unavailable</p>
                     </td>
                   </tr>
                 ) : filteredAttendance.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
+                    <td colSpan={9} className="py-20 text-center">
                        <ClipboardCheck className="h-12 w-12 text-slate-100 mx-auto mb-4" />
                        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No attendance records found</p>
                     </td>
@@ -572,7 +646,10 @@ export const AttendanceDashboard: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          {getStatusBadge(record.status, record.rider_id)}
+                          {getStatusBadge(record)}
+                        </td>
+                        <td className="px-6 py-4">
+                          {getDutyBadge(record.is_on_duty)}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Badge className={cn(
@@ -637,7 +714,7 @@ export const AttendanceDashboard: React.FC = () => {
                             {record.sessions?.map((session) => (
                               <p key={session.id} className="text-[9px] text-slate-500">
                                 {formatPhilippineTime(session.start_time)}–{session.end_time ? formatPhilippineTime(session.end_time) : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}
-                                {session.handover_reason && <span className="ml-1 text-rose-600">Handover: {session.handover_reason} ({session.active_task_count_at_end} tasks)</span>}
+                                {session.end_source === 'scheduled' ? <span className="ml-1 text-amber-700">Automatically ended · {session.active_task_count_at_end || 0} tasks need review</span> : session.handover_reason && <span className="ml-1 text-rose-600">Handover: {session.handover_reason} ({session.active_task_count_at_end} tasks)</span>}
                               </p>
                             ))}
                             {record.reason && (

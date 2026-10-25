@@ -29,6 +29,12 @@ const getCookieOptions = (maxAge?: number) => ({
 
 const getSessionTtl = (rememberMe: boolean) => rememberMe ? REMEMBERED_SESSION_TTL_MS : SESSION_TTL_MS;
 const isMobileClient = (req: Request) => req.headers['x-client-type'] === 'mobile';
+const resetRiderDutyAtLogin = async (user: any, req: Request) => {
+  if (user.role !== 'rider') return;
+  await pool.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [user.id]);
+  user.is_on_duty = false;
+  req.app.get('io')?.to('admin-room').emit('rider-status-updated', { riderId: user.id, riderName: user.name, type: 'duty', is_on_duty: false });
+};
 const toUserProfile = async (user: any) => {
   const { password_hash, mfa_secret, refresh_token, refresh_token_expires_at, ...profile } = user;
   const avatarId = profile.role === 'rider'
@@ -131,6 +137,8 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
       });
     }
 
+    // A fresh rider login starts connected but off duty.
+    await resetRiderDutyAtLogin(user, req);
     // Success: Generate Tokens
     const { accessToken, refreshToken } = await generateTokens(user, rememberMe);
 
@@ -350,6 +358,7 @@ router.post('/mfa/verify-login', async (req: Request, res: Response) => {
       if (!await consumeAuthChallenge(loginChallenge, 'mfa_login')) {
         return res.status(401).json({ error: 'Invalid or expired MFA login challenge' });
       }
+      await resetRiderDutyAtLogin(user, req);
       const { accessToken, refreshToken } = await generateTokens(user, rememberMe);
       const sessionCookieAge = rememberMe ? REMEMBERED_SESSION_TTL_MS : undefined;
       res.cookie('authToken', accessToken, getCookieOptions(sessionCookieAge));

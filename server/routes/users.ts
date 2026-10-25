@@ -8,9 +8,10 @@ import fs from 'fs';
 import { handleRiderLocationUpdate } from '../locationTracking';
 import { recordConnectivityLog } from '../services/connectivityLogger';
 import { ensureLocationEventReceiptsTable } from '../services/locationEventReceipts';
-import { endShiftSession, getCurrentShiftSession, getShiftSessionsForDate, setNonPresentAttendance, setRiderAvailability, ShiftSessionError, startShiftSession } from '../services/shiftSessions';
+import { approveLateCheckIn, endShiftSession, getCurrentShiftSession, getShiftSessionsForDate, setNonPresentAttendance, setRiderAvailability, ShiftSessionError, startShiftSession } from '../services/shiftSessions';
 import { getDefaultRiderAvatarId, isRiderAvatarId } from '../services/riderAvatarCatalog';
 import { ensureRiderAvatarPreferencesTable, saveRiderAvatarPreference } from '../services/riderAvatarPreferences';
+import { getRiderShiftAccess } from '../middleware/riderShiftAccess';
 
 const router = Router();
 const PH_TODAY_SQL = "DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))";
@@ -124,8 +125,10 @@ router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, r
   try {
     const date = (req.query.date as string | undefined) || getPhilippineDateString();
     const [rows]: any = await pool.query(`
-      SELECT u.id as rider_id, u.name as rider_name, u.email as rider_email,
+      SELECT u.id as rider_id, u.name as rider_name, u.email as rider_email, u.is_on_duty,
              al.status, al.reason, al.check_in_time, al.off_duty_time, al.created_at,
+             al.absence_source, al.auto_absent_at, al.late_checkin_approved_by,
+             al.late_checkin_approved_at, late_approver.name AS late_checkin_approved_by_name,
              (SELECT COUNT(*) FROM delivery_requests 
               WHERE assigned_rider_id = u.id 
                 AND (delivery_date <= ? OR delivery_status = 'in_progress')
@@ -143,12 +146,13 @@ router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, r
               )) FROM movement_events WHERE rider_id = u.id AND DATE(timestamp) = ?) as integrity_score
       FROM users u
       LEFT JOIN attendance_logs al ON u.id = al.rider_id AND al.date = ?
+      LEFT JOIN users late_approver ON late_approver.id = al.late_checkin_approved_by
       WHERE u.role = 'rider'
       ORDER BY u.name ASC
     `, [date, date, date, date]);
     const riders = await Promise.all(rows.map(async (row: any) => {
       const summary = await getShiftSessionsForDate(pool, row.rider_id, date);
-      return { ...row, sessions: summary.sessions, total_worked_minutes: summary.total_worked_minutes };
+      return { ...row, is_on_duty: Boolean(row.is_on_duty), sessions: summary.sessions, total_worked_minutes: summary.total_worked_minutes };
     }));
     res.json(riders);
   } catch (error) {
@@ -160,18 +164,50 @@ router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, r
 // GET /me/attendance (Rider only)
 router.get('/me/shift-session', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
+    const access = await getRiderShiftAccess(req.user!.id);
     const session = await getCurrentShiftSession(pool, req.user!.id);
     const [users]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [req.user!.id]);
-    res.json({ session, is_on_duty: Boolean(users[0]?.is_on_duty) });
+    const [ended]: any = await pool.query("SELECT end_source, end_time FROM shift_sessions WHERE rider_id=? AND session_state='closed' ORDER BY end_time DESC LIMIT 1", [req.user!.id]);
+    res.json({ session, is_on_duty: Boolean(users[0]?.is_on_duty) && !access.locked,
+      schedule: access.policy.active ? { date: access.policy.date, start_time: access.policy.startTime, end_time: access.policy.endTime, time_zone: 'Asia/Manila' } : null,
+      server_time: new Date().toISOString(), locked: access.locked, next_start_at: access.policy.nextStartAt,
+      last_end_source: ended[0]?.end_source || null, last_end_time: ended[0]?.end_time || null });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch current shift' });
+  }
+});
+
+router.post('/attendance/:riderId/late-check-in-approval', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  const riderId = String(req.params.riderId);
+  const date = typeof req.body?.date === 'string' ? req.body.date : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'A valid work date is required.' });
+  try {
+    const approval = await approveLateCheckIn(pool, { riderId, date, adminId: String(req.user!.id) });
+    const io = req.app.get('io');
+    io?.to('admin-room').emit('rider-status-updated', {
+      riderId, type: 'attendance', status: 'absent', absence_source: 'automatic_no_show',
+      late_checkin_approved: true, date,
+    });
+    io?.to('admin-room').emit('notification-added', {
+      id: `notif_late_checkin_${riderId}_${date}`,
+      message: `Late check-in approved for rider ${riderId}.`,
+      type: 'info',
+    });
+    io?.to(riderId).emit('attendance-updated', { status: 'absent', late_checkin_approved: true, date });
+    return res.json({ success: true, ...approval });
+  } catch (error: any) {
+    if (error instanceof ShiftSessionError && error.code === 'LATE_CHECKIN_NOT_ELIGIBLE') {
+      return res.status(409).json({ code: error.code, error: error.message });
+    }
+    console.error('Late check-in approval failed:', error);
+    return res.status(500).json({ error: 'Late check-in approval failed.' });
   }
 });
 
 router.get('/me/attendance', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
     const [rows]: any = await pool.query(
-      `SELECT status, reason FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL} LIMIT 1`,
+      `SELECT status, reason, absence_source, auto_absent_at, late_checkin_approved_by, late_checkin_approved_at FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL} LIMIT 1`,
       [req.user!.id]
     );
     res.json(rows[0] || { status: null });
@@ -194,11 +230,14 @@ router.post('/:id/attendance', authorize(['rider']), async (req: AuthRequest, re
     }
 
     if (status === 'present') {
+      const access = await getRiderShiftAccess(id);
+      if (access.locked || !access.policy.canStart) return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
       if (typeof operation_id !== 'string' || !operation_id.trim()) return res.status(400).json({ error: 'operation_id is required' });
       const session = await startShiftSession(pool, { riderId: id, operationId: operation_id.trim() });
+      const [riders]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [id]);
       io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'attendance', status });
       io.to(id).emit('attendance-updated', { status });
-      return res.json({ success: true, session, is_on_duty: !session.end_time });
+      return res.json({ success: true, session, is_on_duty: Boolean(riders[0]?.is_on_duty) });
     }
     await setNonPresentAttendance(pool, { riderId: id, status, reason });
 
@@ -222,7 +261,7 @@ router.post('/:id/attendance', authorize(['rider']), async (req: AuthRequest, re
     res.json({ success: true });
   } catch (error: any) {
     console.error('Attendance submit error:', error);
-    if (error instanceof ShiftSessionError && error.code === 'OPEN_SHIFT') return res.status(409).json({ code: error.code, error: error.message });
+    if (error instanceof ShiftSessionError) return res.status(409).json({ code: error.code, error: error.message });
     if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Attendance already logged for today' });
     res.status(500).json({ error: 'Attendance log failed' });
   }
@@ -237,8 +276,17 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
   if (user.id !== id) return res.status(403).json({ error: 'Forbidden' });
   if (typeof is_on_duty !== 'boolean') return res.status(400).json({ error: 'Duty status must be true or false' });
   try {
+    if (is_on_duty) {
+      const access = await getRiderShiftAccess(id);
+      if (access.locked) return res.status(403).json({ code: 'SHIFT_HOURS_LOCKED', error: 'Outside rider shift hours.', next_start_at: access.policy.nextStartAt });
+      if (!access.policy.canStart && !access.hasOpenShift) return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
+    }
     const result = await setRiderAvailability(pool, { riderId: id, isOnDuty: is_on_duty });
-    io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'duty', is_on_duty });
+    io.to('admin-room').emit('rider-status-updated', { riderId: id, riderName: user.name, type: 'duty', is_on_duty });
+    if (is_on_duty) {
+      io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'attendance', status: 'present' });
+      io.to(id).emit('attendance-updated', { status: 'present' });
+    }
     try {
       await recordConnectivityLog({ riderId: String(id), riderName: user.name, eventType: is_on_duty ? 'duty_on' : 'duty_off', isOnDuty: is_on_duty });
     } catch (logError) { console.error('Failed to log duty connectivity event:', logError); }
@@ -312,6 +360,10 @@ router.delete('/attendance/:riderId', authorize(['admin']), async (req: AuthRequ
     const { riderId } = req.params;
     const io = req.app.get('io');
     
+    const [rows]: any = await pool.query(`SELECT absence_source FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL} LIMIT 1`, [riderId]);
+    if (rows[0]?.absence_source === 'automatic_no_show') {
+      return res.status(409).json({ error: 'Use Approve late check-in to authorize a rider with an automatic no-show.' });
+    }
     await pool.query(`DELETE FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`, [riderId]);
     
     // Notify the mobile app to refresh instantly
@@ -482,9 +534,16 @@ router.post('/:id/shift/end', authorize(['rider']), async (req: AuthRequest, res
   if (typeof operation_id !== 'string' || !operation_id.trim()) return res.status(400).json({ error: 'operation_id is required' });
 
   try {
+    const access = await getRiderShiftAccess(id);
+    if (access.closed) return res.json({ success: true, session: access.closed, is_on_duty: false });
+    if (access.locked) {
+      const [recent]: any = await pool.query("SELECT * FROM shift_sessions WHERE rider_id=? AND end_source='scheduled' AND DATE(start_time)=? ORDER BY end_time DESC LIMIT 1", [id, access.policy.date]);
+      if (recent[0]) return res.json({ success: true, session: recent[0], is_on_duty: false });
+      return res.status(403).json({ code: 'SHIFT_HOURS_LOCKED', error: 'Shift hours have ended for today.' });
+    }
     const session = await endShiftSession(pool, { riderId: id, operationId: operation_id.trim(), reason });
     io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'shift', is_on_duty: false });
-    io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'duty', is_on_duty: false });
+    io.to('admin-room').emit('rider-status-updated', { riderId: id, riderName: user.name, type: 'duty', is_on_duty: false });
     if (session.active_task_count_at_end) {
       io.to('admin-room').emit('notification-added', {
         id: `notif_handover_${Date.now()}`,

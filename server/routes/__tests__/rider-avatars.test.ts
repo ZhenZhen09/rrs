@@ -110,6 +110,8 @@ describe('rider avatar profile API', () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ id: 'rider-1', name: 'Riley', avatar_id: 'avatar_05' });
     expect(response.body.password_hash).toBeUndefined();
+    expect(response.body.is_on_duty).toBe(false);
+    expect(query).toHaveBeenCalledWith('UPDATE users SET is_on_duty = FALSE WHERE id = ?', ['rider-1']);
   });
 
   it('returns the saved rider avatar on login instead of replacing it with the generated default', async () => {

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { getPhilippineDateTime } from './shiftSchedule';
 
 type Db = { query: (sql: string, values?: any[]) => Promise<any>; getConnection: () => Promise<any> };
 export type ShiftSession = {
@@ -8,7 +9,7 @@ export type ShiftSession = {
   handover_reason: string | null; active_task_count_at_end: number | null;
 };
 export class ShiftSessionError extends Error {
-  constructor(public code: 'NO_OPEN_SHIFT' | 'HANDOVER_REQUIRED' | 'OPEN_SHIFT', message: string) { super(message); }
+  constructor(public code: 'NO_OPEN_SHIFT' | 'HANDOVER_REQUIRED' | 'OPEN_SHIFT' | 'ATTENDANCE_CONFLICT' | 'LATE_CHECKIN_NOT_ELIGIBLE', message: string) { super(message); }
 }
 const NOW = "CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')";
 const TODAY = "DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))";
@@ -23,11 +24,27 @@ export async function startShiftSession(db: Db, input: { riderId: string; operat
       await recordOperation(conn, input.riderId, input.operationId, 'start', opened[0].id);
       return opened[0];
     }
+    const [attendanceRows] = await conn.query(`SELECT id, status, absence_source,
+      late_checkin_approved_by, late_checkin_approved_at FROM attendance_logs
+      WHERE rider_id = ? AND date = ${TODAY} LIMIT 1 FOR UPDATE`, [input.riderId]);
+    const attendance = attendanceRows[0];
+    if (attendance && attendance.status !== 'present') {
+      const approvedAutoAbsence = attendance.status === 'absent'
+        && attendance.absence_source === 'automatic_no_show'
+        && attendance.late_checkin_approved_by
+        && attendance.late_checkin_approved_at;
+      if (!approvedAutoAbsence) {
+        throw new ShiftSessionError('ATTENDANCE_CONFLICT', 'Attendance is already recorded as absent or on leave today. Contact Admin if this needs to change.');
+      }
+      await conn.query(`UPDATE attendance_logs SET status='present', check_in_time=${NOW} WHERE id=?`, [attendance.id]);
+    }
     const id = `shift_${crypto.randomUUID()}`;
-    await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW}) ON DUPLICATE KEY UPDATE check_in_time=IF(status='present',check_in_time,${NOW}), status='present'`, [`att_${crypto.randomUUID()}`, input.riderId]);
-    await conn.query('UPDATE users SET is_on_duty = TRUE WHERE id = ?', [input.riderId]);
+    if (!attendance) {
+      await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW})`, [`att_${crypto.randomUUID()}`, input.riderId]);
+    }
+    // Starting attendance opens a shift; going online is a separate rider action.
+    await conn.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [input.riderId]);
     await conn.query(`INSERT INTO shift_sessions (id,rider_id,start_time,session_state,start_operation_id) VALUES (?, ?, ${NOW}, 'open', ?)`, [id, input.riderId, input.operationId]);
-    await conn.query(`INSERT INTO movement_events (id,rider_id,event_type,message,metadata,timestamp) VALUES (?,?,'duty_on','Rider started a shift',NULL,${NOW})`, [`move_${crypto.randomUUID()}`, input.riderId]);
     await recordOperation(conn, input.riderId, input.operationId, 'start', id);
     const [created] = await conn.query('SELECT * FROM shift_sessions WHERE id = ?', [id]);
     return created[0];
@@ -37,8 +54,20 @@ export async function startShiftSession(db: Db, input: { riderId: string; operat
 export async function setRiderAvailability(db: Db, input: { riderId: string; isOnDuty: boolean }) {
   return transition(db, input.riderId, async (conn) => {
     const [open] = await conn.query("SELECT * FROM shift_sessions WHERE rider_id = ? AND session_state = 'open' ORDER BY start_time DESC LIMIT 1", [input.riderId]);
-    if (input.isOnDuty && !open[0]) {
-      throw new ShiftSessionError('NO_OPEN_SHIFT', 'Start your shift before going online.');
+    let session = open[0] || null;
+    if (input.isOnDuty) {
+      const [attendance] = await conn.query(`SELECT status FROM attendance_logs WHERE rider_id = ? AND date = ${TODAY} LIMIT 1`, [input.riderId]);
+      if (attendance[0] && attendance[0].status !== 'present') {
+        throw new ShiftSessionError('ATTENDANCE_CONFLICT', 'Attendance is already recorded as absent or on leave today.');
+      }
+      await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW}) ON DUPLICATE KEY UPDATE check_in_time=IF(status='present',check_in_time,${NOW}), status='present'`, [`att_${crypto.randomUUID()}`, input.riderId]);
+      if (!session) {
+        const shiftId = `shift_${crypto.randomUUID()}`;
+        const operationId = `duty_${crypto.randomUUID()}`;
+        await conn.query(`INSERT INTO shift_sessions (id,rider_id,start_time,session_state,start_operation_id) VALUES (?, ?, ${NOW}, 'open', ?)`, [shiftId, input.riderId, operationId]);
+        const [created] = await conn.query('SELECT * FROM shift_sessions WHERE id = ?', [shiftId]);
+        session = created[0];
+      }
     }
 
     await conn.query('UPDATE users SET is_on_duty = ? WHERE id = ?', [input.isOnDuty, input.riderId]);
@@ -46,7 +75,7 @@ export async function setRiderAvailability(db: Db, input: { riderId: string; isO
       `move_${crypto.randomUUID()}`, input.riderId, input.isOnDuty ? 'duty_on' : 'duty_off',
       input.isOnDuty ? 'Rider went online' : 'Rider went offline',
     ]);
-    return { session: open[0] || null, is_on_duty: input.isOnDuty };
+    return { session, is_on_duty: input.isOnDuty };
   });
 }
 
@@ -61,7 +90,7 @@ export async function endShiftSession(db: Db, input: { riderId: string; operatio
     if (tasks.length && !reason) throw new ShiftSessionError('HANDOVER_REQUIRED', `Cannot go off duty with ${tasks.length} active tasks. Please provide a handover reason.`);
     await conn.query(`UPDATE shift_sessions SET end_time=${NOW}, session_state='closed', end_operation_id=?, handover_reason=?, active_task_count_at_end=? WHERE id=?`, [input.operationId, reason || null, tasks.length, open[0].id]);
     await conn.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [input.riderId]);
-    await conn.query(`UPDATE attendance_logs SET off_duty_time=${NOW} WHERE rider_id=? AND date=${TODAY}`, [input.riderId]);
+    await conn.query(`UPDATE attendance_logs SET off_duty_time=${NOW} WHERE rider_id=? AND date=DATE(?)`, [input.riderId, open[0].start_time]);
     const metadata = tasks.length || reason ? JSON.stringify({ ...(reason ? { handover_reason: reason } : {}), active_task_count: tasks.length }) : null;
     await conn.query(`INSERT INTO movement_events (id,rider_id,event_type,message,metadata,timestamp) VALUES (?,?,'duty_off',?,?,${NOW})`, [`move_${crypto.randomUUID()}`, input.riderId, `Rider toggled duty OFF${tasks.length ? ' (Handover)' : ''}`, metadata]);
     await recordOperation(conn, input.riderId, input.operationId, 'end', open[0].id);
@@ -81,6 +110,30 @@ export async function setNonPresentAttendance(db: Db, input: { riderId: string; 
     [`att_${crypto.randomUUID()}`, input.riderId, input.status, input.reason || null, input.status, input.reason || null, input.status]);
     await conn.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [input.riderId]);
     return { status: input.status };
+  });
+}
+
+export async function approveLateCheckIn(
+  db: Db,
+  input: { riderId: string; date: string; adminId: string },
+  now: Date = new Date(),
+) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || input.date !== getPhilippineDateTime(now).date) {
+    throw new ShiftSessionError('LATE_CHECKIN_NOT_ELIGIBLE', 'Late check-in approval is available only for today.');
+  }
+  return transition(db, input.riderId, async (conn) => {
+    const [rows] = await conn.query(`SELECT status, absence_source, late_checkin_approved_at
+      FROM attendance_logs WHERE rider_id=? AND date=? LIMIT 1 FOR UPDATE`, [input.riderId, input.date]);
+    const attendance = rows[0];
+    if (attendance?.status !== 'absent' || attendance.absence_source !== 'automatic_no_show' || attendance.late_checkin_approved_at) {
+      throw new ShiftSessionError('LATE_CHECKIN_NOT_ELIGIBLE', 'Only an unapproved automatic no-show can be approved for late check-in.');
+    }
+    await conn.query(`UPDATE attendance_logs SET late_checkin_approved_by=?, late_checkin_approved_at=${NOW}
+      WHERE rider_id=? AND date=? AND status='absent' AND absence_source='automatic_no_show' AND late_checkin_approved_at IS NULL`,
+    [input.adminId, input.riderId, input.date]);
+    const [updated] = await conn.query(`SELECT late_checkin_approved_by, late_checkin_approved_at
+      FROM attendance_logs WHERE rider_id=? AND date=? LIMIT 1`, [input.riderId, input.date]);
+    return updated[0];
   });
 }
 

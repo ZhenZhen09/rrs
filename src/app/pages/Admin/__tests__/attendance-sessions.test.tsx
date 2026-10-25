@@ -10,6 +10,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it('shows independent shift sessions, an open session, handover data, and closed time total', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [{
     rider_id: 'rider-1', rider_name: 'Riley Rider', rider_email: 'riley@example.test',
+    is_on_duty: true,
     status: 'present', reason: null, check_in_time: '2026-10-05 08:00:00', off_duty_time: null,
     created_at: null, active_task_count: 1, integrity_score: 100, total_worked_minutes: 480,
     sessions: [
@@ -24,6 +25,7 @@ it('shows independent shift sessions, an open session, handover data, and closed
   expect(await screen.findAllByText(/Shift sessions \(4\)/)).not.toHaveLength(0);
   expect(screen.getAllByText(/Total 8h 0m/)).not.toHaveLength(0);
   expect(screen.getAllByText('In progress').length).toBeGreaterThan(1);
+  expect(screen.getAllByText('ON DUTY').length).toBeGreaterThan(0);
   expect(screen.getAllByText('End time unknown').length).toBeGreaterThan(0);
   expect(screen.getAllByText(/Vehicle issue/)).not.toHaveLength(0);
 });

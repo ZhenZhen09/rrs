@@ -136,10 +136,10 @@ export async function sendPushNotification(
   body: string,
   data?: any,
   options?: { channelId?: string; categoryId?: string; tag?: string },
-) {
+): Promise<{ sent: boolean; providerMessageId?: string; reason?: string }> {
   try {
     const [rows] = await pool.query('SELECT fcm_token, expo_push_token, role FROM users WHERE id = ?', [userId]) as any[];
-    if (rows[0]?.role !== 'rider') return;
+    if (rows[0]?.role !== 'rider') return { sent: false, reason: 'Recipient is not a rider' };
     const fcmToken = rows[0]?.fcm_token;
     const token = rows[0]?.expo_push_token;
     const urgentTypes = new Set([
@@ -154,7 +154,7 @@ export async function sendPushNotification(
 
     if (fcmToken) {
       try {
-        await sendFcmNotification(fcmToken, {
+        const providerMessageId = await sendFcmNotification(fcmToken, {
           title,
           body,
           data: notificationData,
@@ -163,18 +163,19 @@ export async function sendPushNotification(
           tag: options?.tag,
           priority: urgent ? 'high' : 'normal',
         });
+        return { sent: true, providerMessageId };
       } catch (error) {
         if (isPermanentFcmTokenError(error)) {
           await pool.query('UPDATE users SET fcm_token = NULL WHERE id = ? AND fcm_token = ?', [userId, fcmToken]);
         }
         console.error('[FCM] Push delivery failed.');
+        return { sent: false, reason: error instanceof Error ? error.message : 'FCM delivery failed' };
       }
-      return;
     }
 
     if (!token || !Expo.isExpoPushToken(token)) {
       console.log(`⚠️ Invalid or missing Expo Push Token for user ${userId}`);
-      return;
+      return { sent: false, reason: 'No registered push token' };
     }
 
     const messages: any[] = [{
@@ -190,12 +191,17 @@ export async function sendPushNotification(
     }];
 
     const chunks = expo.chunkPushNotifications(messages);
+    let providerMessageId: string | undefined;
     for (const chunk of chunks) {
-      await expo.sendPushNotificationsAsync(chunk);
+      const tickets = await expo.sendPushNotificationsAsync(chunk);
+      const accepted = tickets.find(ticket => ticket.status === 'ok');
+      providerMessageId ||= accepted && 'id' in accepted ? accepted.id : undefined;
     }
+    return { sent: true, providerMessageId };
     console.log(`🚀 Push notification sent to user ${userId}`);
   } catch (err) {
     console.error('[PUSH] Provider delivery failed.');
+    return { sent: false, reason: err instanceof Error ? err.message : 'Push provider delivery failed' };
   }
 }
 

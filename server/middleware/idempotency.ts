@@ -11,6 +11,9 @@ import { AuthRequest } from './auth';
  * Works for POST and PUT requests.
  */
 export const idempotency = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.method === 'PUT' && req.user?.role === 'rider' && /^\/[^/]+\/status$/.test(req.path)) {
+    return next();
+  }
   const key = req.headers['idempotency-key'] as string;
 
   // Skip if no key or not a mutating method

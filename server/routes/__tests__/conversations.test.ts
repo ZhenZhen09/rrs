@@ -65,7 +65,7 @@ describe('conversation REST routes', () => {
       { userId: 'admin-1', requestId: 'req-1' },
       { userId: 'rider-1', requestId: 'req-1' },
     ]);
-    vi.mocked(sendPushNotification).mockResolvedValue(undefined);
+    vi.mocked(sendPushNotification).mockResolvedValue({ sent: true });
   });
 
   afterEach(() => { vi.restoreAllMocks(); });
