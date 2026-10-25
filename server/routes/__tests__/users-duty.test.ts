@@ -25,7 +25,7 @@ describe('rider shift session end route', () => {
     connectionQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT id FROM users')) return [[{ id: 'rider-1' }]];
       if (sql.includes('shift_operation_receipts')) return [[]];
-      if (sql.includes("session_state = 'open'")) return [[{ id: 'shift-1', rider_id: 'rider-1', end_time: null }]];
+      if (sql.includes("session_state = 'open'")) return [[{ id: 'shift-1', rider_id: 'rider-1', start_time: '2026-10-21 08:00:00', end_time: null }]];
       if (sql.includes('SELECT request_id FROM delivery_requests')) return [activeTasks];
       if (sql.includes('SELECT * FROM shift_sessions WHERE id')) return [[{ id: 'shift-1', active_task_count_at_end: activeTasks.length, handover_reason: 'Vehicle breakdown' }]];
       return [{}];
@@ -52,6 +52,10 @@ describe('rider shift session end route', () => {
     expect(connectionQuery.mock.calls.some(([sql]) => String(sql).includes('UPDATE shift_sessions SET end_time'))).toBe(false);
     expect(connectionQuery.mock.calls.some(([sql]) => String(sql).includes('UPDATE users SET is_on_duty = ?'))).toBe(true);
     expect(response.body.is_on_duty).toBe(false);
+    expect(emittedEvents).toContainEqual({
+      room: 'admin-room', event: 'rider-status-updated',
+      payload: { riderId: 'rider-1', riderName: 'Riley', type: 'duty', is_on_duty: false },
+    });
   });
 
   it('only restores availability when going online during an open shift', async () => {
@@ -60,6 +64,10 @@ describe('rider shift session end route', () => {
     expect(connectionQuery.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO shift_sessions'))).toBe(false);
     expect(connectionQuery.mock.calls.some(([sql]) => String(sql).includes('UPDATE users SET is_on_duty = ?'))).toBe(true);
     expect(response.body.is_on_duty).toBe(true);
+    expect(emittedEvents).toContainEqual({
+      room: 'admin-room', event: 'rider-status-updated',
+      payload: { riderId: 'rider-1', riderName: 'Riley', type: 'duty', is_on_duty: true },
+    });
   });
 
   it('requires a nonblank handover reason when explicitly ending with active tasks', async () => {
@@ -74,6 +82,7 @@ describe('rider shift session end route', () => {
     const response = await request(app).post('/api/users/rider-1/shift/end').send({ operation_id: 'end-2', reason: ' Vehicle breakdown ' });
     expect(response.status).toBe(200); expect(connection.commit).toHaveBeenCalledOnce();
     expect(connectionQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE shift_sessions SET end_time'), ['end-2', 'Vehicle breakdown', 2, 'shift-1']);
+    expect(connectionQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE attendance_logs SET off_duty_time'), ['rider-1', '2026-10-21 08:00:00']);
     expect(connectionQuery.mock.calls.some(([sql]) => String(sql).includes('UPDATE delivery_requests'))).toBe(false);
     expect(emittedEvents.some(({ event }) => event === 'notification-added')).toBe(true);
   });

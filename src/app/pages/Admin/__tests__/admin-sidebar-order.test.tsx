@@ -16,6 +16,7 @@ vi.mock('../CalendarView', () => ({ CalendarView: () => null }));
 vi.mock('../RiderMap', () => ({ RiderMap: () => null }));
 vi.mock('../AttendanceDashboard', () => ({ AttendanceDashboard: () => null }));
 vi.mock('../AdminMessaging', () => ({ AdminMessaging: () => null }));
+vi.mock('../NotificationCampaigns', () => ({ NotificationCampaigns: () => null }));
 
 import { AdminLayout } from '../AdminLayout';
 
@@ -27,12 +28,13 @@ describe('admin sidebar navigation order', () => {
     expect(mainMenu).not.toBeNull();
     const labels = within(mainMenu!).getAllByRole('button').map(button => button.textContent?.trim());
 
-    expect(labels.slice(0, 7)).toEqual([
+    expect(labels.slice(0, 8)).toEqual([
       'Dispatch Console',
       'Calendar View',
       'Rider Map',
       'Inbox',
       'Attendance',
+      'Notification Campaigns',
       'Analytics Hub',
       'User Management',
     ]);

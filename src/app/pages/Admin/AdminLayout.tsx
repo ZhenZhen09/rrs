@@ -9,7 +9,7 @@ import { cn } from '../../components/ui/utils';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
-import { Truck, Users, BarChart3, LogOut, UserCog, Mail, Shield, Menu, Palette, Calendar, MapPin, ClipboardCheck, Loader2, MessageSquare } from 'lucide-react';
+import { Truck, Users, BarChart3, LogOut, UserCog, Mail, Shield, Menu, Palette, Calendar, MapPin, ClipboardCheck, Loader2, MessageSquare, Clock3, BellRing } from 'lucide-react';
 import { NotificationBell } from '../../components/Admin/NotificationBell';
 import { FloatingRiderMessagePreview } from '../../components/Admin/FloatingRiderMessagePreview';
 import { useRealTime } from '../../context/RealTimeContext';
@@ -25,8 +25,10 @@ const CalendarView = lazy(() => import('./CalendarView').then(module => ({ defau
 const RiderMap = lazy(() => import('./RiderMap').then(module => ({ default: module.RiderMap })));
 const AttendanceDashboard = lazy(() => import('./AttendanceDashboard').then(module => ({ default: module.AttendanceDashboard })));
 const AdminMessaging = lazy(() => import('./AdminMessaging').then(module => ({ default: module.AdminMessaging })));
+const ShiftHours = lazy(() => import('./ShiftHours').then(module => ({ default: module.ShiftHours })));
+const NotificationCampaigns = lazy(() => import('./NotificationCampaigns').then(module => ({ default: module.NotificationCampaigns })));
 
-type AdminView = 'dispatch' | 'messages' | 'users' | 'analytics' | 'theme' | 'calendar' | 'rider-map' | 'attendance';
+type AdminView = 'dispatch' | 'messages' | 'users' | 'analytics' | 'theme' | 'shift-hours' | 'calendar' | 'rider-map' | 'attendance' | 'campaigns';
 
 const ADMIN_MAIN_NAVIGATION = [
   { view: 'dispatch', label: 'Dispatch Console', icon: Truck },
@@ -34,6 +36,7 @@ const ADMIN_MAIN_NAVIGATION = [
   { view: 'rider-map', label: 'Rider Map', icon: MapPin },
   { view: 'messages', label: 'Inbox', icon: MessageSquare },
   { view: 'attendance', label: 'Attendance', icon: ClipboardCheck },
+  { view: 'campaigns', label: 'Notification Campaigns', icon: BellRing },
   { view: 'analytics', label: 'Analytics Hub', icon: BarChart3 },
   { view: 'users', label: 'User Management', icon: Users },
 ] as const;
@@ -112,6 +115,9 @@ export function AdminLayout() {
           ))}
 
           <p className="px-3 text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2 mt-4">Settings</p>
+          <button onClick={() => setCurrentView('shift-hours')} className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg font-bold transition-all ${currentView === 'shift-hours' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+            <Clock3 size={14} /><span className="text-[11px]">Shift Hours</span>
+          </button>
           
           <button
             onClick={() => setCurrentView('theme')}
@@ -197,6 +203,7 @@ export function AdminLayout() {
                       ))}
 
                       <p className="px-2 text-[7px] font-black text-slate-500 uppercase tracking-widest mb-2 mt-4">Settings</p>
+                      <SheetTrigger asChild><button onClick={() => setCurrentView('shift-hours')} className={`min-h-11 w-full flex items-center gap-3 px-3 py-2 rounded-xl font-bold transition-all ${currentView === 'shift-hours' ? 'bg-primary text-white' : 'text-slate-400'}`}><Clock3 size={14} /><span className="text-xs">Shift Hours</span></button></SheetTrigger>
                       
                       <SheetTrigger asChild>
                         <button
@@ -211,7 +218,7 @@ export function AdminLayout() {
                   </SheetContent>
                 </Sheet>
                 <h1 className="min-w-0 truncate font-black text-slate-900 text-xs md:hidden uppercase tracking-widest">
-                  {currentView === 'rider-map' ? 'Rider Map' : currentView === 'calendar' ? 'Calendar View' : currentView === 'messages' ? 'Inbox' : currentView === 'users' ? 'User Management' : currentView === 'analytics' ? 'Analytics Hub' : currentView === 'attendance' ? 'Attendance' : currentView === 'theme' ? 'Theme Selection' : 'Dispatch Console'}
+                  {currentView === 'rider-map' ? 'Rider Map' : currentView === 'calendar' ? 'Calendar View' : currentView === 'messages' ? 'Inbox' : currentView === 'users' ? 'User Management' : currentView === 'analytics' ? 'Analytics Hub' : currentView === 'attendance' ? 'Attendance' : currentView === 'campaigns' ? 'Notification Campaigns' : currentView === 'shift-hours' ? 'Shift Hours' : currentView === 'theme' ? 'Theme Selection' : 'Dispatch Console'}
                 </h1>
               </div>
 
@@ -272,8 +279,10 @@ export function AdminLayout() {
             {currentView === 'users' && <UserManagement />}
             {currentView === 'analytics' && <AnalyticsHub />}
             {currentView === 'theme' && <ThemeSelection />}
+            {currentView === 'shift-hours' && <ShiftHours onOpenAttendance={() => setCurrentView('attendance')} />}
             {currentView === 'rider-map' && <RiderMap />}
             {currentView === 'attendance' && <AttendanceDashboard />}
+            {currentView === 'campaigns' && <NotificationCampaigns />}
             {currentView === 'messages' && <AdminMessaging
               initialConversationId={pendingConversationId}
               onInitialConversationOpened={() => setPendingConversationId(null)}

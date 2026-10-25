@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { pool } from '../db';
 import { AuthRequest, authorize } from '../middleware/auth';
 import { getOverdueMetadata, getProactiveOverdueMetadata } from '../utils/overdue';
+import { getRiderShiftAccess } from '../middleware/riderShiftAccess';
 
 const router = Router();
 
@@ -44,6 +45,11 @@ const formatRequestRow = (row: any) => ({
 router.get('/active', authorize(['rider']), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+
+    const shiftAccess = await getRiderShiftAccess(user.id);
+    if (shiftAccess.locked) {
+      return res.json({ data: [], meta: { offDuty: true, shiftHoursLocked: true, nextStartAt: shiftAccess.policy.nextStartAt } });
+    }
 
     // ON-DUTY LOCK: Riders can only see tasks if On Duty
     const [userRows]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [user.id]);

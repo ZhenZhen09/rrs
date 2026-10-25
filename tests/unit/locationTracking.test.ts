@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getStaleLocationMetadata } from '../../server/locationTracking';
 
 // Extract logic from server/locationTracking.ts for isolated unit testing
 const isValidCoordinate = (lat: number, lng: number) => {
@@ -42,6 +43,34 @@ function resolveIntegrity(
 }
 
 describe('GPS Integrity Pipeline (Server-Authoritative)', () => {
+  describe('Stale location diagnostics', () => {
+    it('returns the ordering subtype and timestamps for time-skew rejections', () => {
+      expect(getStaleLocationMetadata({
+        type: 'time_skew',
+        now: 2_000,
+        timestamp: 1_000,
+        lastAcceptedTimestamp: 1_500,
+      })).toEqual({
+        type: 'time_skew',
+        serverNow: 2_000,
+        receivedTimestamp: 1_000,
+        lastAcceptedTimestamp: 1_500,
+      });
+    });
+
+    it('returns the age for age-limit rejections', () => {
+      expect(getStaleLocationMetadata({
+        type: 'age_limit',
+        now: 200_000,
+        timestamp: 50_000,
+      })).toEqual({
+        type: 'age_limit',
+        serverNow: 200_000,
+        receivedTimestamp: 50_000,
+        ageMs: 150_000,
+      });
+    });
+  });
   
   describe('isValidCoordinate', () => {
     it('rejects (0,0)', () => {

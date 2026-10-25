@@ -16,12 +16,15 @@ import authRoutes from './routes/auth';
 import requestRoutes from './routes/requests';
 import riderTaskRoutes from './routes/riderTasks';
 import notificationRoutes from './routes/notifications';
+import notificationCampaignRoutes from './routes/notificationCampaigns';
 import conversationRoutes, { resolveRequestConversation } from './routes/conversations';
 import userRoutes from './routes/users';
+import shiftScheduleRoutes from './routes/shiftSchedule';
 import analyticsRoutes from './routes/analytics';
 import routingRoutes from './routes/routing';
 import { pool } from './db';
 import { authenticate } from './middleware/auth';
+import { requireRiderWorkAccess } from './middleware/riderShiftAccess';
 import { idempotency } from './middleware/idempotency';
 import { onlineRiders, updateRiderPresence, removeRiderPresence, cleanupOfflineRiders } from './presence';
 import { handleRiderLocationUpdate, pruneTrackingState, riderLatestState } from './locationTracking';
@@ -33,6 +36,10 @@ import { ensureMessagingTables } from './services/messaging';
 import { canAccessConversation } from './services/messaging';
 import { ensureAuthChallengesTable } from './services/authChallenges';
 import { startProactiveOverdueWorker } from './services/proactiveOverdue';
+import { ensureShiftScheduleTables } from './services/shiftSchedule';
+import { startShiftCutoffWorker } from './services/shiftCutoff';
+import { ensureNotificationCampaignTables } from './services/notificationCampaigns';
+import { startNotificationCampaignWorker } from './services/notificationCampaignWorker';
 import { getJwtSecret, validateProductionSecurityConfig } from './config/security';
 
 validateProductionSecurityConfig();
@@ -538,9 +545,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/conversations', authenticate, idempotency, conversationRoutes);
 app.get('/api/requests/:id/conversation', authenticate, idempotency, resolveRequestConversation);
 app.use('/api/users', authenticate, idempotency, userRoutes);
-app.use('/api/requests', authenticate, idempotency, requestRoutes);
+app.use('/api/shift-schedule', authenticate, shiftScheduleRoutes);
+app.use('/api/requests', authenticate, idempotency, requireRiderWorkAccess, requestRoutes);
 app.use('/api/rider/tasks', authenticate, idempotency, riderTaskRoutes);
 app.use('/api/notifications', authenticate, idempotency, notificationRoutes);
+app.use('/api/notification-campaigns', authenticate, idempotency, notificationCampaignRoutes);
 app.use('/api/analytics', authenticate, idempotency, analyticsRoutes);
 app.use('/api/routing', authenticate, routingRoutes);
 
@@ -557,6 +566,10 @@ ensureMessagingTables()
 ensureAuthChallengesTable()
   .catch((error) => console.error('[AUTH CHALLENGES] Startup initialization failed:', error));
 
+ensureNotificationCampaignTables(pool)
+  .then(() => startNotificationCampaignWorker(io))
+  .catch((error) => console.error('[NOTIFICATION CAMPAIGNS] Startup initialization failed:', error));
+
 const clientDistPath = path.resolve(__dirname, '..', '..', 'dist');
 const clientIndexPath = path.join(clientDistPath, 'index.html');
 
@@ -572,6 +585,9 @@ if (fs.existsSync(clientIndexPath)) {
 const watchdog = new RequestWatchdog(io);
 watchdog.start();
 startProactiveOverdueWorker(io);
+ensureShiftScheduleTables()
+  .then(() => startShiftCutoffWorker(pool, io))
+  .catch((error) => console.error('[SHIFT HOURS] Startup initialization failed:', error));
 
 if (bugsnagMiddleware) {
   app.use(bugsnagMiddleware.errorHandler);

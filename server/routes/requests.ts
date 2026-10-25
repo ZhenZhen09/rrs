@@ -20,6 +20,7 @@ import { sendPushNotification } from './notifications';
 import { persistAdminDispatchNotifications, persistDeliveryNotification, publishDeliveryNotification } from '../services/deliveryNotifications';
 import { appendRequestsToRiderQueue, lockRiderQueues, normalizeRiderQueueOrder, replaceRiderQueueOrder } from '../services/riderTaskQueue';
 import { RiderQueueValidationError } from '../utils/riderQueue';
+import { findRiderOperation, hashRiderStatusPayload, recordRiderOperation } from '../services/riderStatusOperations';
 
 const router = Router();
 
@@ -1158,6 +1159,11 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
     const { id } = req.params;
     const { status, remark, current_lat, current_lng, timestamp } = req.body;
     const user = (req as AuthRequest).user!;
+    const operationId = req.header('Idempotency-Key')?.trim() || '';
+
+    if (user.role === 'rider' && (!operationId || operationId.length > 191)) {
+      return res.status(400).json({ error: 'A valid Idempotency-Key is required for rider status updates.' });
+    }
 
     await connection.beginTransaction();
 
@@ -1185,7 +1191,22 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
        return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // INTEGRITY CHECK: Reject updates if job is terminal
+    const payloadHash = user.role === 'rider' ? hashRiderStatusPayload({
+      requestId: String(id), status: String(status), remark: String(remark || ''),
+      timestamp: timestamp ? String(timestamp) : null,
+    }) : '';
+    if (user.role === 'rider') {
+      const priorOperation = await findRiderOperation(connection, user.id, operationId);
+      if (priorOperation) {
+        await connection.rollback();
+        if (priorOperation.request_id !== String(id) || priorOperation.payload_hash !== payloadHash) {
+          return res.status(409).json({ error: 'This operation ID was already used for a different status update.' });
+        }
+        return res.status(200).json(priorOperation.response_json);
+      }
+    }
+
+    // INTEGRITY CHECK: Reject new updates if job is terminal.
     const terminalStatuses = ['completed', 'failed', 'cancelled', 'disapproved', 'delivered'];
     if (terminalStatuses.includes(current.delivery_status) || terminalStatuses.includes(current.status)) {
       await connection.rollback();
@@ -1204,6 +1225,7 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       query += ', completed_at = ?';
       params.push(timestamp ? new Date(timestamp) : new Date());
     }
+
     if (status === 'failed') {
       query += ', failed_at = ?, overdue_at = CASE WHEN scheduled_end_at < ? THEN COALESCE(overdue_at, scheduled_end_at) ELSE overdue_at END';
       const serverNow = new Date();
@@ -1225,6 +1247,14 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       'INSERT INTO status_logs (request_id, rider_id, status, remark) VALUES (?, ?, ?, ?)',
       [id, current.assigned_rider_id || user.id, status, auditRemark]
     );
+
+    const riderResponse = { success: true, operationId, deliveryStatus: status };
+    if (user.role === 'rider') {
+      await recordRiderOperation(connection, {
+        rider_id: user.id, operation_id: operationId, request_id: String(id), payload_hash: payloadHash,
+        delivery_status: String(status), response_json: riderResponse,
+      });
+    }
 
     const deliveryEventNotifications: Awaited<ReturnType<typeof persistDeliveryNotification>>[] = [];
     const normalizedDeliveryStatus = String(status).toLowerCase();
@@ -1339,7 +1369,7 @@ router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
       }
     }
 
-    res.json({ success: true });
+    res.json(user.role === 'rider' ? riderResponse : { success: true });
   } catch (error) {
     if (connection) await connection.rollback();
     console.error(error);

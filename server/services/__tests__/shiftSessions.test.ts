@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { buildLegacyShiftSessionRows, migrate } = require('../../../scripts/migrate-shift-sessions.cjs');
-import { getCurrentShiftSession, getShiftSessionsForDate, startShiftSession, endShiftSession } from '../shiftSessions';
+import { approveLateCheckIn, getCurrentShiftSession, getShiftSessionsForDate, startShiftSession, endShiftSession, setRiderAvailability } from '../shiftSessions';
 
 describe('legacy shift session backfill rows', () => {
   it('creates deterministic sessions preserving ended and open attendance times', () => {
@@ -63,6 +63,132 @@ describe('shift session transitions', () => {
     expect(conn.query).toHaveBeenCalledWith(expect.stringContaining('FOR UPDATE'), ['rider-1']);
     expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO shift_operation_receipts'))).toBe(true);
     expect(conn.commit).toHaveBeenCalledOnce();
+  });
+
+  it('starts a shift off duty so online availability stays a separate action', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('shift_operation_receipts')
+        ? [[]]
+        : sql.includes('SELECT * FROM shift_sessions WHERE rider_id')
+          ? [[]]
+          : sql.includes('SELECT * FROM shift_sessions WHERE id')
+            ? [[{ id: 'shift-new', rider_id: 'rider-1', end_time: null }]]
+            : [[]]);
+
+    await startShiftSession(db as any, { riderId: 'rider-1', operationId: 'start-off-duty' });
+
+    expect(conn.query).toHaveBeenCalledWith('UPDATE users SET is_on_duty = FALSE WHERE id = ?', ['rider-1']);
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes("'duty_on'"))).toBe(false);
+    expect(conn.commit).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a late start when automatic absence has no admin approval', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('shift_operation_receipts') ? [[]]
+        : sql.includes('SELECT * FROM shift_sessions WHERE rider_id') ? [[]]
+          : sql.includes('SELECT id, status, absence_source') ? [[{ id: 'att-1', status: 'absent', absence_source: 'automatic_no_show', late_checkin_approved_at: null }]]
+            : [[]]);
+
+    await expect(startShiftSession(db as any, { riderId: 'rider-1', operationId: 'late-unapproved' }))
+      .rejects.toMatchObject({ code: 'ATTENDANCE_CONFLICT' });
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO shift_sessions'))).toBe(false);
+    expect(conn.rollback).toHaveBeenCalledOnce();
+  });
+
+  it('converts approved automatic absence to present at the actual check-in and remains off duty', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('shift_operation_receipts') ? [[]]
+        : sql.includes('SELECT * FROM shift_sessions WHERE rider_id') ? [[]]
+          : sql.includes('SELECT id, status, absence_source')
+            ? [[{ id: 'att-1', status: 'absent', absence_source: 'automatic_no_show', late_checkin_approved_by: 'admin-1', late_checkin_approved_at: '2026-10-22 08:20:00' }]]
+            : sql.includes('SELECT * FROM shift_sessions WHERE id')
+              ? [[{ id: 'shift-new', rider_id: 'rider-1', session_state: 'open', start_time: '2026-10-22 08:25:00' }]]
+              : [[]]);
+
+    await startShiftSession(db as any, { riderId: 'rider-1', operationId: 'late-approved' });
+
+    expect(conn.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE attendance_logs SET status='present'"), ['att-1']);
+    expect(conn.query).toHaveBeenCalledWith('UPDATE users SET is_on_duty = FALSE WHERE id = ?', ['rider-1']);
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO attendance_logs'))).toBe(false);
+    expect(conn.commit).toHaveBeenCalledOnce();
+  });
+
+  it('approves only a same-day automatic absence and records admin identity', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('SELECT status, absence_source')
+        ? [[{ status: 'absent', absence_source: 'automatic_no_show', late_checkin_approved_at: null }]]
+        : sql.includes('SELECT late_checkin_approved_by')
+          ? [[{ late_checkin_approved_by: 'admin-1', late_checkin_approved_at: '2026-10-22 08:20:00' }]]
+          : [[]]);
+
+    await approveLateCheckIn(db as any, { riderId: 'rider-1', date: '2026-10-22', adminId: 'admin-1' }, new Date('2026-10-22T00:20:00Z'));
+
+    expect(conn.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE attendance_logs SET late_checkin_approved_by=?'), ['admin-1', 'rider-1', '2026-10-22']);
+    expect(conn.commit).toHaveBeenCalledOnce();
+  });
+
+  it('rejects approval of manual absence and duplicate approval', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('SELECT status, absence_source')
+        ? [[{ status: 'absent', absence_source: 'manual', late_checkin_approved_at: null }]]
+        : [[]]);
+
+    await expect(approveLateCheckIn(db as any, { riderId: 'rider-1', date: '2026-10-22', adminId: 'admin-1' }, new Date('2026-10-22T00:20:00Z')))
+      .rejects.toMatchObject({ code: 'LATE_CHECKIN_NOT_ELIGIBLE' });
+    expect(conn.rollback).toHaveBeenCalledOnce();
+  });
+
+  it('rejects duplicate approval and approval for a different Philippine date', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('SELECT status, absence_source')
+        ? [[{ status: 'absent', absence_source: 'automatic_no_show', late_checkin_approved_at: '2026-10-22 08:20:00' }]]
+        : [[]]);
+
+    await expect(approveLateCheckIn(db as any, { riderId: 'rider-1', date: '2026-10-22', adminId: 'admin-1' }, new Date('2026-10-22T00:20:00Z')))
+      .rejects.toMatchObject({ code: 'LATE_CHECKIN_NOT_ELIGIBLE' });
+    await expect(approveLateCheckIn(db as any, { riderId: 'rider-1', date: '2026-10-21', adminId: 'admin-1' }, new Date('2026-10-22T00:20:00Z')))
+      .rejects.toMatchObject({ code: 'LATE_CHECKIN_NOT_ELIGIBLE' });
+  });
+
+  it('records attendance and opens a shift atomically when the rider goes On Duty', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('SELECT * FROM shift_sessions WHERE rider_id')
+        ? [[]]
+        : sql.includes('SELECT status FROM attendance_logs')
+          ? [[]]
+          : sql.includes('SELECT * FROM shift_sessions WHERE id')
+            ? [[{ id: 'shift-new', rider_id: 'rider-1', session_state: 'open', start_time: '2026-10-21 09:00:00' }]]
+            : [[]]);
+
+    const result = await setRiderAvailability(db as any, { riderId: 'rider-1', isOnDuty: true });
+
+    expect(result).toMatchObject({ is_on_duty: true, session: { id: 'shift-new' } });
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO attendance_logs'))).toBe(true);
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO shift_sessions'))).toBe(true);
+    expect(conn.query).toHaveBeenCalledWith('UPDATE users SET is_on_duty = ? WHERE id = ?', [true, 'rider-1']);
+    expect(conn.commit).toHaveBeenCalledOnce();
+  });
+
+  it('rejects On Duty when absence is already recorded without opening a shift', async () => {
+    conn.query.mockImplementation(async (sql: string) => sql.includes('SELECT id FROM users')
+      ? [[{ id: 'rider-1' }]]
+      : sql.includes('SELECT * FROM shift_sessions WHERE rider_id')
+        ? [[]]
+        : sql.includes('SELECT status FROM attendance_logs')
+          ? [[{ status: 'absent' }]]
+          : [[]]);
+
+    await expect(setRiderAvailability(db as any, { riderId: 'rider-1', isOnDuty: true }))
+      .rejects.toMatchObject({ code: 'ATTENDANCE_CONFLICT' });
+    expect(conn.rollback).toHaveBeenCalledOnce();
+    expect(conn.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO shift_sessions'))).toBe(false);
   });
 
   it('replays a prior start operation even after its shift has ended', async () => {
