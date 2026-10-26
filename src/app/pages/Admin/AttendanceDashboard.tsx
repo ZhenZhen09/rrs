@@ -241,22 +241,12 @@ export const AttendanceDashboard: React.FC = () => {
             <Badge className="bg-rose-50 text-rose-600 border-rose-100 font-black text-[9px] px-2 py-0.5">
               {record.absence_source === 'automatic_no_show' ? 'ABSENT · AUTO NO-SHOW' : 'ABSENT'}
             </Badge>
-            {record.absence_source === 'automatic_no_show' ? (
-              record.late_checkin_approved_at ? (
-                <span className="text-[9px] font-semibold text-sky-700">
-                  Late check-in approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
-                </span>
-              ) : selectedDate === getPhilippineDateString() ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => clearAbsence(record.rider_id)}
-                  className="h-6 rounded-md bg-slate-900 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-black"
-                >
-                  Clear Absence
-                </Button>
-              ) : null
-            ) : (
+            {record.absence_source === 'automatic_no_show' && record.late_checkin_approved_at && (
+              <span className="text-[9px] font-semibold text-sky-700">
+                Late check-in approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
+              </span>
+            )}
+            {record.absence_source !== 'automatic_no_show' || selectedDate === getPhilippineDateString() ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -265,7 +255,7 @@ export const AttendanceDashboard: React.FC = () => {
               >
                 Clear Absence
               </Button>
-            )}
+            ) : null}
           </div>
         );
       case 'on_leave':
