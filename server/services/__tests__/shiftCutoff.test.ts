@@ -23,11 +23,12 @@ describe('scheduled shift cutoff', () => {
 });
 
 describe('weekday automatic absence reconciliation', () => {
-  function makeDb(date: string, existingAttendance: { status: string } | null = null, scheduleExists = true, graceMinutes = 15) {
+  function makeDb(date: string, existingAttendance: { status: string } | null = null, scheduleExists = true, graceMinutes = 15, cleared = false) {
     let inserted = false;
     let attendanceRow = existingAttendance;
     const connectionQuery = vi.fn(async (sql: string) => {
       if (sql.includes('SELECT id FROM users')) return [[{ id: 'rider-1' }]];
+      if (sql.includes('FROM attendance_absence_clearances')) return [cleared ? [{ rider_id: 'rider-1' }] : []];
       if (sql.includes('SELECT status FROM attendance_logs')) return [attendanceRow ? [attendanceRow] : []];
       if (sql.includes('INSERT INTO attendance_logs')) {
         inserted = true;
@@ -88,6 +89,19 @@ describe('weekday automatic absence reconciliation', () => {
     expect(fixture.connectionQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO attendance_logs'), expect.arrayContaining([
       expect.stringContaining('30-minute shift-start grace period'),
     ]));
+  });
+
+  it('does not recreate an absence cleared by an admin for the same work date', async () => {
+    const fixture = makeDb('2026-10-22', null, true, 15, true);
+
+    const count = await reconcileDueAutoAbsences(fixture.db as any, new Date('2026-10-22T00:16:00Z'));
+
+    expect(count).toBe(0);
+    expect(fixture.inserted()).toBe(false);
+    expect(fixture.connectionQuery).toHaveBeenCalledWith(
+      expect.stringContaining('FROM attendance_absence_clearances'),
+      ['rider-1', '2026-10-22'],
+    );
   });
 
   it.each([

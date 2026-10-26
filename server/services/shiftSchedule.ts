@@ -56,6 +56,13 @@ export function validGraceMinutes(value: unknown): value is number {
 function minutesFromTime(value: string): number { const [hours, minutes] = value.split(':').map(Number); return hours * 60 + minutes; }
 
 export async function ensureShiftScheduleTables(db: Db = pool): Promise<void> {
+  await db.query(`CREATE TABLE IF NOT EXISTS attendance_absence_clearances (
+    rider_id VARCHAR(255) NOT NULL,
+    date DATE NOT NULL,
+    cleared_by VARCHAR(255) NULL,
+    cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (rider_id, date)
+  )`);
   await db.query(`CREATE TABLE IF NOT EXISTS system_settings (
     setting_key VARCHAR(100) PRIMARY KEY,
     setting_value VARCHAR(255) NOT NULL,
