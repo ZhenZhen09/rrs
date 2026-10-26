@@ -4,12 +4,13 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { poolQuery, getShiftSessionsForDate, approveLateCheckIn } = vi.hoisted(() => ({
+const { poolQuery, poolGetConnection, getShiftSessionsForDate, approveLateCheckIn } = vi.hoisted(() => ({
   poolQuery: vi.fn(),
+  poolGetConnection: vi.fn(),
   getShiftSessionsForDate: vi.fn(),
   approveLateCheckIn: vi.fn(),
 }));
-vi.mock('../../db', () => ({ pool: { query: poolQuery, getConnection: vi.fn() } }));
+vi.mock('../../db', () => ({ pool: { query: poolQuery, getConnection: poolGetConnection } }));
 vi.mock('../../presence', () => ({ onlineRiders: new Map() }));
 vi.mock('../../locationTracking', () => ({ handleRiderLocationUpdate: vi.fn() }));
 vi.mock('../../services/connectivityLogger', () => ({ recordConnectivityLog: vi.fn() }));
@@ -91,12 +92,26 @@ describe('daily attendance API shift data', () => {
     expect(emit).toHaveBeenCalledWith('attendance-updated', { status: 'absent', late_checkin_approved: true, date: '2026-10-22' });
   });
 
-  it('does not let admins clear an automatic no-show in place of explicit approval', async () => {
-    poolQuery.mockResolvedValueOnce([[{ absence_source: 'automatic_no_show' }]]);
+  it('clears an automatic no-show and records a same-day clearance marker', async () => {
+    const emit = vi.fn();
+    app.set('io', { to: vi.fn(() => ({ emit })) });
+    const connectionQuery = vi.fn(async (sql: string) => {
+      if (sql.includes('SELECT id FROM users')) return [[{ id: 'rider-1' }]];
+      if (sql.includes('DELETE FROM attendance_logs')) return [{ affectedRows: 1 }];
+      return [{ affectedRows: 1 }];
+    });
+    const conn = {
+      query: connectionQuery,
+      beginTransaction: vi.fn(), commit: vi.fn(), rollback: vi.fn(), release: vi.fn(),
+    };
+    poolGetConnection.mockResolvedValueOnce(conn);
 
     const response = await request(app).delete('/api/users/attendance/rider-1').set('Authorization', adminToken);
 
-    expect(response.status).toBe(409);
-    expect(poolQuery).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(conn.commit).toHaveBeenCalledOnce();
+    expect(connectionQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO attendance_absence_clearances'), ['rider-1', 'admin-1']);
+    expect(emit).toHaveBeenCalledWith('attendance-cleared', expect.any(Object));
+    expect(emit).toHaveBeenCalledWith('attendance-updated', { status: null });
   });
 });

@@ -86,6 +86,11 @@ export async function reconcileDueAutoAbsences(db: Db = pool, now: Date = new Da
       await conn.beginTransaction();
       const [lockedRiders] = await conn.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [rider.id]);
       if (!lockedRiders[0]) { await conn.commit(); continue; }
+      const [clearances] = await conn.query(
+        'SELECT rider_id FROM attendance_absence_clearances WHERE rider_id = ? AND date = ? LIMIT 1 FOR UPDATE',
+        [rider.id, date],
+      );
+      if (clearances[0]) { await conn.commit(); continue; }
       const [attendance] = await conn.query(
         'SELECT status FROM attendance_logs WHERE rider_id = ? AND date = ? LIMIT 1 FOR UPDATE',
         [rider.id, date],

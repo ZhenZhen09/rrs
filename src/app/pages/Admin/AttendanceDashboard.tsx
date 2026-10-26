@@ -77,7 +77,6 @@ export const AttendanceDashboard: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
-  const [approvalInProgress, setApprovalInProgress] = useState<string | null>(null);
   const attendanceRequestId = useRef(0);
   const hasManuallySelectedDate = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -218,26 +217,6 @@ export const AttendanceDashboard: React.FC = () => {
     }
   };
 
-  const approveLateCheckIn = async (record: AttendanceRecord) => {
-    setApprovalInProgress(record.rider_id);
-    try {
-      const response = await fetch(`/api/users/attendance/${record.rider_id}/late-check-in-approval`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Unable to approve late check-in');
-      toast.success(`Late check-in approved for ${record.rider_name}`);
-      await fetchAttendance(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to approve late check-in');
-    } finally {
-      setApprovalInProgress(null);
-    }
-  };
-
   const openConflictModal = (riderId: string, riderName: string) => {
     setSelectedRider({ id: riderId, name: riderName });
     setIsConflictModalOpen(true);
@@ -271,11 +250,10 @@ export const AttendanceDashboard: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={approvalInProgress === record.rider_id}
-                  onClick={() => void approveLateCheckIn(record)}
-                  className="h-7 rounded-md bg-sky-700 px-2 text-[8px] font-black uppercase tracking-wide text-white hover:bg-sky-800"
+                  onClick={() => clearAbsence(record.rider_id)}
+                  className="h-6 rounded-md bg-slate-900 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-black"
                 >
-                  {approvalInProgress === record.rider_id ? 'Approving…' : 'Approve late check-in'}
+                  Clear Absence
                 </Button>
               ) : null
             ) : (

@@ -21,6 +21,7 @@ describe('attendance auto-absence schema', () => {
 
     await ensureShiftScheduleTables({ query } as any);
 
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS attendance_absence_clearances'));
     const alters = query.mock.calls.map(([sql]) => String(sql)).filter((sql) => sql.startsWith('ALTER TABLE attendance_logs'));
     expect(alters).toHaveLength(4);
     expect(alters.join('\n')).toContain('absence_source');

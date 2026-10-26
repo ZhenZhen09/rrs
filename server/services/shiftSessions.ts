@@ -42,6 +42,7 @@ export async function startShiftSession(db: Db, input: { riderId: string; operat
     if (!attendance) {
       await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW})`, [`att_${crypto.randomUUID()}`, input.riderId]);
     }
+    await conn.query(`DELETE FROM attendance_absence_clearances WHERE rider_id=? AND date=${TODAY}`, [input.riderId]);
     // Starting attendance opens a shift; going online is a separate rider action.
     await conn.query('UPDATE users SET is_on_duty = FALSE WHERE id = ?', [input.riderId]);
     await conn.query(`INSERT INTO shift_sessions (id,rider_id,start_time,session_state,start_operation_id) VALUES (?, ?, ${NOW}, 'open', ?)`, [id, input.riderId, input.operationId]);
@@ -61,6 +62,7 @@ export async function setRiderAvailability(db: Db, input: { riderId: string; isO
         throw new ShiftSessionError('ATTENDANCE_CONFLICT', 'Attendance is already recorded as absent or on leave today.');
       }
       await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW}) ON DUPLICATE KEY UPDATE check_in_time=IF(status='present',check_in_time,${NOW}), status='present'`, [`att_${crypto.randomUUID()}`, input.riderId]);
+      await conn.query(`DELETE FROM attendance_absence_clearances WHERE rider_id=? AND date=${TODAY}`, [input.riderId]);
       if (!session) {
         const shiftId = `shift_${crypto.randomUUID()}`;
         const operationId = `duty_${crypto.randomUUID()}`;
@@ -104,6 +106,7 @@ export async function setNonPresentAttendance(db: Db, input: { riderId: string; 
     const [open] = await conn.query("SELECT id FROM shift_sessions WHERE rider_id = ? AND session_state = 'open' LIMIT 1 FOR UPDATE", [input.riderId]);
     if (open[0]) throw new ShiftSessionError('OPEN_SHIFT', 'End your current shift before changing attendance status.');
 
+    await conn.query(`DELETE FROM attendance_absence_clearances WHERE rider_id=? AND date=${TODAY}`, [input.riderId]);
     await conn.query(`INSERT INTO attendance_logs (id, rider_id, date, status, reason, check_in_time)
       VALUES (?, ?, ${TODAY}, ?, ?, ${NOW})
       ON DUPLICATE KEY UPDATE check_in_time=IF(status <> ?, ${NOW}, check_in_time), reason=?, status=?`,

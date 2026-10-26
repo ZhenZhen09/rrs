@@ -354,17 +354,27 @@ router.post('/dev/simulate-sweep', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /attendance/:riderId (Admin only) - Clear absence for today
+// DELETE /attendance/:riderId (Admin only) - Clear any absence for today
 router.delete('/attendance/:riderId', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  let conn: any;
   try {
     const { riderId } = req.params;
     const io = req.app.get('io');
-    
-    const [rows]: any = await pool.query(`SELECT absence_source FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL} LIMIT 1`, [riderId]);
-    if (rows[0]?.absence_source === 'automatic_no_show') {
-      return res.status(409).json({ error: 'Use Approve late check-in to authorize a rider with an automatic no-show.' });
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [riders]: any = await conn.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [riderId]);
+    if (!riders[0]) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Rider not found' });
     }
-    await pool.query(`DELETE FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`, [riderId]);
+    const [deleted]: any = await conn.query(`DELETE FROM attendance_logs WHERE rider_id = ? AND date = ${PH_TODAY_SQL}`, [riderId]);
+    if (deleted.affectedRows > 0) {
+      await conn.query(`INSERT INTO attendance_absence_clearances (rider_id, date, cleared_by, cleared_at)
+        VALUES (?, ${PH_TODAY_SQL}, ?, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))
+        ON DUPLICATE KEY UPDATE cleared_by=VALUES(cleared_by), cleared_at=VALUES(cleared_at)`,
+      [riderId, String(req.user!.id)]);
+    }
+    await conn.commit();
     
     // Notify the mobile app to refresh instantly
     io.to(riderId).emit('attendance-cleared', { message: 'Your absence has been cleared by Admin. You can now start your shift.' });
@@ -379,7 +389,10 @@ router.delete('/attendance/:riderId', authorize(['admin']), async (req: AuthRequ
 
     res.json({ success: true });
   } catch (error) {
+    if (conn) await conn.rollback().catch(() => undefined);
     res.status(500).json({ error: 'Failed to clear attendance' });
+  } finally {
+    conn?.release();
   }
 });
 

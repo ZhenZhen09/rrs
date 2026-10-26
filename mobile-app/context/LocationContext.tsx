@@ -11,14 +11,16 @@ import { AuthManager } from '@/utils/AuthManager';
 
 import * as Battery from 'expo-battery';
 import * as Network from 'expo-network';
-import { updateDutyStatus, submitAttendance, endShift as endShiftRequest, getMyAttendance, getMyShiftSession } from '@/services/apiService';
+import { updateDutyStatus, submitAttendance, endShift as endShiftRequest, getMyAttendance, getMyShiftSession, getJobQueryKey } from '@/services/apiService';
 import { applyCommittedDutyResult, getOrCreateShiftOperationId } from '@/services/shiftOperationService';
 import { appendLocationEvent } from '../services/locationOutbox';
 import { flushLocationOutbox } from '../services/locationSyncService';
 import { beginTrackingSession, createLocationEvent, endTrackingSession, getTrackingSession } from '../services/trackingSessionService';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { RouteOptimizedModal } from '@/components/RouteOptimizedModal';
 import { shouldStartBackgroundLocation } from '@/utils/locationCapability';
+import { isOutsideShiftHours, RiderShiftSchedule } from '@/utils/shiftHours';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const STORAGE_USER_ID = '@rider_id';
@@ -46,10 +48,16 @@ type LocationState = {
   hasOpenShift: boolean;
   shiftStartedAt: string | null;
   attendanceStatus: AttendanceStatus;
+  isLateCheckInApproved: boolean;
   isShiftStatusReady: boolean;
+  shiftHoursLocked: boolean;
+  shiftSchedule: RiderShiftSchedule | null;
+  nextShiftStartAt: string | null;
+  lastEndSource: string | null;
   locationPermission: Location.PermissionStatus | null;
   backgroundPermissionGranted: boolean;
   isSocketConnected: boolean;
+  isNetworkReachable: boolean | null;
   routeOptimizedMessage: string | null;
   setRouteOptimizedMessage: (msg: string | null) => void;
   startTracking: (requestId: string) => Promise<void>;
@@ -58,7 +66,7 @@ type LocationState = {
   endShift: (reason?: string) => Promise<DutyToggleResult>;
   checkIn: (status: 'present' | 'absent' | 'on_leave', reason?: string) => Promise<boolean>;
   refreshCurrentLocation: (requestId?: string) => Promise<LocationState['lastLocation']>;
-  refreshAttendance: () => Promise<AttendanceStatus>;
+  refreshAttendance: () => Promise<{ status: AttendanceStatus; lateCheckInApproved: boolean }>;
   simulateLocation: (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => void;
   subscribeToSocketEvent: (event: string, listener: (...args: any[]) => void) => () => void;
 };
@@ -251,11 +259,27 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [hasOpenShift, setHasOpenShift] = useState(false);
   const [shiftStartedAt, setShiftStartedAt] = useState<string | null>(null);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>(null);
+  const [isLateCheckInApproved, setIsLateCheckInApproved] = useState(false);
   const [isShiftStatusReady, setIsShiftStatusReady] = useState(false);
+  const [confirmedSchedule, setConfirmedSchedule] = useState<RiderShiftSchedule | null>(null);
+  const [hasConfirmedSchedule, setHasConfirmedSchedule] = useState(false);
+  const [serverShiftLocked, setServerShiftLocked] = useState(false);
+  const [nextShiftStartAt, setNextShiftStartAt] = useState<string | null>(null);
+  const [lastEndSource, setLastEndSource] = useState<string | null>(null);
+  const [shiftClock, setShiftClock] = useState(Date.now());
+  const shiftHoursLocked = !hasConfirmedSchedule || serverShiftLocked || Boolean(confirmedSchedule && isOutsideShiftHours(confirmedSchedule, new Date(shiftClock)));
+
+  useEffect(() => {
+    if (shiftHoursLocked && isOnDuty) {
+      setIsOnDuty(false);
+      void stopBackgroundTracking('shift hours cutoff');
+    }
+  }, [shiftHoursLocked, isOnDuty]);
   const [locationPermission, setLocationPermission] =
     useState<Location.PermissionStatus | null>(null);
   const [backgroundPermissionGranted, setBackgroundPermissionGranted] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [isNetworkReachable, setIsNetworkReachable] = useState<boolean | null>(null);
   const [lastLocation, setLastLocation] = useState<LocationState['lastLocation']>(null);
   const [routeOptimizedMessage, setRouteOptimizedMessage] = useState<string | null>(null);
   const lastLocationRef = useRef<LocationState['lastLocation']>(null);
@@ -264,6 +288,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const foregroundSubscription = useRef<Location.LocationSubscription | null>(null);
   const socketAuthRefreshInFlight = useRef(false);
   const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasConfirmedShiftStatus = useRef(false);
+  const lastShiftUnlockCheck = useRef(0);
 
   useEffect(() => {
     lastLocationRef.current = lastLocation;
@@ -272,14 +298,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   // --- DUTY MANAGEMENT ---
   const toggleDuty = async (status: boolean): Promise<DutyToggleResult> => {
     if (!user?.id) return 'failed';
+    if (status && shiftHoursLocked) {
+      Alert.alert('Shift hours locked', 'You can go On Duty during the next scheduled shift.');
+      return 'failed';
+    }
 
     if (status) {
       if (attendanceStatus === 'absent' || attendanceStatus === 'on_leave') {
         Alert.alert('Attendance already submitted', 'Your attendance is recorded as absent or on leave. Contact Admin if this needs to change.');
-        return 'failed';
-      }
-      if (!hasOpenShift) {
-        Alert.alert('Shift not started', 'Start your shift before going online.');
         return 'failed';
       }
     }
@@ -287,9 +313,21 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await updateDutyStatus(user.id, status);
       const confirmedDuty = Boolean(response.data?.is_on_duty);
+      if (confirmedDuty && response.data?.session) {
+        setHasOpenShift(true);
+        setShiftStartedAt(response.data.session.start_time ?? null);
+        setAttendanceStatus('present');
+        try {
+          await AsyncStorage.setItem(STORAGE_ATTENDANCE_DATE, new Date().toISOString().split('T')[0]);
+          await AsyncStorage.setItem(STORAGE_ATTENDANCE_STATUS, 'present');
+        } catch (storageError) {
+          console.warn('[LocationContext] Attendance cache write failed after going On Duty:', storageError);
+        }
+      }
       setIsOnDuty(confirmedDuty);
       try { await AsyncStorage.setItem(STORAGE_DUTY_STATUS, confirmedDuty ? 'true' : 'false'); }
       catch (storageError) { console.warn('[LocationContext] Duty cache write failed after server confirmation:', storageError); }
+      void queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
       
       return 'success';
     } catch (err: any) {
@@ -301,7 +339,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         const serverError = err.response?.data?.error || "Cannot go off duty while a job is in progress.";
         Alert.alert("Active Task Detected", serverError);
       } else if (err.response?.status === 409) {
-        Alert.alert('Shift not active', err.response?.data?.error || 'Start your shift before going online.');
+        Alert.alert('Cannot go On Duty', err.response?.data?.error || 'Please try again.');
       } else {
         Alert.alert("Connection Error", "Could not update your duty status. Please check your internet connection.");
       }
@@ -316,6 +354,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       const response = await endShiftRequest(user.id, operationId, reason);
       setHasOpenShift(false);
       setShiftStartedAt(null);
+      setLastEndSource(response.data?.session?.end_source || 'manual');
       await applyCommittedDutyResult('end', Boolean(response.data?.is_on_duty), setIsOnDuty);
       return 'success';
     } catch (err: any) {
@@ -329,6 +368,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   const checkIn = async (status: 'present' | 'absent' | 'on_leave', reason?: string) => {
     if (!user?.id) return false;
+    if (status === 'present' && attendanceStatus === 'absent' && !isLateCheckInApproved) {
+      Alert.alert('Admin approval required', 'Contact Admin to approve a late check-in before starting your shift.');
+      return false;
+    }
+    if (status === 'present' && shiftHoursLocked) {
+      Alert.alert('Shift hours locked', 'You can start your shift during the next scheduled hours.');
+      return false;
+    }
 
     try {
       const operationId = status === 'present' ? await getOrCreateShiftOperationId('start') : undefined;
@@ -339,6 +386,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       try { await AsyncStorage.setItem(STORAGE_ATTENDANCE_STATUS, status); }
       catch (storageError) { console.warn('[LocationContext] Attendance status cache write failed after server confirmation:', storageError); }
       setAttendanceStatus(status);
+      setIsLateCheckInApproved(false);
       setIsShiftStatusReady(true);
       if (status === 'present') {
         setHasOpenShift(Boolean(response.data?.session && !response.data.session.end_time));
@@ -514,38 +562,117 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   }, [locationPermission, publishSafeLocation, user?.role]);
 
   const syncStatus = useCallback(async () => {
+    setIsShiftStatusReady(false);
+    hasConfirmedShiftStatus.current = false;
     try {
       const serverData = await getMyAttendance();
       const shiftData = await getMyShiftSession();
       const confirmedDuty = Boolean(shiftData.is_on_duty);
+      setConfirmedSchedule(shiftData.schedule ? { date: shiftData.schedule.date, start_time: shiftData.schedule.start_time, end_time: shiftData.schedule.end_time } : null);
+      setHasConfirmedSchedule(true);
+      if (user?.id) {
+        const key = `@shift_schedule_${user.id}`;
+        if (shiftData.schedule) await AsyncStorage.setItem(key, JSON.stringify(shiftData.schedule));
+        else await AsyncStorage.removeItem(key);
+      }
+      setServerShiftLocked(Boolean(shiftData.locked));
+      setNextShiftStartAt(shiftData.next_start_at ?? null);
+      setLastEndSource(shiftData.last_end_source ?? null);
+      setShiftClock(Date.now());
       setHasOpenShift(Boolean(shiftData.session && !shiftData.session.end_time));
       setShiftStartedAt(shiftData.session?.start_time ?? null);
       setIsOnDuty(confirmedDuty);
       await AsyncStorage.setItem(STORAGE_DUTY_STATUS, confirmedDuty ? 'true' : 'false');
       if (serverData.status) {
         setAttendanceStatus(serverData.status);
+        setIsLateCheckInApproved(serverData.status === 'absent' && Boolean(serverData.late_checkin_approved_at));
         await AsyncStorage.setItem(STORAGE_ATTENDANCE_STATUS, serverData.status);
       } else {
         setAttendanceStatus(null);
+        setIsLateCheckInApproved(false);
         await AsyncStorage.removeItem(STORAGE_ATTENDANCE_STATUS);
       }
       setIsShiftStatusReady(true);
-      return serverData.status;
+      hasConfirmedShiftStatus.current = true;
+      return {
+        status: serverData.status ?? null,
+        lateCheckInApproved: serverData.status === 'absent' && Boolean(serverData.late_checkin_approved_at),
+      };
     } catch {
-      const local = await AsyncStorage.getItem(STORAGE_ATTENDANCE_STATUS);
-      if (local) {
-        setAttendanceStatus(local as any);
-        setIsShiftStatusReady(true);
-        return local as any;
+      // Keep the last known values for offline work, but do not treat cached
+      // attendance or availability as server confirmation.
+      if (user?.id && !hasConfirmedSchedule) {
+        try {
+          const cached = await AsyncStorage.getItem(`@shift_schedule_${user.id}`);
+          if (cached) {
+            const schedule = JSON.parse(cached);
+            if (typeof schedule.date === 'string' && typeof schedule.start_time === 'string' && typeof schedule.end_time === 'string') {
+              setConfirmedSchedule({ date: schedule.date, start_time: schedule.start_time, end_time: schedule.end_time });
+              setHasConfirmedSchedule(true);
+            }
+          }
+        } catch { /* Keep shift access locked when cached schedule is unavailable. */ }
       }
-      setIsShiftStatusReady(true);
-      return null;
+      return { status: null, lateCheckInApproved: false };
     }
+  }, [user?.id, hasConfirmedSchedule]);
+
+  useEffect(() => {
+    if (!user?.id || !serverShiftLocked || !confirmedSchedule || isNetworkReachable === false) return;
+    if (isOutsideShiftHours(confirmedSchedule, new Date(shiftClock))) return;
+    if (shiftClock - lastShiftUnlockCheck.current < 60_000) return;
+    lastShiftUnlockCheck.current = shiftClock;
+    void syncStatus();
+  }, [confirmedSchedule, isNetworkReachable, serverShiftLocked, shiftClock, syncStatus, user?.id]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setShiftClock(Date.now()), 15_000);
+    return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setHasConfirmedSchedule(false);
+    setConfirmedSchedule(null);
+    setServerShiftLocked(false);
+  }, [user?.id]);
 
   const refreshAttendance = async () => {
     return await syncStatus();
   };
+
+  const verifyStatusThenRefreshTasks = useCallback(async () => {
+    if (!user?.id) return;
+    await syncStatus();
+    if (hasConfirmedShiftStatus.current) {
+      await queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
+    }
+  }, [queryClient, syncStatus, user?.id]);
+
+  useEffect(() => {
+    let previousReachability: boolean | null = null;
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const reachable = state.isConnected === true && state.isInternetReachable !== false;
+      setIsNetworkReachable(reachable);
+
+      if (previousReachability === true && !reachable) {
+        hasConfirmedShiftStatus.current = false;
+        setIsShiftStatusReady(false);
+      } else if (previousReachability === false && reachable) {
+        void verifyStatusThenRefreshTasks();
+      }
+      previousReachability = reachable;
+    });
+    return unsubscribe;
+  }, [verifyStatusThenRefreshTasks]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && isNetworkReachable) {
+        void verifyStatusThenRefreshTasks();
+      }
+    });
+    return () => subscription.remove();
+  }, [isNetworkReachable, verifyStatusThenRefreshTasks]);
 
   const simulateLocation = (lat: number, lng: number, heading?: number | null, overrideRiderId?: string) => {
     const targetRiderId = overrideRiderId || user?.id;
@@ -644,7 +771,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data?.request_id) {
-        queryClient.invalidateQueries({ queryKey: ['job', data.request_id] });
+        queryClient.invalidateQueries({ queryKey: getJobQueryKey(user.id, String(data.request_id)) });
       }
 
       queryClient.invalidateQueries({ queryKey: ['tasks', user.id] });
@@ -655,10 +782,30 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     activeSocket.on('connect', () => {
       setIsSocketConnected(true);
       if (user?.id) activeSocket.emit('join', user.id);
+      void verifyStatusThenRefreshTasks();
+    });
+
+    activeSocket.on('attendance-cleared', async () => {
+      setAttendanceStatus(null);
+      setIsLateCheckInApproved(false);
+      setHasOpenShift(false);
+      setShiftStartedAt(null);
+      setIsOnDuty(false);
+      setIsShiftStatusReady(true);
+      hasConfirmedShiftStatus.current = true;
+      await AsyncStorage.removeItem(STORAGE_ATTENDANCE_STATUS);
+      await AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'false');
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
     });
 
     activeSocket.on('attendance-updated', async (data: any) => {
       setAttendanceStatus(data.status);
+      if (data.status === null) {
+        setIsLateCheckInApproved(false);
+        await AsyncStorage.removeItem(STORAGE_ATTENDANCE_STATUS);
+      }
+      if (typeof data.late_checkin_approved === 'boolean') setIsLateCheckInApproved(data.late_checkin_approved);
+      else if (data.status === 'present' || data.status === 'absent' || data.status === 'on_leave') setIsLateCheckInApproved(false);
       if (data.status === 'present') {
         // Attendance presence is not itself a shift session. The duty state is
         // sourced from the shift-session endpoint and updated by checkIn().
@@ -670,13 +817,17 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           setIsOnDuty(confirmedDuty);
           await AsyncStorage.setItem(STORAGE_DUTY_STATUS, confirmedDuty ? 'true' : 'false');
         }
-        setIsShiftStatusReady(true);
+        hasConfirmedShiftStatus.current = Boolean(attendance);
+        setIsShiftStatusReady(Boolean(attendance));
       } else if (data.status === 'absent' || data.status === 'on_leave') {
+        setHasOpenShift(false);
+        setShiftStartedAt(null);
         setIsOnDuty(false);
         await AsyncStorage.setItem(STORAGE_DUTY_STATUS, 'false');
         setIsShiftStatusReady(true);
+        hasConfirmedShiftStatus.current = true;
       } else {
-        setIsShiftStatusReady(true);
+        void verifyStatusThenRefreshTasks();
       }
       queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
     });
@@ -708,7 +859,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       refreshSocketTokenForReconnect();
     });
 
-    activeSocket.on('disconnect', () => setIsSocketConnected(false));
+    activeSocket.on('disconnect', () => {
+      setIsSocketConnected(false);
+      hasConfirmedShiftStatus.current = false;
+      setIsShiftStatusReady(false);
+    });
     activeSocket.on('connect_error', (error: Error) => {
       setIsSocketConnected(false);
       const message = error?.message || '';
@@ -768,7 +923,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       socketSetupCancelled = true;
       cleanupSocket?.();
     };
-  }, [queryClient, user?.id, token, resetSocketState]);
+  }, [queryClient, user?.id, token, resetSocketState, verifyStatusThenRefreshTasks]);
 
   // Request permissions and setup always-on tracking
   useEffect(() => {
@@ -919,10 +1074,16 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       hasOpenShift,
       shiftStartedAt,
       attendanceStatus,
+      isLateCheckInApproved,
       isShiftStatusReady,
+      shiftHoursLocked,
+      shiftSchedule: confirmedSchedule,
+      nextShiftStartAt,
+      lastEndSource,
       locationPermission, 
       backgroundPermissionGranted,
       isSocketConnected,
+      isNetworkReachable,
       routeOptimizedMessage,
       setRouteOptimizedMessage,
       startTracking,
