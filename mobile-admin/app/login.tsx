@@ -1,29 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, TYPOGRAPHY, RADIUS } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AdminLoginScreen() {
   const router = useRouter();
+  const { height, width } = useWindowDimensions();
+  const compact = height < 700;
   const { login, isLoading, biometricEnabled, setBiometricEnabled } = useAuth();
+  const { theme } = useTheme();
+  const { COLORS } = theme;
+  const isLight = COLORS.surface === '#FFFFFF';
+  const isBlueDark = COLORS.surface === '#1E293B';
+  // Screen-local presentation tokens keep the existing app themes intact.
+  const palette = {
+    text: isLight ? '#0F172A' : COLORS.foreground,
+    secondary: isLight ? '#475569' : '#B8C3D4',
+    border: isLight ? '#CBD5E1' : COLORS.border,
+    field: isLight ? '#F8FAFC' : COLORS.background,
+    button: isBlueDark ? COLORS.secondary : COLORS.primary,
+    onButton: isBlueDark ? '#0F172A' : COLORS.onPrimary,
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isBiometricSupported, setIsBiometricSupported] = useState(false);
 
   useEffect(() => {
+    let active = true;
     (async () => {
       const compatible = await LocalAuthentication.hasHardwareAsync();
+      if (!active) return;
       setIsBiometricSupported(compatible);
-      
+
       if (biometricEnabled && compatible) {
         handleBiometricLogin();
       }
     })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleBiometricLogin = async () => {
@@ -75,152 +95,137 @@ export default function AdminLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface }}>
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
       >
-        <View style={styles.content}>
-          <View style={styles.headerContainer}>
-            <View style={styles.logoWrapper}>
-              <MaterialIcons name="admin-panel-settings" size={40} color={COLORS.onPrimary} />
-            </View>
-            <Text style={styles.title}>Admin Control</Text>
-            <Text style={styles.subtitle}>System Management Portal</Text>
-          </View>
-
-          <View style={styles.formContainer}>
-            <View style={styles.stepWrapper}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Admin Email</Text>
-                <View style={styles.inputWrapper}>
-                  <MaterialIcons name="alternate-email" size={20} color={COLORS.muted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="admin@company.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    editable={!isLoading}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputWrapper}>
-                  <MaterialIcons name="lock-outline" size={20} color={COLORS.muted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="••••••••"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    editable={!isLoading}
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={[styles.primaryButton, isLoading && styles.disabledButton]} 
-                onPress={handleLogin}
-                activeOpacity={0.8}
-                disabled={isLoading}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: width < 360 ? 20 : 24,
+            paddingTop: compact ? 24 : 40,
+            paddingBottom: 24,
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="w-full max-w-[440px] self-center" style={{ flexGrow: 1 }}>
+            <View className="flex-row items-center" style={{ marginBottom: compact ? 28 : 40 }}>
+              <View
+                className="mr-[12px] h-[44px] w-[44px] items-center justify-center rounded-[14px]"
+                style={{ backgroundColor: COLORS.primary }}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
               >
-                {isLoading ? (
-                  <ActivityIndicator color={COLORS.onPrimary} />
-                ) : (
-                  <>
-                    <Text style={styles.primaryButtonText}>Login</Text>
-                    <MaterialIcons name="login" size={20} color={COLORS.onPrimary} style={{ marginLeft: 8 }} />
-                  </>
-                )}
-              </TouchableOpacity>
+                <MaterialIcons name="admin-panel-settings" size={24} color={COLORS.onPrimary} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[18px] font-bold leading-[24px]" style={{ color: palette.text, includeFontPadding: false }}>Admin Control</Text>
+                <Text className="mt-[2px] text-[13px] leading-[18px]" style={{ color: palette.secondary, includeFontPadding: false }}>Rider Scheduling</Text>
+              </View>
+            </View>
 
-              {isBiometricSupported && biometricEnabled && (
-                <TouchableOpacity 
-                  style={styles.biometricButton} 
-                  onPress={handleBiometricLogin}
-                  activeOpacity={0.7}
-                  disabled={isLoading}
-                >
-                  <MaterialIcons name="fingerprint" size={32} color={COLORS.primary} />
-                  <Text style={styles.biometricText}>Quick Login</Text>
-                </TouchableOpacity>
+            <View style={{ marginBottom: compact ? 24 : 32 }}>
+              <Text accessibilityRole="header" className="text-[30px] font-bold leading-[38px] tracking-[-0.5px]" style={{ color: palette.text, includeFontPadding: false }}>
+                Welcome back
+              </Text>
+              <Text className="mt-[8px] text-[15px] leading-[23px]" style={{ color: palette.secondary, includeFontPadding: false }}>
+                Sign in to manage your team and deliveries.
+              </Text>
+            </View>
+
+            <View className="mb-[20px]">
+              <Text className="mb-[8px] text-[14px] font-medium leading-[20px]" style={{ color: palette.text, includeFontPadding: false }}>Email address</Text>
+              <View className="min-h-[56px] flex-row items-center rounded-[12px] border px-[16px]" style={{ backgroundColor: palette.field, borderColor: palette.border }}>
+                <MaterialIcons name="alternate-email" size={20} color={palette.secondary} accessible={false} />
+                <TextInput
+                  className="ml-[12px] min-h-[56px] min-w-0 flex-1 py-[14px] text-[16px]"
+                  style={{ color: palette.text, includeFontPadding: false, textAlignVertical: 'center' }}
+                  underlineColorAndroid="transparent"
+                  placeholder="admin@company.com"
+                  placeholderTextColor={palette.secondary}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="username"
+                  textContentType="username"
+                  editable={!isLoading}
+                  accessibilityLabel="Admin email"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            <View className="mb-[24px]">
+              <Text className="mb-[8px] text-[14px] font-medium leading-[20px]" style={{ color: palette.text, includeFontPadding: false }}>Password</Text>
+              <View className="min-h-[56px] flex-row items-center rounded-[12px] border px-[16px]" style={{ backgroundColor: palette.field, borderColor: palette.border }}>
+                <MaterialIcons name="lock-outline" size={20} color={palette.secondary} accessible={false} />
+                <TextInput
+                  className="ml-[12px] min-h-[56px] min-w-0 flex-1 py-[14px] text-[16px]"
+                  style={{ color: palette.text, includeFontPadding: false, textAlignVertical: 'center' }}
+                  underlineColorAndroid="transparent"
+                  placeholder="Enter your password"
+                  placeholderTextColor={palette.secondary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="current-password"
+                  textContentType="password"
+                  editable={!isLoading}
+                  accessibilityLabel="Password"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              className="min-h-[56px] flex-row items-center justify-center rounded-[12px] px-[16px] py-[16px]"
+              style={{ backgroundColor: palette.button, opacity: isLoading ? 0.7 : 1 }}
+              onPress={handleLogin}
+              activeOpacity={0.8}
+              disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel={isLoading ? 'Signing in' : 'Sign in'}
+              accessibilityState={{ disabled: isLoading, busy: isLoading }}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={palette.onButton} />
+              ) : (
+                <>
+                  <Text className="text-[16px] font-bold leading-[24px]" style={{ color: palette.onButton, includeFontPadding: false }}>Sign in</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color={palette.onButton} style={{ marginLeft: 10 }} accessible={false} />
+                </>
               )}
+            </TouchableOpacity>
+
+            {isBiometricSupported && biometricEnabled && (
+              <TouchableOpacity
+                className="mt-[12px] min-h-[56px] flex-row items-center justify-center rounded-[12px] border px-[16px] py-[14px]"
+                style={{ borderColor: palette.border, opacity: isLoading ? 0.7 : 1 }}
+                onPress={handleBiometricLogin}
+                activeOpacity={0.7}
+                disabled={isLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with biometrics"
+                accessibilityState={{ disabled: isLoading }}
+              >
+                <MaterialIcons name="fingerprint" size={24} color={palette.text} accessible={false} />
+                <Text className="ml-[8px] shrink text-[14px] font-medium leading-[20px]" style={{ color: palette.text, includeFontPadding: false }}>Sign in with biometrics</Text>
+              </TouchableOpacity>
+            )}
+
+            <View className="mt-auto flex-row items-center justify-center pt-[32px]">
+              <MaterialIcons name="verified-user" size={16} color={palette.secondary} accessible={false} />
+              <Text className="ml-[8px] shrink text-center text-[12px] leading-[20px]" style={{ color: palette.secondary, includeFontPadding: false }}>Administrator access only</Text>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  keyboardView: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  headerContainer: { alignItems: 'center', marginBottom: 32 },
-  logoWrapper: {
-    width: 70, height: 70, borderRadius: 35,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-  },
-  title: { 
-    fontSize: TYPOGRAPHY.size['2xl'], 
-    fontFamily: TYPOGRAPHY.fontFamily.bold, 
-    color: COLORS.primary 
-  },
-  subtitle: { 
-    fontSize: TYPOGRAPHY.size.sm, 
-    fontFamily: TYPOGRAPHY.fontFamily.regular,
-    color: COLORS.secondary, 
-    marginTop: 4 
-  },
-  formContainer: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: 24,
-    borderWidth: 1, borderColor: COLORS.border, minHeight: 400,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20 },
-      android: { elevation: 6 },
-    }),
-  },
-  stepWrapper: { width: '100%' },
-  inputGroup: { marginBottom: 24 },
-  label: { 
-    fontSize: TYPOGRAPHY.size.xs, 
-    fontFamily: TYPOGRAPHY.fontFamily.bold, 
-    color: COLORS.foreground, 
-    marginBottom: 8, 
-    textTransform: 'uppercase' 
-  },
-  inputWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background,
-    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingHorizontal: 16, height: 56,
-  },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.regular, color: COLORS.foreground },
-  primaryButton: {
-    backgroundColor: COLORS.accent, height: 56, borderRadius: RADIUS.button,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    marginTop: 8,
-  },
-  primaryButtonText: { color: COLORS.onPrimary, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold },
-  disabledButton: { opacity: 0.7 },
-  biometricButton: {
-    marginTop: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  biometricText: {
-    marginTop: 8,
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-});

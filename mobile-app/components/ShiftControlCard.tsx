@@ -8,6 +8,7 @@ import { HandoverModal } from '@/components/HandoverModal';
 import { ShiftEndModal } from '@/components/ShiftEndModal';
 import { AttendanceGate } from '@/components/AttendanceGate';
 import { scale, verticalScale, normalizeFontSize } from '@/utils/responsive';
+import { getPhilippineClock } from '@/utils/shiftHours';
 
 interface ShiftControlCardProps {
   tasks: Job[];
@@ -28,8 +29,13 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
     endShift,
     hasOpenShift,
     isOnDuty,
+    isLateCheckInApproved,
     isShiftStatusReady,
     shiftStartedAt,
+    shiftHoursLocked,
+    shiftSchedule,
+    nextShiftStartAt,
+    lastEndSource,
     toggleDuty,
   } = useLocation();
   const [isBusy, setIsBusy] = useState(false);
@@ -45,29 +51,31 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
   const startTime = formatShiftStartTime(shiftStartedAt);
   const statusLabel = !isShiftStatusReady
     ? 'Checking status'
+    : shiftHoursLocked
+      ? 'SHIFT CLOSED'
     : hasOpenShift
-      ? isOnDuty ? 'ONLINE' : 'OFFLINE'
+      ? isOnDuty ? 'ON DUTY' : 'OFF DUTY'
       : attendanceStatus === 'present'
-        ? 'Shift ended'
+        ? 'OFF DUTY'
         : attendanceStatus === 'absent'
           ? 'Absent'
           : attendanceStatus === 'on_leave'
             ? 'On leave'
-            : 'Not started';
-
-  const handleStartShift = async () => {
-    setIsBusy(true);
-    try {
-      await checkIn('present');
-    } finally {
-      setIsBusy(false);
-    }
-  };
+            : 'OFF DUTY';
 
   const handleToggleAvailability = async () => {
     setIsBusy(true);
     try {
       await toggleDuty(!isOnDuty);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleLateCheckIn = async () => {
+    setIsBusy(true);
+    try {
+      await checkIn('present');
     } finally {
       setIsBusy(false);
     }
@@ -97,9 +105,15 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
     }
   };
 
-  const shouldShowStart = isShiftStatusReady && !hasOpenShift && (attendanceStatus === null || attendanceStatus === 'present');
+  const clock = getPhilippineClock(new Date());
+  const minutesUntilEnd = shiftSchedule && clock.date === shiftSchedule.date
+    ? Number(shiftSchedule.end_time.slice(0, 2)) * 60 + Number(shiftSchedule.end_time.slice(3))
+      - Number(clock.time.slice(0, 2)) * 60 - Number(clock.time.slice(3))
+    : null;
+  const shouldShowDutyAction = isShiftStatusReady && !shiftHoursLocked && attendanceStatus !== 'absent' && attendanceStatus !== 'on_leave';
+  const shouldShowLateCheckIn = isShiftStatusReady && !shiftHoursLocked && attendanceStatus === 'absent' && isLateCheckInApproved;
   const shouldShowAbsenceReport = isShiftStatusReady && !hasOpenShift && attendanceStatus === null;
-  const shouldShowShiftControls = isShiftStatusReady && hasOpenShift;
+  const shouldShowShiftControls = isShiftStatusReady && hasOpenShift && !shiftHoursLocked;
 
   return (
     <>
@@ -121,20 +135,17 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
             <Text style={styles.startTimeText}>Started {startTime}</Text>
           </View>
         )}
-
-        {shouldShowStart && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={attendanceStatus === 'present' ? 'Start shift again' : 'Start shift'}
-            disabled={isBusy}
-            onPress={() => void handleStartShift()}
-            android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, isBusy && styles.disabledButton]}
-          >
-            {isBusy ? <ActivityIndicator color="#FFFFFF" /> : <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />}
-            <Text style={styles.primaryButtonText}>{isBusy ? 'Starting…' : attendanceStatus === 'present' ? 'Start shift again' : 'Start shift'}</Text>
-          </Pressable>
-        )}
+        {isShiftStatusReady && shiftHoursLocked && <View style={styles.startTimeRow}>
+          <MaterialIcons name="lock-outline" size={16} color="#92400E" />
+          <Text style={styles.startTimeText}>{lastEndSource === 'scheduled' ? 'Shift ended automatically. ' : 'Shift hours are closed. '}{nextShiftStartAt ? `Next start: ${nextShiftStartAt.replace(' ', ' at ')}` : 'Check back for your next shift.'}</Text>
+        </View>}
+        {isShiftStatusReady && !hasOpenShift && !shiftHoursLocked && lastEndSource === 'manual' && <View style={styles.startTimeRow}>
+          <MaterialIcons name="check-circle-outline" size={16} color="#166534" />
+          <Text style={styles.startTimeText}>Shift ended manually. You are Off Duty.</Text>
+        </View>}
+        {isShiftStatusReady && hasOpenShift && !shiftHoursLocked && minutesUntilEnd !== null && minutesUntilEnd > 0 && minutesUntilEnd <= 30 && <Text style={styles.startTimeText}>Your shift ends automatically in {minutesUntilEnd} minute{minutesUntilEnd === 1 ? '' : 's'}.</Text>}
+        {isShiftStatusReady && attendanceStatus === 'absent' && !isLateCheckInApproved && <Text style={styles.startTimeText}>Your attendance is marked absent. Contact Admin if you need to check in late.</Text>}
+        {isShiftStatusReady && shouldShowLateCheckIn && <Text style={styles.startTimeText}>Admin approved your late check-in. Checking in records attendance but does not put you On Duty.</Text>}
 
         {shouldShowAbsenceReport && (
           <Pressable
@@ -149,21 +160,37 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
           </Pressable>
         )}
 
-        {shouldShowShiftControls && (
+        {shouldShowLateCheckIn && (
           <View style={styles.actionsRow}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={isOnDuty ? 'Go offline' : 'Go online'}
-              accessibilityHint={isOnDuty ? 'Pause availability for new delivery requests. Your shift stays open.' : 'Become available for delivery requests.'}
+              accessibilityLabel="Check in late"
+              accessibilityHint="Record your actual late check-in. This does not place you On Duty."
+              disabled={isBusy}
+              onPress={() => void handleLateCheckIn()}
+              style={({ pressed }) => [styles.availabilityButton, styles.onDutyButton, pressed && styles.pressed, isBusy && styles.disabledButton]}
+            >
+              {isBusy ? <ActivityIndicator color="#FFFFFF" /> : <MaterialIcons name="login" size={18} color="#FFFFFF" />}
+              <Text style={styles.onDutyButtonText}>{isBusy ? 'Checking in…' : 'Check in — late'}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {shouldShowDutyAction && (
+          <View style={styles.actionsRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isOnDuty ? 'Pause availability' : 'On Duty'}
+              accessibilityHint={isOnDuty ? 'Pause new delivery requests. Your shift stays open; use End shift to record your end time.' : 'Record attendance and become available for delivery requests.'}
               disabled={isBusy}
               onPress={() => void handleToggleAvailability()}
               android_ripple={{ color: 'rgba(15, 118, 110, 0.12)' }}
-              style={({ pressed }) => [styles.availabilityButton, pressed && styles.pressed, isBusy && styles.disabledButton]}
+              style={({ pressed }) => [styles.availabilityButton, !isOnDuty && styles.onDutyButton, pressed && styles.pressed, isBusy && styles.disabledButton]}
             >
-              {isBusy ? <ActivityIndicator color="#0F766E" /> : <MaterialIcons name={isOnDuty ? 'wifi-off' : 'wifi'} size={18} color="#0F766E" />}
-              <Text style={styles.availabilityButtonText}>{isOnDuty ? 'Go offline' : 'Go online'}</Text>
+              {isBusy ? <ActivityIndicator color={isOnDuty ? '#0F766E' : '#FFFFFF'} /> : <MaterialIcons name={isOnDuty ? 'wifi-off' : 'wifi'} size={18} color={isOnDuty ? '#0F766E' : '#FFFFFF'} />}
+              <Text style={[styles.availabilityButtonText, !isOnDuty && styles.onDutyButtonText]}>{isOnDuty ? 'Pause availability' : 'On Duty'}</Text>
             </Pressable>
-            <Pressable
+            {shouldShowShiftControls && <Pressable
               accessibilityRole="button"
               accessibilityLabel="End shift"
               accessibilityHint="Close your work shift and record your end time."
@@ -174,9 +201,10 @@ export const ShiftControlCard: React.FC<ShiftControlCardProps> = ({ tasks }) => 
             >
               <MaterialIcons name="stop-circle" size={18} color="#B42318" />
               <Text style={styles.endShiftButtonText}>End shift</Text>
-            </Pressable>
+            </Pressable>}
           </View>
         )}
+        {shouldShowShiftControls && isOnDuty && <Text style={styles.startTimeText}>Pausing availability keeps your shift open. Use End shift to record your end time.</Text>}
       </View>
 
       <HandoverModal
@@ -326,6 +354,8 @@ const styles = StyleSheet.create({
     fontSize: normalizeFontSize(11),
     fontWeight: '800',
   },
+  onDutyButton: { backgroundColor: '#0F766E', borderColor: '#0F766E' },
+  onDutyButtonText: { color: '#FFFFFF' },
   endShiftButton: {
     minHeight: minTouchHeight,
     flex: 1,

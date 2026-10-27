@@ -6,6 +6,7 @@ import { getTasks, getHistoryTasks, getNotifications, markNotificationAsRead, ma
 import { useAuth } from '@/context/AuthContext';
 import { Job } from '@/types';
 import { getLocalDateStr } from '@/utils/dateUtils';
+import { getRiderStatusActions } from '@/services/syncQueue';
 
 export const useDashboard = () => {
   const { user, logout } = useAuth();
@@ -24,7 +25,7 @@ export const useDashboard = () => {
     isRefetching: refreshing,
   } = useQuery({
     queryKey: ['tasks', user?.id],
-    queryFn: getTasks,
+    queryFn: () => getTasks(user!.id),
     enabled: !!user?.id,
   });
 
@@ -56,6 +57,20 @@ export const useDashboard = () => {
   const loading = tasksLoading;
 
   const handleLogout = async () => {
+    const pendingActions = user?.id
+      ? (await getRiderStatusActions(user.id)).filter((action) => action.state !== 'acked')
+      : [];
+    if (pendingActions.length > 0) {
+      Alert.alert(
+        'Delivery updates still need syncing',
+        `${pendingActions.length} saved update${pendingActions.length === 1 ? '' : 's'} will remain on this device and stay hidden until you sign back in as this rider.`,
+        [
+          { text: 'Keep working', style: 'cancel' },
+          { text: 'Sign out', style: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } },
+        ],
+      );
+      return;
+    }
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Keyboard, ActivityIndicator, Alert, ScrollView, Image, ImageBackground, StatusBar, useWindowDimensions, findNodeHandle } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Keyboard, ActivityIndicator, Alert, ScrollView, Image, StatusBar, useWindowDimensions, findNodeHandle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/utils/api';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale, normalizeFontSize } from '@/utils/responsive';
 import PasswordResetOverlay from '@/components/ui/PasswordResetOverlay';
@@ -19,6 +18,7 @@ import Animated, {
   ReduceMotion,
 } from 'react-native-reanimated';
 import { useReducedMotionPreference } from '@/hooks/useReducedMotionPreference';
+import { useConnection } from '@/context/ConnectionContext';
 
 const loginHero = require('../assets/images/login-hero-rider.png');
 const loginRoadFooter = require('../assets/images/login-road-footer.png');
@@ -26,9 +26,10 @@ const errandsWordmark = require('../assets/images/errands-rider-wordmark.png');
 const loginSurfaceColor = '#F8FAFC';
 
 const statusConfig = {
-  checking: { color: '#EAB308', label: 'Checking Server' },
+  checking: { color: '#EAB308', label: 'Checking connection' },
   ready: { color: '#22C55E', label: 'System Ready' },
-  offline: { color: '#EF4444', label: 'Server Offline' },
+  no_network: { color: '#EF4444', label: 'No Internet Connection' },
+  service_unavailable: { color: '#EF4444', label: 'Cannot reach Errands' },
 } as const;
 
 export default function LoginScreen() {
@@ -51,7 +52,8 @@ export default function LoginScreen() {
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [serverStatus, setServerStatus] = useState<'checking' | 'ready' | 'offline'>('checking');
+  const { state: connectionState, retry: retryConnection } = useConnection();
+  const serverStatus = connectionState === 'online' ? 'ready' : connectionState;
   const reduceMotion = useReducedMotionPreference();
   const submitInProgress = useRef(false);
   const [pinFocused, setPinFocused] = useState(false);
@@ -209,35 +211,6 @@ export default function LoginScreen() {
     transform: [{ translateY: -Math.max(keyboard.height.value - keyboardFormOffset, 0) }],
   }));
 
-  useEffect(() => {
-    let isMounted = true;
-    let inFlight = false;
-    let hasCompletedInitialCheck = false;
-
-    const checkServerHealth = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        if (!hasCompletedInitialCheck && isMounted) setServerStatus('checking');
-        await api.get('/api/ping', { timeout: 45000 });
-        if (isMounted) setServerStatus('ready');
-      } catch {
-        if (isMounted) setServerStatus('offline');
-      } finally {
-        hasCompletedInitialCheck = true;
-        inFlight = false;
-      }
-    };
-
-    checkServerHealth();
-    const interval = setInterval(checkServerHealth, 30000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
   // Animated Styles
   const emailStepStyle = useAnimatedStyle(() => {
     return {
@@ -276,10 +249,10 @@ export default function LoginScreen() {
         />
         <View style={styles.heroShade} />
         <View testID="login_hero_top_row" style={[styles.heroTopRow, { paddingTop: (StatusBar.currentHeight ?? verticalScale(24)) + verticalScale(6) }]}>
-          <View style={styles.connectionStatus}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry connection check" onPress={() => void retryConnection()} style={styles.connectionStatus}>
             <View style={[styles.statusDot, { backgroundColor: statusConfig[serverStatus].color }]} />
             <Text style={styles.statusText}>{statusConfig[serverStatus].label}</Text>
-          </View>
+          </TouchableOpacity>
           <Text style={styles.versionText}>RIDER APP</Text>
         </View>
         <View
@@ -312,13 +285,12 @@ export default function LoginScreen() {
         </Svg>
       </View>
 
-      <ImageBackground
-          testID="login_footer_image"
-          source={loginRoadFooter}
-          style={[styles.footerImage, compactLayout && styles.compactFooterImage]}
-          imageStyle={styles.footerImageContent}
-          resizeMode="cover"
-        />
+      <Image
+        testID="login_footer_image"
+        source={loginRoadFooter}
+        resizeMode="cover"
+        style={[styles.footerImage, styles.footerImageContent, compactLayout && styles.compactFooterImage]}
+      />
 
       <Animated.View
         testID="login_keyboard_cover"

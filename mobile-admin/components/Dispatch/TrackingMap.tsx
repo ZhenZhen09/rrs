@@ -87,8 +87,8 @@ export const TrackingMap: React.FC<TrackingMapProps> = ({
             maxZoom: 18
           }).setView([0, 0], 2);
           
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(map);
 
           let pickupMarker = null;
@@ -323,9 +323,14 @@ export const TrackingMap: React.FC<TrackingMapProps> = ({
     `;
   }, [riderMarkerDataUri]);
 
+  const lastInjectTime = useRef(0);
+
   // Feed updates via injectJavaScript to keep markers sliding smoothly without reloading
   useEffect(() => {
     if (isLoaded && webViewRef.current) {
+      const now = Date.now();
+      if (now - lastInjectTime.current < 1000) return; // Throttle 1s
+
       const shouldFit = !initialCenteredRef.current;
       const payload = JSON.stringify({ pickup, dropoff, riderLocation, history, status, shouldFit });
       
@@ -335,6 +340,8 @@ export const TrackingMap: React.FC<TrackingMapProps> = ({
         })();
         true;
       `);
+
+      lastInjectTime.current = now;
 
       if (shouldFit && (pickup.latitude || dropoff.latitude)) {
         initialCenteredRef.current = true;

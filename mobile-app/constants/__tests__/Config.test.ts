@@ -10,6 +10,6 @@ describe('rider API configuration', () => {
     global.__DEV__ = true;
     const { Config } = require('../Config');
 
-    expect(Config.API_URL).toBe('http://10.5.22.70:3001');
+    expect(Config.API_URL).toBe('http://10.5.22.51:3001');
   });
 });

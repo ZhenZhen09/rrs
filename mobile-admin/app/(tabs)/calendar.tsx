@@ -1,24 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Modal, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Modal, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { COLORS, RADIUS, TYPOGRAPHY } from '../../constants/Theme';
 import api from '../../services/api';
-import { useRealTime } from '../../context/RealTimeContext';
+import { useRealTimeStore } from '../../store/useRealTimeStore';
 import { getGroupedStatus, getStatusColor, UIGroupStatus } from '../../utils/statusMapping';
 import { PremiumJobCard } from '../../components/Dispatch/PremiumJobCard';
 import { moderateScale, verticalScale } from '../../utils/responsive';
+import { useDebounce } from '../../utils/useDebounce';
 
 import { useAuth } from '../../context/AuthContext';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+const isFabricRenderer = Boolean((globalThis as typeof globalThis & {
+  nativeFabricUIManager?: unknown;
+}).nativeFabricUIManager);
+
+if (Platform.OS === 'android' && !isFabricRenderer && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function CalendarScreen() {
   const router = useRouter();
-  const { lastRequestUpdate, showToast } = useRealTime();
+  const rawLastRequestUpdate = useRealTimeStore((state) => state.lastRequestUpdate);
+  const lastRequestUpdate = useDebounce(rawLastRequestUpdate, 2000);
+  const riderPresence = useRealTimeStore((state) => state.riderPresence);
+  const showToast = useRealTimeStore((state) => state.showToast);
   const { user: authUser, isAuthenticated, isLoading: authLoading } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -37,9 +45,9 @@ export default function CalendarScreen() {
   const fetchRiders = async () => {
     // SECURITY GUARD: Only fetch if authorized
     if (authUser?.role !== 'admin' && authUser?.role !== 'personnel') return;
-    
+
     try {
-      const response = await api.get('/users/riders');
+      const response = await api.get('/users/riders/live');
       const allUsers = Array.isArray(response.data) ? response.data : response.data.data || [];
       setRiders(allUsers);
     } catch (error) {
@@ -60,6 +68,12 @@ export default function CalendarScreen() {
 
   const handleConfirmAssignment = async () => {
     if (!selectedJob || !selectedRiderId || isAssigning) return;
+    const selectedRider = riders.find((rider) => rider.id === selectedRiderId);
+    const unavailableReason = selectedRider ? getRiderUnavailableReason(selectedRider, selectedJob) : null;
+    if (unavailableReason) {
+      showToast(`Cannot assign rider: ${unavailableReason}`, 'warning');
+      return;
+    }
 
     setIsAssigning(true);
     try {
@@ -67,7 +81,7 @@ export default function CalendarScreen() {
         rider_id: selectedRiderId,
         admin_remark: adminRemark,
       });
-      
+
       showToast(`Request #${selectedJob.id.slice(-6).toUpperCase()} assigned successfully`, 'success');
       setSelectedJob(null);
       setSelectedRiderId(null);
@@ -145,23 +159,23 @@ export default function CalendarScreen() {
     const monthNames = ["January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
     ];
-    
+
     return (
-      <View style={styles.header}>
+      <View className="my-5 flex-row items-center justify-between">
         <View>
-          <Text style={styles.monthTitle}>{monthNames[currentMonth.getMonth()]}</Text>
-          <Text style={styles.yearTitle}>{currentMonth.getFullYear()}</Text>
+          <Text className="text-2xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{monthNames[currentMonth.getMonth()]}</Text>
+          <Text className="text-base" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{currentMonth.getFullYear()}</Text>
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
+        <View className="flex-row gap-3">
+          <TouchableOpacity
             onPress={() => changeMonth(-1)}
-            style={styles.headerButton}
+            className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: COLORS.background }}
           >
             <MaterialIcons name="chevron-left" size={28} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => changeMonth(1)}
-            style={styles.headerButton}
+            className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: COLORS.background }}
           >
             <MaterialIcons name="chevron-right" size={28} color={COLORS.primary} />
           </TouchableOpacity>
@@ -180,11 +194,11 @@ export default function CalendarScreen() {
     ];
 
     return (
-      <View style={styles.legendRow}>
+      <View className="mb-3.5 flex-row flex-wrap items-center gap-2.5">
         {items.map(item => (
-          <View key={item.group} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: getStatusColor(item.group) }]} />
-            <Text style={styles.legendText}>{item.label}</Text>
+          <View key={item.group} className="flex-row items-center">
+            <View className="mr-1 h-[7px] w-[7px] rounded-full" style={{ backgroundColor: getStatusColor(item.group) }} />
+            <Text className="text-[10px] font-bold uppercase" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{item.label}</Text>
           </View>
         ))}
       </View>
@@ -194,9 +208,9 @@ export default function CalendarScreen() {
   const renderDaysOfWeek = () => {
     const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     return (
-      <View style={styles.daysOfWeekContainer}>
+      <View className="mb-2.5 flex-row justify-between">
         {days.map((day, index) => (
-          <Text key={index} style={styles.dayOfWeekText}>{day}</Text>
+          <Text key={index} className="w-10 text-center text-xs font-bold" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{day}</Text>
         ))}
       </View>
     );
@@ -209,32 +223,20 @@ export default function CalendarScreen() {
     const isToday = toDateString(new Date()) === dateString;
 
     return (
-      <View key={key} style={[
-        isOutsideMonth && styles.outsideMonthWrapper,
-        isSelected && styles.selectedDayWrapper,
-      ]}>
+      <View key={key} style={{ opacity: isOutsideMonth ? 0.55 : 1, transform: isSelected ? [{ scale: 1.08 }] : undefined }}>
       <TouchableOpacity
-        style={[
-          styles.daySlot,
-          isSelected && styles.selectedDaySlot,
-          isOutsideMonth && styles.outsideMonthSlot
-        ]}
+        className="my-1 h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: isSelected ? COLORS.primary : 'transparent', opacity: isOutsideMonth ? 0.45 : 1 }}
         onPress={() => selectDate(date)}
       >
-        <Text style={[
-          styles.dayText,
-          isSelected && styles.selectedDayText,
-          isToday && !isSelected && styles.todayText,
-          isOutsideMonth && styles.outsideMonthText
-        ]}>
+        <Text className="text-[15px]" style={{ fontFamily: isToday && !isSelected ? TYPOGRAPHY.fontFamily.bold : TYPOGRAPHY.fontFamily.medium, color: isSelected ? COLORS.primaryForeground : isToday ? COLORS.accentBlue : isOutsideMonth ? COLORS.muted : COLORS.primary }}>
           {date.getDate()}
         </Text>
         {groups.length > 0 && (
-          <View style={styles.eventDotsRow}>
+          <View className="absolute bottom-1 flex-row items-center gap-0.5">
             {groups.map((group, index) => (
               <View
                 key={group}
-                style={[styles.eventDot, { backgroundColor: getStatusColor(group) }]}
+                className="h-1 w-1 rounded-full" style={{ backgroundColor: getStatusColor(group) }}
               />
             ))}
           </View>
@@ -259,22 +261,22 @@ export default function CalendarScreen() {
         return renderDateCell(date, `week-${toDateString(date)}`, date.getMonth() !== month);
       });
 
-      return <View style={styles.calendarGrid}>{weekDays}</View>;
+      return <View className="flex-row flex-wrap justify-between">{weekDays}</View>;
     }
 
     const calendarDays = [];
     // Empty slots for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
-      calendarDays.push(<View key={`empty-${i}`} style={styles.daySlot} />);
+      calendarDays.push(<View key={`empty-${i}`} className="my-1 h-10 w-10" />);
     }
-    
+
     // Days of the month
     for (let i = 1; i <= totalDays; i++) {
       calendarDays.push(renderDateCell(dateFromParts(year, month, i), `month-${i}`));
     }
 
     return (
-      <View style={styles.calendarGrid}>
+      <View className="flex-row flex-wrap justify-between">
         {calendarDays}
       </View>
     );
@@ -291,18 +293,45 @@ export default function CalendarScreen() {
   );
 
   const selectedDateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-  
+
   const filteredRequests = requests.filter(req => req.delivery_date === selectedDateString);
+
+  const normalizeDateString = (date?: string) => {
+    return typeof date === 'string' ? date.split('T')[0] : '';
+  };
+
+  const getRiderUnavailableReason = (rider: any, job: any) => {
+    if (!rider) return 'not found';
+    if (rider.attendance_status === 'on_leave') return 'on leave';
+    if (!job || normalizeDateString(job.deliveryDate) !== toDateString(new Date())) return null;
+    if (rider.attendance_status === 'absent') return 'absent today';
+    if (!rider.attendance_status) return 'no attendance report';
+    if (!rider.is_on_duty) return 'off duty';
+    const presenceStatus = riderPresence.get(rider.id);
+    const isOnline = presenceStatus ? presenceStatus === 'online' : !!rider.is_online;
+    if (!isOnline) return 'offline';
+    return null;
+  };
+
+  const selectedRiderUnavailableReason = selectedRiderId
+    ? getRiderUnavailableReason(riders.find((rider) => rider.id === selectedRiderId), selectedJob)
+    : null;
 
   const mappedRequests = filteredRequests.map(req => ({
     id: req.request_id.toString(),
     customer: req.requester_name,
+    destinationBuilding: req.dropoff_location?.businessName || req.dropoff_business_name,
+    recipientName: req.recipient_name,
+    personnel_instructions: req.personnel_instructions,
+    admin_remark: req.admin_remark,
     location: req.dropoff_location?.address || req.dropoff_address || 'Unknown',
     time: req.time_window || 'ASAP',
     status: req.delivery_status || req.status,
     uiGroup: getGroupedStatus(req.status, req.delivery_status),
     rawStatus: req.status,
     deliveryStatus: req.delivery_status,
+    deliveryDate: req.delivery_date,
+    timeWindow: req.time_window,
     riderRemark: req.rider_remark,
     assignedRiderId: req.assigned_rider_id,
     type: req.request_type || 'Delivery',
@@ -311,14 +340,14 @@ export default function CalendarScreen() {
   }));
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.calendarContainer}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.primaryForeground }}>
+      <View className="border-b px-5 pb-2.5" style={{ backgroundColor: COLORS.primaryForeground, borderBottomColor: COLORS.border }}>
         {renderHeader()}
         {renderLegend()}
         {renderDaysOfWeek()}
         {renderCalendarGrid()}
-        <TouchableOpacity style={styles.calendarToggle} onPress={toggleCalendar} activeOpacity={0.8}>
-          <View style={isCalendarExpanded && styles.expandedToggleIcon}>
+        <TouchableOpacity className="mt-2 h-6 w-[72px] self-center items-center justify-center rounded-xl border" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }} onPress={toggleCalendar} activeOpacity={0.8}>
+          <View style={isCalendarExpanded ? { transform: [{ rotate: '180deg' }] } : undefined}>
             <MaterialIcons
               name="keyboard-arrow-down"
               size={22}
@@ -327,17 +356,17 @@ export default function CalendarScreen() {
           </View>
         </TouchableOpacity>
       </View>
-      
-      <View style={styles.scheduleSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Schedule</Text>
+
+      <View className="flex-1 px-5 pt-6" style={{ backgroundColor: COLORS.background }}>
+        <View className="mb-5 flex-row items-center justify-between">
+          <Text className="text-lg font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Schedule</Text>
           <TouchableOpacity onPress={onRefresh}>
-            <Text style={styles.seeAllText}>Refresh</Text>
+            <Text className="text-sm font-bold" style={{ color: COLORS.accentBlue, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Refresh</Text>
           </TouchableOpacity>
         </View>
-        
+
         {isLoading && !refreshing ? (
-          <View style={styles.emptyContainer}>
+          <View className="items-center py-10">
             <ActivityIndicator size="large" color={COLORS.primary} />
           </View>
         ) : (
@@ -345,14 +374,14 @@ export default function CalendarScreen() {
             data={mappedRequests}
             renderItem={renderScheduleItem}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.scheduleList}
+            contentContainerStyle={{ paddingBottom: 20 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
             }
             ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No schedules for this day</Text>
+              <View className="items-center py-10">
+                <Text className="text-sm" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium }}>No schedules for this day</Text>
               </View>
             }
           />
@@ -365,10 +394,10 @@ export default function CalendarScreen() {
         animationType="slide"
         transparent={true}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Dispatch Management</Text>
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="max-h-[85%] rounded-t-3xl p-6" style={{ backgroundColor: '#FFFFFF', padding: moderateScale(24) }}>
+            <View className="mb-6 flex-row items-center justify-between" style={{ marginBottom: verticalScale(24) }}>
+              <Text className="text-xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Dispatch Management</Text>
               <TouchableOpacity onPress={() => setSelectedJob(null)} disabled={isAssigning}>
                 <MaterialIcons name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
@@ -376,16 +405,16 @@ export default function CalendarScreen() {
 
             {selectedJob && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.modalJobInfo}>
-                  <Text style={styles.modalJobId}>{selectedJob.id}</Text>
-                  <Text style={styles.modalCustomer}>{selectedJob.customer}</Text>
+                <View className="mb-6" style={{ marginBottom: verticalScale(24) }}>
+                  <Text className="text-sm font-bold uppercase" style={{ color: COLORS.accentBlue, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedJob.id}</Text>
+                  <Text className="mt-1 text-2xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedJob.customer}</Text>
                 </View>
 
-                <View style={styles.instructionSection}>
-                  <Text style={styles.modalSectionTitle}>Admin Instructions</Text>
-                  <View style={styles.instructionInputContainer}>
+                <View className="mb-3" style={{ marginBottom: verticalScale(12) }}>
+                  <Text className="mb-4 text-xs font-bold uppercase" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold, marginBottom: verticalScale(16) }}>Admin Instructions</Text>
+                  <View className="min-h-[100px] rounded-xl border-l-4 p-3" style={{ backgroundColor: '#F1F5F9', borderLeftColor: COLORS.primary, minHeight: verticalScale(100), padding: moderateScale(12) }}>
                     <TextInput
-                      style={styles.instructionTextInput}
+                      className="text-sm leading-5" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium, textAlignVertical: 'top' }}
                       placeholder="Add specific instructions for the rider..."
                       placeholderTextColor={COLORS.muted}
                       multiline={true}
@@ -395,55 +424,60 @@ export default function CalendarScreen() {
                   </View>
                 </View>
 
-                <View style={styles.spacer} />
+                <View style={{ height: verticalScale(24) }} />
 
-                <Text style={styles.modalSectionTitle}>Select Available Rider</Text>
+                <Text className="mb-4 text-xs font-bold uppercase" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold, marginBottom: verticalScale(16) }}>Select Available Rider</Text>
                 {riders.length > 0 ? (
-                  riders.map((rider) => (
-                    <TouchableOpacity 
-                      key={rider.id} 
-                      style={[
-                        styles.riderOption,
-                        selectedRiderId === rider.id && styles.selectedRiderOption
-                      ]}
-                      onPress={() => setSelectedRiderId(rider.id)}
+                  riders.map((rider) => {
+                    const unavailableReason = getRiderUnavailableReason(rider, selectedJob);
+                    const isUnavailable = !!unavailableReason;
+                    const isSelected = selectedRiderId === rider.id;
+                    return (
+                    <TouchableOpacity
+                      key={rider.id}
+                      className="mb-3 flex-row items-center rounded-2xl border p-4" style={{ backgroundColor: isSelected ? '#EEF2FF' : '#F8FAFC', borderColor: isSelected ? COLORS.primary : COLORS.border, opacity: isUnavailable ? 0.55 : 1, marginBottom: verticalScale(12), padding: moderateScale(16) }}
+                      onPress={() => {
+                        if (isUnavailable) return;
+                        setSelectedRiderId(rider.id);
+                      }}
+                      disabled={isUnavailable}
                     >
-                      <FontAwesome5 
-                        name="biking" 
-                        size={16} 
-                        color={selectedRiderId === rider.id ? COLORS.primary : COLORS.muted} 
+                      <FontAwesome5
+                        name="biking"
+                        size={16}
+                        color={isSelected ? COLORS.primary : COLORS.muted}
                       />
-                      <Text style={[
-                        styles.riderOptionText,
-                        selectedRiderId === rider.id && styles.selectedRiderOptionText
-                      ]}>
-                        {rider.name}
-                      </Text>
-                      <MaterialIcons 
-                        name={selectedRiderId === rider.id ? "check-circle" : "radio-button-unchecked"} 
-                        size={24} 
-                        color={selectedRiderId === rider.id ? COLORS.accentBlue : COLORS.border} 
+                      <View className="ml-3 flex-1" style={{ marginLeft: moderateScale(12) }}>
+                        <Text className="text-base font-bold" style={{ color: isUnavailable ? COLORS.muted : isSelected ? COLORS.primary : COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
+                          {rider.name}
+                        </Text>
+                        {isUnavailable && (
+                          <Text className="mt-0.5 text-xs font-bold uppercase" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{unavailableReason}</Text>
+                        )}
+                      </View>
+                      <MaterialIcons
+                        name={isSelected ? "check-circle" : (isUnavailable ? "block" : "radio-button-unchecked")}
+                        size={24}
+                        color={isSelected ? COLORS.accentBlue : COLORS.border}
                       />
                     </TouchableOpacity>
-                  ))
+                  );
+                })
                 ) : (
-                  <View style={styles.emptyRiders}>
-                    <Text style={styles.emptyRidersText}>No riders available</Text>
+                  <View className="items-center p-5" style={{ padding: moderateScale(20) }}>
+                    <Text style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium }}>No riders available</Text>
                   </View>
                 )}
 
-                <TouchableOpacity 
-                  style={[
-                    styles.confirmDispatchButton,
-                    (!selectedRiderId || isAssigning) && styles.disabledButton
-                  ]}
+                <TouchableOpacity
+                  className="mt-3 items-center rounded-xl p-[18px]" style={{ backgroundColor: (!selectedRiderId || isAssigning || selectedRiderUnavailableReason) ? COLORS.muted : COLORS.primary, opacity: (!selectedRiderId || isAssigning || selectedRiderUnavailableReason) ? 0.6 : 1, marginTop: verticalScale(12), padding: moderateScale(18) }}
                   onPress={handleConfirmAssignment}
-                  disabled={!selectedRiderId || isAssigning}
+                  disabled={!selectedRiderId || isAssigning || !!selectedRiderUnavailableReason}
                 >
                   {isAssigning ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.confirmDispatchText}>Confirm Assignment</Text>
+                    <Text className="text-base font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.bold }}>Confirm Assignment</Text>
                   )}
                 </TouchableOpacity>
               </ScrollView>
@@ -454,307 +488,3 @@ export default function CalendarScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.primaryForeground,
-  },
-  calendarContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    backgroundColor: COLORS.primaryForeground,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  monthTitle: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-  },
-  yearTitle: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.muted,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 5,
-  },
-  legendText: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.secondary,
-    textTransform: 'uppercase',
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  daysOfWeekContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  dayOfWeekText: {
-    width: 40,
-    textAlign: 'center',
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.muted,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  outsideMonthWrapper: {
-    opacity: 0.55,
-  },
-  selectedDayWrapper: {
-    transform: [{ scale: 1.08 }],
-  },
-  daySlot: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 4,
-    borderRadius: 20,
-  },
-  outsideMonthSlot: {
-    opacity: 0.45,
-  },
-  selectedDaySlot: {
-    backgroundColor: COLORS.primary,
-  },
-  dayText: {
-    fontSize: TYPOGRAPHY.size.base - 1,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.primary,
-  },
-  selectedDayText: {
-    color: COLORS.primaryForeground,
-  },
-  todayText: {
-    color: COLORS.accentBlue,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-  },
-  outsideMonthText: {
-    color: COLORS.muted,
-  },
-  eventDotsRow: {
-    position: 'absolute',
-    bottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  eventDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  calendarToggle: {
-    alignSelf: 'center',
-    width: 72,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  expandedToggleIcon: {
-    transform: [{ rotate: '180deg' }],
-  },
-  scheduleSection: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-  },
-  seeAllText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.accentBlue,
-  },
-  scheduleList: {
-    paddingBottom: 20,
-  },
-  scheduleItem: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.primaryForeground,
-    borderRadius: RADIUS.button,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  statusIndicator: {
-    width: 6,
-  },
-  scheduleContent: {
-    flex: 1,
-    padding: 16,
-  },
-  scheduleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  scheduleTime: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.secondary,
-  },
-  scheduleStatus: {
-    fontSize: TYPOGRAPHY.size.xs - 2,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.muted,
-    textTransform: 'uppercase',
-  },
-  scheduleTitle: {
-    fontSize: TYPOGRAPHY.size.base - 1,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  riderInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  riderName: {
-    fontSize: TYPOGRAPHY.size.sm - 1,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.secondary,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    color: COLORS.muted,
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: RADIUS.modal,
-    borderTopRightRadius: RADIUS.modal,
-    padding: moderateScale(24),
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(24),
-  },
-  modalTitle: { fontSize: TYPOGRAPHY.size.xl, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary },
-  modalJobInfo: { marginBottom: verticalScale(24) },
-  modalJobId: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.accentBlue, textTransform: 'uppercase' },
-  modalCustomer: { fontSize: TYPOGRAPHY.size['2xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: verticalScale(4) },
-  modalSectionTitle: { 
-    fontSize: TYPOGRAPHY.size.xs, 
-    fontFamily: TYPOGRAPHY.fontFamily.bold, 
-    color: COLORS.secondary, 
-    marginBottom: verticalScale(16), 
-    textTransform: 'uppercase' 
-  },
-  instructionSection: {
-    marginBottom: verticalScale(12),
-  },
-  instructionInputContainer: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-    minHeight: verticalScale(100),
-    padding: moderateScale(12),
-  },
-  instructionTextInput: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.primary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    lineHeight: 20,
-    textAlignVertical: 'top',
-  },
-  spacer: {
-    height: verticalScale(24),
-  },
-  riderOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: moderateScale(16),
-    borderRadius: 16,
-    marginBottom: verticalScale(12),
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  selectedRiderOption: {
-    borderColor: COLORS.primary,
-    backgroundColor: '#EEF2FF',
-  },
-  riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, marginLeft: moderateScale(12) },
-  selectedRiderOptionText: { color: COLORS.primary },
-  emptyRiders: { padding: moderateScale(20), alignItems: 'center' },
-  emptyRidersText: { color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium },
-  confirmDispatchButton: {
-    backgroundColor: COLORS.primary,
-    padding: moderateScale(18),
-    borderRadius: RADIUS.button,
-    alignItems: 'center',
-    marginTop: verticalScale(12),
-  },
-  disabledButton: {
-    backgroundColor: COLORS.muted,
-    opacity: 0.6,
-  },
-  confirmDispatchText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold },
-});
-

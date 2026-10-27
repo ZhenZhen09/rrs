@@ -62,7 +62,7 @@ export function NotificationCampaigns() {
   const [workerHealth, setWorkerHealth] = useState<any>(null);
   const [historyCampaign, setHistoryCampaign] = useState<Campaign | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const createRequestKey = useRef<string | null>(null);
+  const createRequestKey = useRef<{ fingerprint: string; key: string } | null>(null);
   const saveInFlight = useRef(false);
 
   const load = useCallback(async () => {
@@ -108,7 +108,14 @@ export function NotificationCampaigns() {
     try {
       const payload = { ...form, end_date: form.end_date || null,
         repeat_interval_minutes: form.repeat_interval_minutes === '' ? null : Number(form.repeat_interval_minutes) };
-      const idempotencyKey = editingId ? undefined : (createRequestKey.current || (createRequestKey.current = crypto.randomUUID()));
+      const fingerprint = JSON.stringify(payload);
+      let idempotencyKey: string | undefined;
+      if (!editingId) {
+        if (createRequestKey.current?.fingerprint !== fingerprint) {
+          createRequestKey.current = { fingerprint, key: crypto.randomUUID() };
+        }
+        idempotencyKey = createRequestKey.current.key;
+      }
       await request(editingId ? `/${editingId}` : '/', { method: editingId ? 'PATCH' : 'POST', body: JSON.stringify(payload),
         ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}) });
       toast.success(editingId ? 'Campaign updated' : 'Campaign created');

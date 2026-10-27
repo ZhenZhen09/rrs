@@ -14,14 +14,24 @@ export const AttendanceLockout: React.FC<AttendanceLockoutProps> = ({ status, on
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
-  const { refreshAttendance } = useLocation();
+  const { checkIn, isLateCheckInApproved, refreshAttendance } = useLocation();
 
   const handleCheckStatus = async () => {
     setIsRefreshing(true);
     setFeedbackMsg('');
     
     try {
-      const nextStatus = await refreshAttendance();
+      const { status: nextStatus, lateCheckInApproved } = await refreshAttendance();
+      // An approved automatic no-show remains `absent` until the rider starts
+      // the shift. Checking status is the action riders use from this lockout,
+      // so complete the approved late check-in here before showing the dashboard.
+      if (nextStatus === 'absent' && (lateCheckInApproved || isLateCheckInApproved)) {
+        const checkedIn = await checkIn('present');
+        if (checkedIn) {
+          setShowWelcome(true);
+          return;
+        }
+      }
       
       if (!nextStatus || nextStatus === 'present') {
         setShowWelcome(true);

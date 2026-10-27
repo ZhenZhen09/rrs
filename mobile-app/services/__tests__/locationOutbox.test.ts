@@ -40,8 +40,18 @@ describe('location outbox', () => {
   it('returns pending events in sequence order', async () => {
     db.getAllAsync.mockResolvedValue([{ event_id: event.eventId, payload: JSON.stringify(event) }]);
 
-    await expect(getPendingLocationEvents(10)).resolves.toEqual([event]);
-    expect(db.getAllAsync).toHaveBeenCalledWith(expect.stringContaining("status = 'pending'"), [expect.any(Number), 10]);
+    await expect(getPendingLocationEvents('rider-1', 10)).resolves.toEqual([event]);
+    expect(db.getAllAsync).toHaveBeenCalledWith(expect.stringContaining("status = 'pending'"), ['rider-1', 10]);
+    expect(db.getAllAsync.mock.calls[0][0]).not.toContain('expires_at');
+  });
+
+  it('keeps old queued coordinates selectable after the retention window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-21T00:00:00.000Z'));
+    db.getAllAsync.mockResolvedValue([{ payload: JSON.stringify(event) }]);
+    jest.setSystemTime(new Date('2026-10-24T01:00:00.000Z'));
+
+    await expect(getPendingLocationEvents('rider-1')).resolves.toEqual([event]);
+    jest.useRealTimers();
   });
 
   it('acknowledges only the supplied event IDs', async () => {

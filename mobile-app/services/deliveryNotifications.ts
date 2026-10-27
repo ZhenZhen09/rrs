@@ -17,6 +17,8 @@ type DeliveryNotificationData = {
   dropoff_lat?: number | string;
   dropoff_lng?: number | string;
   conversationId?: string;
+  destination?: string;
+  campaignId?: string;
 };
 
 type ForegroundPushMessage = {
@@ -121,6 +123,13 @@ export function routePushData(
 ): void {
   if (data.conversationId && data.type === 'conversation_message') {
     router.navigate(`/conversation/${encodeURIComponent(data.conversationId)}` as never);
+    return;
+  }
+  if (data.type === 'campaign' || data.type === 'campaign_test') {
+    const routes: Record<string, string> = {
+      dashboard: '/(tabs)', shift: '/(tabs)', today: '/(tabs)', overdue: '/(tabs)/overdue', inbox: '/(tabs)/inbox',
+    };
+    router.navigate((routes[String(data.destination || '')] || '/(tabs)') as never);
     return;
   }
   const requestId = data.request_id || data.requestId;

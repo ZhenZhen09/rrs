@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
-import { COLORS } from '../../constants/Theme';
+import { View, Text, ViewStyle, TextStyle } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 export type BadgeProps = {
   label: string;
@@ -10,6 +10,9 @@ export type BadgeProps = {
 };
 
 export function Badge({ label, status = 'default', style, textStyle }: BadgeProps) {
+  const { theme } = useTheme();
+  const { COLORS } = theme;
+
   const getColors = () => {
     switch (status) {
       case 'success': 
@@ -19,7 +22,7 @@ export function Badge({ label, status = 'default', style, textStyle }: BadgeProp
       case 'danger': 
         return { bg: COLORS.danger + '20', text: COLORS.danger };
       case 'info': 
-        return { bg: COLORS.accentBlue + '20', text: COLORS.accentBlue };
+        return { bg: COLORS.info + '20', text: COLORS.info };
       default: 
         return { bg: COLORS.border, text: COLORS.secondary };
     }
@@ -28,24 +31,10 @@ export function Badge({ label, status = 'default', style, textStyle }: BadgeProp
   const { bg, text } = getColors();
 
   return (
-    <View style={[styles.badge, { backgroundColor: bg }, style]}>
-      <Text style={[styles.label, { color: text }, textStyle]}>
+    <View className="self-start rounded-xl px-2 py-1" style={[{ backgroundColor: bg }, style]}>
+      <Text className="text-[10px] font-extrabold uppercase" style={[{ color: text }, textStyle]}>
         {label}
       </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-});

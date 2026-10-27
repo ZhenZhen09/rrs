@@ -89,19 +89,26 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
           .rider-car-body { width: 48px; height: 48px; transform-origin: 50% 50%; transition: transform 0.3s ease; }
           .rider-car-body img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2)); }
           .rider-label { background: rgba(15, 23, 42, 0.85); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: system-ui, sans-serif; font-weight: 700; position: absolute; top: -24px; left: 50%; transform: translateX(-50%); white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .map-legend { position: absolute; left: 14px; bottom: 14px; z-index: 1000; display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid rgba(226,232,240,.95); border-radius: 10px; background: rgba(255,255,255,.94); color: #334155; font: 700 11px system-ui, sans-serif; box-shadow: 0 3px 10px rgba(15,23,42,.12); }
+          .map-legend img { width: 22px; height: 22px; object-fit: contain; }
+          .map-status { position: absolute; left: 50%; top: 14px; z-index: 1000; transform: translateX(-50%); padding: 7px 11px; border: 1px solid rgba(226,232,240,.95); border-radius: 999px; background: rgba(255,255,255,.94); color: #475569; font: 700 11px system-ui, sans-serif; box-shadow: 0 3px 10px rgba(15,23,42,.12); }
+          .fit-fleet { position: absolute; right: 14px; bottom: 14px; z-index: 1000; padding: 8px 11px; border: 1px solid rgba(226,232,240,.95); border-radius: 10px; background: rgba(255,255,255,.94); color: #0b4168; font: 800 11px system-ui, sans-serif; box-shadow: 0 3px 10px rgba(15,23,42,.12); }
         </style>
       </head>
       <body>
         <div id="map"></div>
+        <div id="map-status" class="map-status">Loading live fleet...</div>
+        <div class="map-legend"><img src="${carMarkerDataUri}" alt="" /><span>Rider location</span></div>
+        <button id="fit-fleet" class="fit-fleet" type="button">Fit fleet</button>
         <script>
           const map = L.map('map', { 
             zoomControl: false, 
             attributionControl: false,
             maxZoom: 18
-          }).setView([0, 0], 2);
+          }).setView([14.5995, 120.9842], 12);
           
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(map);
 
           const markerCluster = L.markerClusterGroup({
@@ -109,9 +116,19 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
             spiderfyOnMaxZoom: true,
             maxClusterRadius: 40
           }).addTo(map);
+          const riderLayer = L.layerGroup().addTo(map);
 
           const riderMarkers = {};
           let jobMarkers = [];
+
+          function fitFleet() {
+            const allLayers = [...Object.values(riderMarkers), ...jobMarkers];
+            if (allLayers.length === 0) return;
+            const group = new L.featureGroup(allLayers);
+            map.fitBounds(group.getBounds(), { padding: [60, 60], animate: true, maxZoom: 16 });
+          }
+
+          document.getElementById('fit-fleet').addEventListener('click', fitFleet);
 
           function createRiderIcon(name) {
             return L.divIcon({ 
@@ -147,7 +164,7 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
             // Cleanup missing riders
             Object.keys(riderMarkers).forEach(id => {
               if (!currentRiderIds.has(id)) {
-                markerCluster.removeLayer(riderMarkers[id]);
+                riderLayer.removeLayer(riderMarkers[id]);
                 delete riderMarkers[id];
               }
             });
@@ -167,7 +184,9 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
                   icon: createRiderIcon(r.name),
                   zIndexOffset: 1000 
                 });
-                markerCluster.addLayer(marker);
+                // Keep rider cars outside the delivery cluster so they remain
+                // visible on the road even when pickup/drop-off markers overlap.
+                riderLayer.addLayer(marker);
                 
                 // Allow DOM to render before applying rotation
                 setTimeout(() => {
@@ -199,13 +218,19 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
               }
             });
 
-            // Center map to show all markers if requested
-            if (shouldCenter) {
-              const allLayers = [...Object.values(riderMarkers), ...jobMarkers];
-              if (allLayers.length > 0) {
-                const group = new L.featureGroup(allLayers);
-                map.fitBounds(group.getBounds(), { padding: [60, 60], animate: true });
+            const status = document.getElementById('map-status');
+            if (status) {
+              status.textContent = (riders.length || jobs.length) ? 'Live fleet' : 'No active locations';
+              status.style.display = 'block';
+              if (riders.length || jobs.length) {
+                setTimeout(() => { status.style.display = 'none'; }, 1400);
               }
+            }
+
+            // Center only once after the first non-empty payload. Live updates
+            // move markers without interrupting the admin's current viewport.
+            if (shouldCenter) {
+              fitFleet();
             }
           }
 
@@ -226,9 +251,14 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
     `;
   }, [carMarkerDataUri]);
 
+  const lastInjectTime = useRef(0);
+
   // Handle real-time updates - Reliability: ensure initial data is sent only after WebView onLoad
   useEffect(() => {
     if (isLoaded && webViewRef.current) {
+      const now = Date.now();
+      if (now - lastInjectTime.current < 1000) return; // Throttle 1s
+
       const shouldCenter = !initialBoundsSet.current;
       const payload = JSON.stringify({ riders, activeJobs, shouldCenter });
       
@@ -240,7 +270,13 @@ export const FleetPulseMap: React.FC<FleetPulseMapProps> = ({
         true;
       `);
 
-      if (shouldCenter && (riders.length > 0 || activeJobs.length > 0)) {
+      lastInjectTime.current = now;
+
+      const hasMapMarkers = riders.length > 0 || activeJobs.some((job) =>
+        Boolean(job.pickup_location?.lat && job.pickup_location?.lng) ||
+        Boolean(job.dropoff_location?.lat && job.dropoff_location?.lng)
+      );
+      if (shouldCenter && hasMapMarkers) {
         initialBoundsSet.current = true;
       }
     }

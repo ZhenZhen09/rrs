@@ -1,0 +1,3 @@
+# Keep per-plan execution notes out of git status.
+*
+!.gitignore

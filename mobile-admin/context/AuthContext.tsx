@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { clearTokens, getAccessToken, saveTokens } from '../services/tokenStorage';
+import { refreshAccessToken } from '../services/api';
 
 interface User {
   id: string;
@@ -17,7 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   biometricEnabled: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => Promise<void>;
+  logout: (shouldUpdateState?: () => boolean) => Promise<void>;
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
 }
 
@@ -62,11 +65,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (shouldUpdateState: () => boolean = () => true) => {
     try {
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('refreshToken');
+      await clearTokens();
       await AsyncStorage.removeItem('user');
+      if (!shouldUpdateState()) return;
       setUser(null);
       setToken(null);
     } catch (error) {
@@ -74,21 +77,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const loadStoredAuth = async () => {
+  const loadStoredAuth = async (shouldUpdateState: () => boolean) => {
     try {
-      const storedToken = await AsyncStorage.getItem('authToken');
+      let storedToken = await getAccessToken();
       const userData = await AsyncStorage.getItem('user');
       const bioSetting = await AsyncStorage.getItem('biometricEnabled');
+      if (!shouldUpdateState()) return;
 
       if (bioSetting !== null) {
         setBiometricEnabledState(JSON.parse(bioSetting));
       }
 
+      if (storedToken && isTokenExpired(storedToken)) {
+        try {
+          storedToken = await refreshAccessToken();
+        } catch {
+          storedToken = null;
+        }
+      } else if (!storedToken) {
+        try {
+          storedToken = await refreshAccessToken();
+        } catch {
+          storedToken = null;
+        }
+      }
+
       if (storedToken && userData) {
-        if (isTokenExpired(storedToken)) {
-          console.log('Stored token expired, clearing session');
-          await logout();
-        } else {
           try {
             // Requirement: check role from AsyncStorage or /api/auth/me
             let parsedUser = JSON.parse(userData);
@@ -96,12 +110,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Try to verify session with server if possible
             try {
               const response = await api.get('/auth/me');
+              if (!shouldUpdateState()) return;
               const remoteUser = response.data.user || response.data;
               if (remoteUser && remoteUser.role) {
                 parsedUser = remoteUser;
                 await AsyncStorage.setItem('user', JSON.stringify(parsedUser));
               }
             } catch (apiError) {
+              if (!shouldUpdateState()) return;
               // If /api/auth/me fails (e.g. doesn't exist or network error), 
               // we continue with stored data but still enforce role check
               console.log('Session verification with server failed, using stored data');
@@ -109,28 +125,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (parsedUser.role !== 'admin') {
               console.warn('Non-admin user access detected, logging out');
-              await logout();
+              await logout(shouldUpdateState);
               return;
             }
 
-            setUser(parsedUser);
-            setToken(storedToken);
+            if (shouldUpdateState()) {
+              setUser(parsedUser);
+              setToken(storedToken);
+            }
           } catch (parseError) {
             console.error('Failed to parse stored user data:', parseError);
-            await logout();
+            await logout(shouldUpdateState);
           }
-        }
       }
     } catch (error) {
       console.error('Failed to load stored auth:', error);
     } finally {
-      setIsLoading(false);
+      if (shouldUpdateState()) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadStoredAuth();
-  }, []);
+    let active = true;
+    const isActive = () => active;
+    loadStoredAuth(isActive);
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && active) {
+        loadStoredAuth(isActive);
+      }
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [logout]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -151,10 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // If server returned a nested user object, ensure userProfile reflects that
       const finalProfile = response.data.user || userProfile;
 
-      await AsyncStorage.setItem('authToken', newToken);
-      if (refreshToken) {
-        await AsyncStorage.setItem('refreshToken', refreshToken);
-      }
+      await saveTokens(newToken, refreshToken);
       await AsyncStorage.setItem('user', JSON.stringify(finalProfile));
 
       setToken(newToken);

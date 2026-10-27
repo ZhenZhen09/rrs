@@ -17,10 +17,13 @@ import { getTodayEmptyStateTopPadding } from '@/utils/todayEmptyStateLayout';
 import { formatOverdueDuration } from '@/utils/eta';
 import { TaskDetailIcon } from '@/components/jobs/TaskDetailIcon';
 import { useReducedMotionPreference } from '@/hooks/useReducedMotionPreference';
+import { ShiftTaskAccessNotice } from '@/components/jobs/ShiftTaskAccessNotice';
+import { useConnection } from '@/context/ConnectionContext';
 
 export default function TodayScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotionPreference();
+  const { state: connectionState } = useConnection();
   const [dashboardEntrance] = React.useState(() => new Animated.Value(0));
 
   React.useEffect(() => {
@@ -34,7 +37,7 @@ export default function TodayScreen() {
     });
     return () => cancelAnimationFrame(frame);
   }, [dashboardEntrance, reduceMotion]);
-  const { isOnDuty, hasOpenShift, attendanceStatus, isShiftStatusReady } = useLocation();
+  const { isOnDuty, hasOpenShift, attendanceStatus, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
 
   const { 
     user,
@@ -63,6 +66,10 @@ export default function TodayScreen() {
     const tab = getRiderTaskTab(req);
     return tab === 'tomorrow' || tab === 'future';
   }).length;
+  const savedActiveDelivery = allTasks.find(req => req.delivery_status?.toLowerCase() === 'in_progress');
+  const shouldShowSavedActiveDelivery = Boolean(savedActiveDelivery) && !shiftHoursLocked &&
+    (!isShiftStatusReady || isNetworkReachable === false || connectionState !== 'online');
+  const canShowAssignments = isShiftStatusReady && hasOpenShift && isOnDuty && !shiftHoursLocked && isNetworkReachable !== false;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -81,24 +88,39 @@ export default function TodayScreen() {
       <ShiftControlDrawer tasks={allTasks} />
 
       {!isShiftStatusReady ? (
-        <View style={styles.shiftStatusLoading} accessibilityRole="progressbar" accessibilityLabel="Checking shift status">
-          <ActivityIndicator color="#10B981" />
-        </View>
-      ) : !isOnDuty ? (
-        <View style={styles.offDutyContainer}>
+        shouldShowSavedActiveDelivery ? (
+          <SavedActiveDelivery
+            task={savedActiveDelivery!}
+            onPress={() => router.push(`/job/${savedActiveDelivery!.request_id}`)}
+            isNetworkReachable={isNetworkReachable === true}
+          />
+        ) : (
+          <View style={styles.shiftStatusLoading} accessibilityRole="progressbar" accessibilityLabel="Checking shift status">
+            <ActivityIndicator color="#10B981" />
+          </View>
+        )
+      ) : !canShowAssignments ? (
+        shouldShowSavedActiveDelivery ? (
+          <SavedActiveDelivery
+            task={savedActiveDelivery!}
+            onPress={() => router.push(`/job/${savedActiveDelivery!.request_id}`)}
+            isNetworkReachable={isNetworkReachable === true}
+          />
+        ) : <View style={styles.offDutyContainer}>
           <View style={styles.offDutyIconCircle}>
             <MaterialIcons name="power-settings-new" size={40} color="#94A3B8" />
           </View>
-          <Text style={styles.offDutyTitle}>{hasOpenShift ? 'You are offline' : attendanceStatus === 'present' ? 'Your Shift Has Ended' : 'You are currently Off Duty'}</Text>
+          <Text style={styles.offDutyTitle}>You are Off Duty</Text>
           <Text style={styles.offDutyText}>
-            {hasOpenShift
-              ? 'Your shift remains active while you are offline. You will not receive new delivery requests.'
+            {shiftHoursLocked ? 'Shift hours are closed. Your assignments will be available during your next shift.' : hasOpenShift
+              ? 'Press On Duty to see your assigned tasks and become available for work.'
               : attendanceStatus === 'present'
                 ? 'You have ended today’s shift. Your attendance and recorded hours are saved.'
                 : attendanceStatus === 'absent' || attendanceStatus === 'on_leave'
                   ? 'Your attendance is recorded as absent or on leave. Contact Admin if this needs to change.'
-                : 'Start your shift to record today’s attendance and become available for delivery requests.'}
+                : 'Press On Duty to record attendance and see your assigned tasks.'}
           </Text>
+          <ShiftTaskAccessNotice title="Today's tasks are locked" message={shiftHoursLocked ? 'Shift hours are closed. Return during your next shift.' : "Press On Duty to record attendance and reveal today's assigned tasks."} />
         </View>
       ) : (
         <ScrollView 
@@ -162,10 +184,11 @@ export default function TodayScreen() {
                   key={task.request_id}
                   style={{ opacity: dashboardEntrance, transform: [{ translateY: dashboardEntrance.interpolate({ inputRange: [0, 1], outputRange: [6 + Math.min(index * 2, 6), 0] }) }] }}
                 >
-                <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}) }}>
+                <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isOnDuty ? styles.offDutyTaskCard : {}) }}>
                   <TouchableOpacity
                     testID={`today_task_card_${index}`}
                     activeOpacity={0.7}
+                    disabled={!isOnDuty && task.delivery_status !== 'in_progress'}
                     onPress={() => router.push(`/job/${task.request_id}`)}
                   >
                     <View style={styles.cardHeader}>
@@ -230,7 +253,7 @@ export default function TodayScreen() {
                       <View style={styles.riderInfo}><MaterialIcons name="schedule" size={14} color="#64748B" /><Text style={styles.recipientName}>{task?.time_window || 'Time not set'}</Text></View>
                       <View style={styles.action}>
                           <Text style={[styles.actionText, isLocked && { color: '#94A3B8' }]}>{isLocked ? 'View Details' : 'Start Task'}</Text>
-                          <MaterialIcons name="arrow-forward" size={14} color={isLocked ? "#94A3B8" : "#3B82F6"} />
+                          <MaterialIcons name="arrow-forward" size={14} color={isLocked || !isOnDuty ? "#94A3B8" : "#3B82F6"} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -251,6 +274,34 @@ export default function TodayScreen() {
       />
 
     </SafeAreaView>
+  );
+}
+
+function SavedActiveDelivery({ task, onPress, isNetworkReachable }: { task: any; onPress: () => void; isNetworkReachable: boolean }) {
+  const location = task?.dropoff_location?.address || task?.dropoff_location?.businessName || 'Drop-off details saved';
+  return (
+    <View style={styles.savedDeliveryContainer}>
+      <Text style={styles.savedDeliveryHeading}>Continue your active delivery</Text>
+      <Text style={styles.savedDeliveryMessage}>
+        {isNetworkReachable === false
+          ? 'Connection lost. Your saved delivery details remain available; new assignments are held until status is checked.'
+          : 'Checking your current shift status. Your saved delivery details remain available.'}
+      </Text>
+      <TouchableOpacity
+        testID="offline-active-delivery"
+        accessibilityRole="button"
+        accessibilityLabel={`Open active delivery ${task.request_id}`}
+        onPress={onPress}
+        style={styles.savedDeliveryCard}
+      >
+        <View style={styles.savedDeliveryIcon}><MaterialIcons name="local-shipping" size={22} color="#0F766E" /></View>
+        <View style={styles.savedDeliveryDetails}>
+          <Text style={styles.savedDeliveryTitle}>Delivery {task.request_id}</Text>
+          <Text numberOfLines={2} style={styles.savedDeliveryAddress}>{location}</Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color="#0F766E" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -291,6 +342,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  savedDeliveryContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: scale(20),
+    backgroundColor: '#F8FAFD',
+  },
+  savedDeliveryHeading: {
+    color: '#0F172A',
+    fontSize: normalizeFontSize(20),
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  savedDeliveryMessage: {
+    color: '#64748B',
+    fontSize: normalizeFontSize(14),
+    lineHeight: normalizeFontSize(20),
+    marginTop: verticalScale(8),
+    marginBottom: verticalScale(18),
+    textAlign: 'center',
+  },
+  savedDeliveryCard: {
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(12),
+    padding: scale(14),
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+  },
+  savedDeliveryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDFA',
+  },
+  savedDeliveryDetails: { flex: 1 },
+  savedDeliveryTitle: { color: '#0F172A', fontSize: normalizeFontSize(14), fontWeight: '800' },
+  savedDeliveryAddress: { color: '#64748B', fontSize: normalizeFontSize(12), marginTop: 4 },
   offDutyIconCircle: {
     width: scale(80),
     height: scale(80),
@@ -625,6 +718,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     borderColor: '#F1F5F9',
   },
+  offDutyTaskCard: { backgroundColor: '#F8FAFC', opacity: 0.62, borderColor: '#CBD5E1' },
   sequenceBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',

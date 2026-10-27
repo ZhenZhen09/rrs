@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
-import { LIGHT_COLORS, DARK_COLORS, RADIUS, TYPOGRAPHY, SPACING } from '../constants/Theme';
+import { LIGHT_COLORS, DARK_COLORS, BLACK_PINK_COLORS, GOLD_COLORS, RADIUS, TYPOGRAPHY, SPACING } from '../constants/Theme';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeMode = 'light' | 'dark' | 'system' | 'black-pink' | 'gold';
 type Density = 'compact' | 'default' | 'relaxed';
 
 interface ThemeContextType {
@@ -29,16 +29,21 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    let active = true;
     const loadPreferences = async () => {
       try {
         const savedMode = await AsyncStorage.getItem('@theme_mode');
         const savedDensity = await AsyncStorage.getItem('@theme_density');
+        if (!active) return;
         if (savedMode) setModeState(savedMode as ThemeMode);
         if (savedDensity) setDensityState(savedDensity as Density);
       } catch (e) { }
-      setMounted(true);
+      if (active) setMounted(true);
     };
     loadPreferences();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const setMode = async (newMode: ThemeMode) => {
@@ -53,12 +58,23 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const isDark = mode === 'system' ? systemColorScheme === 'dark' : mode === 'dark';
 
-  const theme = useMemo(() => ({
-    COLORS: isDark ? DARK_COLORS : LIGHT_COLORS,
-    RADIUS,
-    TYPOGRAPHY,
-    SPACING: SPACING[density],
-  }), [isDark, density]);
+  const theme = useMemo(() => {
+    let currentColors = LIGHT_COLORS;
+    if (mode === 'black-pink') {
+      currentColors = BLACK_PINK_COLORS;
+    } else if (mode === 'gold') {
+      currentColors = GOLD_COLORS;
+    } else if (isDark) {
+      currentColors = DARK_COLORS;
+    }
+
+    return {
+      COLORS: currentColors,
+      RADIUS,
+      TYPOGRAPHY,
+      SPACING: SPACING[density],
+    };
+  }, [mode, isDark, density]);
 
   if (!mounted) return null;
 

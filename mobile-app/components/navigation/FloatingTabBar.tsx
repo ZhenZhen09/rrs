@@ -11,7 +11,8 @@ type FloatingTabBarProps = BottomTabBarProps & {
 type FloatingTabItemProps = {
   route: BottomTabBarProps['state']['routes'][number];
   options: BottomTabBarProps['descriptors'][string]['options'];
-  navigation: BottomTabBarProps['navigation'];
+  emitter: BottomTabBarProps['emitter'];
+  navigateToTab: BottomTabBarProps['navigateToTab'];
   focused: boolean;
   count: number;
   reduceMotion: boolean;
@@ -73,7 +74,7 @@ function CountBadge({
   );
 }
 
-function FloatingTabItem({ route, options, navigation, focused, count, reduceMotion }: FloatingTabItemProps) {
+function FloatingTabItem({ route, options, emitter, navigateToTab, focused, count, reduceMotion }: FloatingTabItemProps) {
   const label = options.title ?? route.name;
   const isToday = route.name === 'index';
   const badgeTone: BadgeTone = route.name === 'overdue'
@@ -91,19 +92,19 @@ function FloatingTabItem({ route, options, navigation, focused, count, reduceMot
     : label;
 
   const onPress = () => {
-    const event = navigation.emit({
+    const event = emitter.emit({
       type: 'tabPress',
       target: route.key,
       canPreventDefault: true,
     });
 
     if (!focused && !event.defaultPrevented) {
-      navigation.navigate(route.name, route.params);
+      navigateToTab(route.key);
     }
   };
 
   const onLongPress = () => {
-    navigation.emit({ type: 'tabLongPress', target: route.key });
+    emitter.emit({ type: 'tabLongPress', target: route.key });
   };
 
   const onPressIn = () => {
@@ -169,7 +170,7 @@ function FloatingTabItem({ route, options, navigation, focused, count, reduceMot
   );
 }
 
-export function FloatingTabBar({ state, descriptors, navigation, insets, badgeCounts }: FloatingTabBarProps) {
+export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets, badgeCounts }: FloatingTabBarProps) {
   const reduceMotion = useReducedMotionPreference();
   const bottomInset = Math.max(0, insets.bottom);
   const [entranceProgress] = useState(() => new Animated.Value(reduceMotion ? 1 : 0));
@@ -206,7 +207,8 @@ export function FloatingTabBar({ state, descriptors, navigation, insets, badgeCo
             key={route.key}
             route={route}
             options={descriptors[route.key].options}
-            navigation={navigation}
+            emitter={emitter}
+            navigateToTab={navigateToTab}
             focused={state.index === index}
             count={badgeCounts[route.name] ?? 0}
             reduceMotion={reduceMotion}

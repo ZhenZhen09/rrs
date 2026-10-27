@@ -20,18 +20,18 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { attendanceStatus } = useLocation();
+  const { attendanceStatus, hasOpenShift, isOnDuty, isShiftStatusReady, isNetworkReachable } = useLocation();
   const { handleLogout } = useDashboard();
   const unreadMessages = useMessagingUnread();
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', user?.id],
-    queryFn: getTasks,
+    queryFn: () => getTasks(user!.id),
     enabled: !!user?.id,
     refetchInterval: 30000,
   });
 
-  const counts = getRiderTaskCounts(tasks);
+  const counts = getRiderTaskCounts(isShiftStatusReady && hasOpenShift && isOnDuty && isNetworkReachable !== false ? tasks : []);
 
   if (attendanceStatus === 'absent' || attendanceStatus === 'on_leave') {
     return (
