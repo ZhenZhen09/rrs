@@ -1,0 +1,8 @@
+[DEBUG 2026-10-09T07:48:12.915Z] Fetched 1 users. First row keys: id, name, email, role, avatar_id
+Sample data: {"id":"rider-1","name":"Riley","email":"riley@example.test","role":"rider","avatar_id":null}
+[DEBUG 2026-10-09T07:48:38.560Z] Fetched 1 users. First row keys: id, name, email, role, avatar_id
+Sample data: {"id":"rider-1","name":"Riley","email":"riley@example.test","role":"rider","avatar_id":null}
+[DEBUG 2026-10-09T07:49:31.056Z] Fetched 1 users. First row keys: id, name, email, role, avatar_id
+Sample data: {"id":"rider-1","name":"Riley","email":"riley@example.test","role":"rider","avatar_id":null}
+[DEBUG 2026-10-09T07:49:47.590Z] Fetched 1 users. First row keys: id, name, email, role, avatar_id
+Sample data: {"id":"rider-1","name":"Riley","email":"riley@example.test","role":"rider","avatar_id":null}

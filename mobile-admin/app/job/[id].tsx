@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, ScrollView, Animated, PanResponder, Dimensions, Alert, Linking, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Platform, ScrollView, Animated, PanResponder, Dimensions, Alert, Linking, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../../services/api';
-import { useRealTime } from '../../context/RealTimeContext';
+import { useRealTimeStore } from '../../store/useRealTimeStore';
 import { TrackingMap } from '../../components/Dispatch/TrackingMap';
-import { COLORS, TYPOGRAPHY } from '../../constants/Theme';
+import { TYPOGRAPHY } from '../../constants/Theme';
+import { useTheme } from '../../context/ThemeContext';
 import { Badge } from '../../components/UI/Badge';
 
 const parseSafeDate = (dateStr: any) => {
@@ -25,7 +26,7 @@ const parseSafeDate = (dateStr: any) => {
       return d;
     }
   } catch (e) {}
-  
+
   try {
     const parts = String(dateStr).match(/\d+/g);
     if (parts && parts.length >= 3) {
@@ -55,14 +56,17 @@ interface TrackingData {
 export default function JobTrackingScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { riderLocations, showToast } = useRealTime();
+  const { theme } = useTheme();
+  const { COLORS } = theme;
+  const riderLocations = useRealTimeStore((state) => state.riderLocations);
+  const showToast = useRealTimeStore((state) => state.showToast);
   const [loading, setLoading] = useState(true);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [managementModalVisible, setManagementModalVisible] = useState(false);
   const [adminRemark, setAdminRemark] = useState('');
   const [managementAction, setManagementAction] = useState<'return' | 'cancel' | null>(null);
-  
+
   // Advanced Animation State
   const translateY = useRef(new Animated.Value(0)).current;
   const lastOffset = useRef(0);
@@ -97,24 +101,19 @@ export default function JobTrackingScreen() {
     });
   };
 
-  const toggleExpand = () => {
-    const toValue = isExpanded ? MAX_TRANSLATE_Y : 0;
-    animateTo(toValue);
-  };
-
   const handleStatusUpdate = async (status: 'completed' | 'failed') => {
     Alert.alert(
       `${status === 'completed' ? 'Complete' : 'Fail'} Job?`,
       `Are you sure you want to manually mark this job as ${status.toUpperCase()}? This action is permanent.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Confirm', 
+        {
+          text: 'Confirm',
           style: status === 'failed' ? 'destructive' : 'default',
           onPress: async () => {
             setIsSubmitting(true);
             try {
-              await api.put(`/requests/${id}/status`, { 
+              await api.put(`/requests/${id}/status`, {
                 status,
                 remark: `Manually ${status} by Admin via Mobile`
               });
@@ -148,12 +147,12 @@ export default function JobTrackingScreen() {
     setIsSubmitting(true);
     try {
       const endpoint = managementAction === 'return' ? 'return' : 'cancel';
-      await api.put(`/requests/${id}/${endpoint}`, { 
-        admin_remark: adminRemark 
+      await api.put(`/requests/${id}/${endpoint}`, {
+        admin_remark: adminRemark
       });
-      
+
       showToast(
-        `Job #${String(id).slice(-6).toUpperCase()} ${managementAction === 'return' ? 'returned' : 'cancelled'}`, 
+        `Job #${String(id).slice(-6).toUpperCase()} ${managementAction === 'return' ? 'returned' : 'cancelled'}`,
         'success'
       );
       setManagementModalVisible(false);
@@ -175,8 +174,15 @@ export default function JobTrackingScreen() {
   // PAN RESPONDER: Professional Drag-to-Slide
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 8,
+      onPanResponderGrant: () => {
+        translateY.stopAnimation((value) => {
+          lastOffset.current = Math.max(0, Math.min(MAX_TRANSLATE_Y, value));
+        });
+      },
+      onPanResponderTerminationRequest: () => true,
       onPanResponderMove: (_, gestureState) => {
         let newVal = lastOffset.current + gestureState.dy;
         // Resistance at boundaries
@@ -192,6 +198,9 @@ export default function JobTrackingScreen() {
           dest = MAX_TRANSLATE_Y;
         }
         animateTo(dest);
+      },
+      onPanResponderTerminate: () => {
+        animateTo(lastOffset.current > MAX_TRANSLATE_Y / 2 ? MAX_TRANSLATE_Y : 0);
       },
     })
   ).current;
@@ -258,7 +267,7 @@ export default function JobTrackingScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: COLORS.background }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
@@ -266,46 +275,46 @@ export default function JobTrackingScreen() {
 
   if (!job) {
     return (
-      <View style={styles.center}>
-        <Text>Job not found</Text>
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: COLORS.background }}>
+        <Text style={{ color: COLORS.primary }}>Job not found</Text>
       </View>
     );
   }
 
   const InfoRow = ({ icon, label, value, color = COLORS.secondary, subValue, onPress }: any) => (
-    <TouchableOpacity 
-      style={styles.infoRow} 
-      onPress={onPress} 
+    <TouchableOpacity
+      className="mb-5 flex-row items-start gap-3"
+      onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
     >
-      <View style={styles.iconCircle}>
+      <View className="h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: COLORS.background }}>
         <MaterialIcons name={icon} size={16} color={color} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={[styles.infoValue, onPress && { color: COLORS.accentBlue, textDecorationLine: 'underline' }]}>
+        <Text className="text-[9px] font-bold uppercase tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{label}</Text>
+        <Text className="mt-px text-sm font-bold" style={{ color: onPress ? COLORS.accentBlue : COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold, textDecorationLine: onPress ? 'underline' : 'none' }}>
           {value || 'N/A'}
         </Text>
-        {subValue && <Text style={styles.infoSubValue}>{subValue}</Text>}
+        {subValue && <Text className="mt-0.5 text-[11px] italic" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{subValue}</Text>}
       </View>
       {onPress && <MaterialIcons name="chevron-right" size={20} color={COLORS.border} />}
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1" style={{ backgroundColor: COLORS.background }}>
       <Stack.Screen options={{ headerShown: false }} />
-      
-      <View style={styles.mapContainer}>
-        <TrackingMap 
-          pickup={{ 
-            latitude: Number(job.pickup_location?.lat || 0), 
-            longitude: Number(job.pickup_location?.lng || 0) 
+
+      <View className="flex-1">
+        <TrackingMap
+          pickup={{
+            latitude: Number(job.pickup_location?.lat || 0),
+            longitude: Number(job.pickup_location?.lng || 0)
           }}
-          dropoff={{ 
-            latitude: Number(job.dropoff_location?.lat || 0), 
-            longitude: Number(job.dropoff_location?.lng || 0) 
+          dropoff={{
+            latitude: Number(job.dropoff_location?.lat || 0),
+            longitude: Number(job.dropoff_location?.lng || 0)
           }}
           riderLocation={mapRiderLocation}
           history={mapHistory}
@@ -313,188 +322,180 @@ export default function JobTrackingScreen() {
         />
       </View>
 
-      <SafeAreaView style={styles.header} pointerEvents="box-none">
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+      <SafeAreaView className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-between p-5" pointerEvents="box-none">
+        <TouchableOpacity className="h-12 w-12 items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: COLORS.surface, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 }} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back">
           <MaterialIcons name="arrow-back" size={24} color={COLORS.primary} />
         </TouchableOpacity>
-        <View style={styles.headerBadge}>
-          <View style={[styles.pulseDot, { 
-            backgroundColor: job.delivery_status === 'completed' 
-              ? '#10B981' 
+        <View className="h-10 flex-row items-center rounded-full px-4 shadow-lg" style={{ backgroundColor: COLORS.surface, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 }}>
+          <View className="mr-2 h-2 w-2 rounded-full" style={{
+            backgroundColor: job.delivery_status === 'completed'
+              ? '#10B981'
               : (['failed', 'cancelled', 'disapproved'].includes(job.delivery_status || job.status)
-                ? '#EF4444' 
-                : (job.delivery_status === 'in_progress' ? '#0EA5E9' : '#F59E0B')) 
-          }]} />
-          <Text style={styles.liveText}>{isTerminal ? 'DELIVERY SUMMARY' : 'LIVE TRACKING'}</Text>
+                ? '#EF4444'
+                : (job.delivery_status === 'in_progress' ? '#0EA5E9' : '#F59E0B'))
+          }} />
+          <Text className="text-[10px] font-bold tracking-widest" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{isTerminal ? 'DELIVERY SUMMARY' : 'LIVE TRACKING'}</Text>
         </View>
       </SafeAreaView>
 
-      <Animated.View 
-        style={[
-          styles.bottomCard, 
-          { transform: [{ translateY }] }
-        ]}
-        {...panResponder.panHandlers}
+      <Animated.View
+        className="absolute bottom-0 left-0 right-0 z-[100] rounded-t-[32px]"
+        style={{ backgroundColor: COLORS.surface, paddingBottom: Platform.OS === 'ios' ? 40 : 24, elevation: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.15, shadowRadius: 20, height: EXPANDED_HEIGHT, transform: [{ translateY }] }}
       >
-        <TouchableOpacity 
-          style={styles.clickableHeader} 
-          onPress={toggleExpand} 
-          activeOpacity={0.8}
-        >
-          <View style={styles.handle} />
-          
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.customerLabel}>RECIPIENT NAME</Text>
-              <Text style={styles.customerName} numberOfLines={1}>{job.recipient_name}</Text>
-            </View>
-            <Badge 
-              label={(job.delivery_status === 'in_progress' ? 'ON ROUTE' : (job.delivery_status || job.status || 'PENDING')).toUpperCase()} 
-              status={
-                job.delivery_status === 'completed' ? 'success' :
-                ['failed', 'cancelled', 'disapproved'].includes(job.delivery_status || job.status) ? 'danger' :
-                job.delivery_status === 'in_progress' ? 'info' : 'warning'
-              } 
-            />
+        <View className="w-full px-6 pt-3 pb-4">
+          <View
+            {...panResponder.panHandlers}
+            className="mb-4 h-11 w-full items-center justify-center"
+            hitSlop={{ top: 8, bottom: 8, left: 24, right: 24 }}
+          >
+            <View className="h-1 w-10 rounded-full" style={{ backgroundColor: COLORS.border }} />
           </View>
-        </TouchableOpacity>
 
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
-          style={styles.drawerContent}
+          <View className="flex-row items-start justify-between">
+            <View style={{ flex: 1 }}>
+              <Text className="text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>DESTINATION NAME</Text>
+              <Text className="mt-0.5 text-2xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }} numberOfLines={1}>
+                {job.dropoff_location?.businessName || 'Residential/Generic'}
+              </Text>
+              <Text className="mt-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>RECIPIENT NAME</Text>
+              <Text className="mt-0.5 text-sm font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }} numberOfLines={1}>
+                {job.recipient_name || 'N/A'}
+              </Text>
+            </View>
+            <View className="ml-4 items-end" style={{ flex: 1, marginLeft: 16 }}>
+              <Text className="text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>ASSIGNED RIDER</Text>
+              <View className="mt-0.5 flex-row items-center">
+                <MaterialIcons name="two-wheeler" size={16} color={COLORS.primary} />
+                <Text className="ml-1 text-right text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold, marginLeft: 4 }} numberOfLines={1}>
+                  {job.assigned_rider_name || 'Assigning...'}
+                </Text>
+              </View>
+              <Badge
+                label={(job.delivery_status === 'in_progress' ? 'ON ROUTE' : (job.delivery_status || job.status || 'PENDING')).toUpperCase()}
+                style={{ alignSelf: 'flex-end', marginTop: 4 }}
+                status={
+                  job.delivery_status === 'completed' ? 'success' :
+                  ['failed', 'cancelled', 'disapproved'].includes(job.delivery_status || job.status) ? 'danger' :
+                  job.delivery_status === 'in_progress' ? 'info' : 'warning'
+                }
+              />
+            </View>
+          </View>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          className="flex-1"
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-          scrollEnabled={isExpanded}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          overScrollMode="never"
+          scrollEnabled
         >
-          <View style={styles.detailsGrid}>
-            <InfoRow 
-              icon="business" 
-              label="DESTINATION NAME" 
-              value={job.dropoff_location?.businessName || 'Residential/Generic'} 
-              color={COLORS.primary}
-            />
-            <InfoRow 
-              icon="place" 
-              label="DESTINATION ADDRESS" 
-              value={job.dropoff_location?.address} 
+          <View className="mt-2">
+            {job.is_overdue && !isTerminal && (
+              <View className="mb-4 flex-row items-start rounded-2xl border p-4" style={{ backgroundColor: '#FFF1F2', borderColor: '#FECDD3' }}>
+                <MaterialIcons name="warning" size={20} color="#BE123C" />
+                <View className="ml-3 flex-1">
+                  <Text className="text-[10px] font-bold tracking-wide" style={{ color: '#9F1239', fontFamily: TYPOGRAPHY.fontFamily.bold }}>OVERDUE · {job.overdue_label || 'NEEDS ATTENTION'}</Text>
+                  <Text className="mt-1 text-xs" style={{ color: '#881337', fontFamily: TYPOGRAPHY.fontFamily.medium }}>Next step: {(job.recommended_action || 'contact rider').replace('_', ' ')}</Text>
+                </View>
+              </View>
+            )}
+
+            <InfoRow
+              icon="place"
+              label="DESTINATION ADDRESS"
+              value={job.dropoff_location?.address}
               color="#EF4444"
               subValue={job.dropoff_location?.landmarks ? `Landmark: ${job.dropoff_location.landmarks}` : null}
             />
-            
-            <View style={styles.row}>
+
+            <View className="flex-row gap-2.5">
               <View style={{ flex: 1 }}>
                 <InfoRow icon="category" label="REQUEST TYPE" value={job.request_type} color={COLORS.accentBlue} />
               </View>
               <View style={{ flex: 1 }}>
-                <InfoRow 
-                  icon="priority-high" 
-                  label="PRIORITY" 
-                  value={job.urgency_level} 
-                  color={job.urgency_level === 'Urgent' ? '#B91C1C' : '#F59E0B'} 
+                <InfoRow
+                  icon="priority-high"
+                  label="PRIORITY"
+                  value={job.urgency_level}
+                  color={job.urgency_level === 'Urgent' ? '#B91C1C' : '#F59E0B'}
                 />
               </View>
             </View>
 
             <InfoRow icon="person" label="REQUESTER NAME" value={job.requester_name} />
-            
-            <View style={styles.row}>
+
+            <View className="flex-row gap-2.5">
               <View style={{ flex: 1 }}>
-                <InfoRow 
-                  icon="phone" 
-                  label="RECIP. CONTACT" 
-                  value={job.recipient_contact} 
-                  color="#10B981" 
+                <InfoRow
+                  icon="phone"
+                  label="RECIP. CONTACT"
+                  value={job.recipient_contact}
+                  color="#10B981"
                   onPress={() => handleCall(job.recipient_contact)}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <InfoRow 
-                  icon="contact-phone" 
-                  label="REQ. CONTACT" 
-                  value={job.requester_contact || 'N/A'} 
-                  color="#6366F1" 
+                <InfoRow
+                  icon="contact-phone"
+                  label="REQ. CONTACT"
+                  value={job.requester_contact || 'N/A'}
+                  color="#6366F1"
                   onPress={() => handleCall(job.requester_contact)}
                 />
               </View>
             </View>
 
-            <InfoRow 
-              icon="description" 
-              label="PERSONNEL NOTE" 
-              value={job.personnel_instructions} 
-              color="#64748B" 
+            <InfoRow
+              icon="description"
+              label="PERSONNEL NOTE"
+              value={job.personnel_instructions}
+              color="#64748B"
             />
-            
-            <View style={styles.adminNoteCard}>
-              <View style={styles.adminNoteHeader}>
+
+            <View className="mb-5 rounded-2xl border-l-4 p-4" style={{ backgroundColor: COLORS.background, borderLeftColor: COLORS.primary }}>
+              <View className="mb-1.5 flex-row items-center gap-1.5">
                 <MaterialIcons name="security" size={14} color="#0F172A" />
-                <Text style={styles.adminNoteTitle}>ADMIN DISPATCH NOTE</Text>
+                <Text className="text-[9px] font-bold tracking-wide" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>ADMIN DISPATCH NOTE</Text>
               </View>
-              <Text style={styles.adminNoteText}>{job.admin_remark || 'No specific admin instructions provided.'}</Text>
+              <Text className="text-[13px] leading-[18px]" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{job.admin_remark || 'No specific admin instructions provided.'}</Text>
             </View>
 
-            {job.assigned_rider_id ? (
-              <View style={styles.riderCard}>
-                <View style={styles.riderAvatar}>
-                  <Ionicons name="bicycle" size={20} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.riderLabel}>ASSIGNED RIDER</Text>
-                  <Text style={styles.riderName}>{job.assigned_rider_name}</Text>
-                </View>
-                <Text style={styles.timestamp}>
-                  {formatTimestamp(job.updated_at)}
-                </Text>
-              </View>
-            ) : !isTerminal ? (
-              <View style={styles.riderCard}>
-                <View style={styles.riderAvatar}>
-                  <Ionicons name="bicycle" size={20} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.riderLabel}>ASSIGNED RIDER</Text>
-                  <Text style={styles.riderName}>Assigning...</Text>
-                </View>
-                <Text style={styles.timestamp}>
-                  {formatTimestamp(job.updated_at)}
-                </Text>
-              </View>
-            ) : null}
-
             {isTerminal && (
-              <View style={styles.deliveryDetailsCard}>
-                <View style={styles.deliveryDetailsHeader}>
-                  <MaterialIcons 
-                    name={job.delivery_status === 'completed' ? 'check-circle' : 'error'} 
-                    size={20} 
-                    color={job.delivery_status === 'completed' ? '#10B981' : '#EF4444'} 
+              <View className="mb-6 rounded-2xl border p-5" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}>
+                <View className="mb-3 flex-row items-center gap-2">
+                  <MaterialIcons
+                    name={job.delivery_status === 'completed' ? 'check-circle' : 'error'}
+                    size={20}
+                    color={job.delivery_status === 'completed' ? '#10B981' : '#EF4444'}
                   />
-                  <Text style={[
-                    styles.deliveryDetailsTitle, 
-                    { color: job.delivery_status === 'completed' ? '#10B981' : '#EF4444' }
-                  ]}>
+                  <Text className="text-base font-bold tracking-widest" style={{ color: job.delivery_status === 'completed' ? '#10B981' : '#EF4444', fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                     DELIVERY {job.delivery_status?.toUpperCase() || job.status?.toUpperCase()}
                   </Text>
                 </View>
 
-                <View style={styles.deliveryInfoRow}>
+                <View className="mb-4 flex-row items-center gap-2">
                   <MaterialIcons name="access-time" size={16} color={COLORS.muted} />
-                  <Text style={styles.deliveryTimeText}>
+                  <Text className="text-[13px]" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>
                     Finished at: <Text style={{ fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary }}>{formatTimestamp(job.completed_at || job.updated_at)}</Text>
                   </Text>
                 </View>
 
-                <View style={styles.remarkSeparator} />
+                <View className="my-3.5 h-px" style={{ backgroundColor: COLORS.border }} />
 
-                <Text style={styles.remarkLabel}>RIDER REMARKS / FEEDBACK</Text>
-                <Text style={[styles.remarkText, !job.rider_remark && { fontStyle: 'italic', color: COLORS.muted }]}>
+                <Text className="mb-1.5 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>RIDER REMARKS / FEEDBACK</Text>
+                <Text className="text-sm leading-5" style={{ color: job.rider_remark ? COLORS.primary : COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium, fontStyle: job.rider_remark ? 'normal' : 'italic' }}>
                   {job.rider_remark || 'No delivery remarks provided by the rider.'}
                 </Text>
 
                 {job.admin_remark && (
                   <>
-                    <View style={styles.remarkSeparator} />
-                    <Text style={styles.remarkLabel}>ADMIN REMARKS / REASON</Text>
-                    <Text style={styles.remarkText}>
+                    <View className="my-3.5 h-px" style={{ backgroundColor: COLORS.border }} />
+                    <Text className="mb-1.5 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>ADMIN REMARKS / REASON</Text>
+                    <Text className="text-sm leading-5" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>
                       {job.admin_remark}
                     </Text>
                   </>
@@ -503,45 +504,45 @@ export default function JobTrackingScreen() {
             )}
 
             {!isTerminal && (
-              <View style={styles.actionBar}>
-                {(job.delivery_status === 'pending' || job.delivery_status === 'submitted_waiting') && (
+              <View className="mt-2 gap-3">
+                {(job.status === 'pending' || job.status === 'submitted_waiting' || job.delivery_status === 'pending' || job.delivery_status === 'submitted_waiting') && (
                   <>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, { backgroundColor: '#F59E0B' }]} 
+                    <TouchableOpacity
+                      className="h-14 flex-row items-center justify-center gap-2.5 rounded-2xl shadow-sm" style={{ backgroundColor: '#F59E0B', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
                       onPress={() => openManagementModal('return')}
                       disabled={isSubmitting}
                     >
                       <MaterialIcons name="assignment-return" size={20} color="#FFFFFF" />
-                      <Text style={styles.actionText}>RETURN FOR REVISION</Text>
+                      <Text className="text-[13px] font-bold tracking-widest" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>RETURN FOR REVISION</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.failedButton]} 
+                    <TouchableOpacity
+                      className="h-14 flex-row items-center justify-center gap-2.5 rounded-2xl shadow-sm" style={{ backgroundColor: COLORS.danger, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
                       onPress={() => openManagementModal('cancel')}
                       disabled={isSubmitting}
                     >
                       <MaterialIcons name="cancel" size={20} color="#FFFFFF" />
-                      <Text style={styles.actionText}>CANCEL REQUEST</Text>
+                      <Text className="text-[13px] font-bold tracking-widest" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>CANCEL REQUEST</Text>
                     </TouchableOpacity>
                   </>
                 )}
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.completeButton]} 
+                <TouchableOpacity
+                  className="h-14 flex-row items-center justify-center gap-2.5 rounded-2xl shadow-sm" style={{ backgroundColor: COLORS.success, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
                   onPress={() => handleStatusUpdate('completed')}
                   disabled={isSubmitting}
                 >
                   <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
-                  <Text style={styles.actionText}>COMPLETE DELIVERY</Text>
+                  <Text className="text-[13px] font-bold tracking-widest" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>COMPLETE DELIVERY</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.failedButton]} 
+                <TouchableOpacity
+                  className="h-14 flex-row items-center justify-center gap-2.5 rounded-2xl shadow-sm" style={{ backgroundColor: COLORS.danger, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}
                   onPress={() => handleStatusUpdate('failed')}
                   disabled={isSubmitting}
                 >
                   <MaterialIcons name="error" size={20} color="#FFFFFF" />
-                  <Text style={styles.actionText}>MARK AS FAILED</Text>
+                  <Text className="text-[13px] font-bold tracking-widest" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>MARK AS FAILED</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -555,15 +556,15 @@ export default function JobTrackingScreen() {
         visible={managementModalVisible}
         onRequestClose={() => setManagementModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
+        <View className="flex-1 items-center justify-center bg-black/50 p-5">
+          <View className="w-full rounded-3xl p-6 shadow-xl" style={{ backgroundColor: COLORS.surface, elevation: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 }}>
+            <Text className="mb-2 text-xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
               {managementAction === 'return' ? 'Return for Revision' : 'Cancel Request'}
             </Text>
-            <Text style={styles.modalSubtitle}>Please provide a reason/remark for this action:</Text>
-            
+            <Text className="mb-4 text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Please provide a reason/remark for this action:</Text>
+
             <TextInput
-              style={styles.remarkInput}
+              className="mb-5 h-[100px] rounded-xl p-3 text-sm" style={{ backgroundColor: COLORS.background, color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium, textAlignVertical: 'top' }}
               placeholder="Enter remark here..."
               multiline
               numberOfLines={4}
@@ -571,26 +572,26 @@ export default function JobTrackingScreen() {
               onChangeText={setAdminRemark}
             />
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                className="h-12 flex-1 items-center justify-center rounded-xl" style={{ backgroundColor: COLORS.border }}
                 onPress={() => {
                   setManagementModalVisible(false);
                   setAdminRemark('');
                 }}
               >
-                <Text style={styles.modalButtonText}>CANCEL</Text>
+                <Text className="text-[13px] font-bold tracking-wide" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>CANCEL</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton, managementAction === 'cancel' && { backgroundColor: '#EF4444' }]} 
+
+              <TouchableOpacity
+                className="h-12 flex-1 items-center justify-center rounded-xl" style={{ backgroundColor: managementAction === 'cancel' ? '#EF4444' : COLORS.primary }}
                 onPress={handleManagementSubmit}
                 disabled={isSubmitting || !adminRemark.trim()}
               >
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>CONFIRM</Text>
+                  <Text className="text-[13px] font-bold tracking-wide text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.bold }}>CONFIRM</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -599,111 +600,10 @@ export default function JobTrackingScreen() {
       </Modal>
 
       {isSubmitting && (
-        <View style={styles.overlay}>
+        <View className="absolute inset-0 z-[1000] items-center justify-center bg-black/40">
           <ActivityIndicator size="large" color={COLORS.onPrimary} />
         </View>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  mapContainer: { flex: 1 },
-  header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', padding: 20, zIndex: 10 },
-  backButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
-  headerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 16, height: 40, borderRadius: 20, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  liveText: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 1 },
-  bottomCard: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: Platform.OS === 'ios' ? 40 : 24, elevation: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.15, shadowRadius: 20, height: EXPANDED_HEIGHT, zIndex: 100 },
-  clickableHeader: { width: '100%', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16 },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  customerLabel: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.muted, letterSpacing: 0.5 },
-  customerName: { fontSize: 24, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: 2 },
-  drawerContent: { flex: 1 },
-  detailsGrid: { marginTop: 10 },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, gap: 12 },
-  iconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' },
-  infoLabel: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  infoValue: { fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: 1 },
-  infoSubValue: { fontSize: 11, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, marginTop: 2, fontStyle: 'italic' },
-  row: { flexDirection: 'row', gap: 10 },
-  adminNoteCard: { backgroundColor: COLORS.background, padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: COLORS.primary, marginBottom: 20 },
-  adminNoteHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  adminNoteTitle: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 0.5 },
-  adminNoteText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, lineHeight: 18 },
-  riderCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, padding: 16, borderRadius: 20, marginBottom: 24 },
-  riderAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  riderLabel: { fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.bold, color: 'rgba(255,255,255,0.5)', letterSpacing: 0.5 },
-  riderName: { fontSize: 15, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.onPrimary, marginTop: 1 },
-  timestamp: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: 'rgba(255,255,255,0.4)', position: 'absolute', right: 16, bottom: 16 },
-  actionBar: { gap: 12, marginTop: 10 },
-  actionButton: { height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  completeButton: { backgroundColor: COLORS.success },
-  failedButton: { backgroundColor: COLORS.danger },
-  actionText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, letterSpacing: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  
-  // Modal Styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 24, width: '100%', elevation: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
-  modalTitle: { fontSize: 20, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginBottom: 8 },
-  modalSubtitle: { fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary, marginBottom: 16 },
-  remarkInput: { backgroundColor: COLORS.background, borderRadius: 12, padding: 12, height: 100, textAlignVertical: 'top', fontSize: 14, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.primary, marginBottom: 20 },
-  modalButtons: { flexDirection: 'row', gap: 12 },
-  modalButton: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  cancelButton: { backgroundColor: COLORS.border },
-  confirmButton: { backgroundColor: COLORS.primary },
-  modalButtonText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: 0.5 },
-  
-  deliveryDetailsCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 24,
-  },
-  deliveryDetailsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  deliveryDetailsTitle: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    letterSpacing: 1,
-  },
-  deliveryInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  deliveryTimeText: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  remarkSeparator: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 14,
-  },
-  remarkLabel: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.muted,
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  remarkText: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.primary,
-    lineHeight: 20,
-  }
-});

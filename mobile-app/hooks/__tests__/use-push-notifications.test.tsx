@@ -101,7 +101,7 @@ it('refreshes rider queries and captures the alert when an FCM message arrives i
   }));
 
   expect(mockInvalidateQueries.mock.calls.map(([query]) => query.queryKey)).toEqual([
-    ['notifications', 'rider-1'], ['tasks', 'rider-1'], ['historyTasks', 'rider-1'], ['job', 'job-1'],
+    ['notifications', 'rider-1'], ['tasks', 'rider-1'], ['historyTasks', 'rider-1'], ['job', 'rider-1', 'job-1'],
   ]);
   expect(result.current.notification).toMatchObject({ messageId: 'event-1' });
   expect(mockPresentForegroundPushNotification).toHaveBeenCalledWith(expect.objectContaining({

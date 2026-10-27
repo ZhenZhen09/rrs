@@ -4,8 +4,6 @@ import { api, setAuthFailureListener, resetAuthStatus } from '@/utils/api';
 import { useRootNavigationState, useRouter, useSegments } from 'expo-router';
 
 import { AuthManager } from '@/utils/AuthManager';
-import { queryClient } from '@/utils/queryClient';
-import { getTasks } from '@/services/apiService';
 import { getAuthRedirect } from '@/utils/authNavigation';
 import { unregisterFcmToken } from '@/services/pushTokenService';
 
@@ -108,18 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.token && data.refreshToken) {
         await AuthManager.saveSession(data.token, data.refreshToken, data, keepSignedIn);
         resetAuthStatus();
-
-        if (data.id) {
-          try {
-            await queryClient.fetchQuery({
-              queryKey: ['tasks', data.id],
-              queryFn: getTasks,
-              staleTime: 0,
-            });
-          } catch {
-            // Keep the login session and let the dashboard show its retry state.
-          }
-        }
 
         const currentToken = await AuthManager.getAccessToken();
         if (!currentToken) return { success: false, error: 'Your session expired. Please sign in again.' };

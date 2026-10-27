@@ -38,11 +38,16 @@ export default function JobDetailsScreen() {
     etaStatus,
     etaError,
     etaRefreshing,
+    syncStatus,
+    hasStatusAction,
+    statusActionError,
+    cachedSavedAt,
+    locationOutboxSummary,
   } = useJobDetails();
 
   const { isLocked: isSequentiallyLocked, activeTask } = sequentialEnforcement;
 
-  const { backgroundPermissionGranted, isSocketConnected, lastLocation, refreshCurrentLocation, simulateLocation } = useLocation();
+  const { backgroundPermissionGranted, isSocketConnected, lastLocation, refreshCurrentLocation, simulateLocation, isOnDuty, hasOpenShift, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const webViewRef = useRef<WebView>(null);
   
@@ -716,6 +721,29 @@ export default function JobDetailsScreen() {
 
   if (!job) return null;
 
+  const isActiveDelivery = deliveryStatus === 'in_progress';
+  const isPastDelivery = ['completed', 'delivered', 'failed', 'cancelled'].includes(deliveryStatus || '');
+  if (!isActiveDelivery && !isPastDelivery && !(isShiftStatusReady && hasOpenShift && isOnDuty && isNetworkReachable !== false)) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <MaterialIcons name="lock-outline" size={32} color="#64748B" />
+        <Text>Press On Duty to view this task.</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to tasks" onPress={() => router.back()}>
+          <Text>Back to tasks</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (shiftHoursLocked) return <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#F8FAFC' }}>
+    <MaterialIcons name="lock-outline" size={34} color="#92400E" />
+    <Text style={{ fontSize: 18, fontWeight: '700', color: '#0F172A', marginTop: 12 }}>Shift hours are closed</Text>
+    <Text style={{ color: '#475569', textAlign: 'center', marginTop: 8 }}>Your assigned tasks are available during your next shift.</Text>
+    <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={{ marginTop: 20, minHeight: 44, justifyContent: 'center', paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#0F766E' }}>
+      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Go back</Text>
+    </TouchableOpacity>
+  </SafeAreaView>;
+
   return (
     <View style={styles.container}>
       <View style={styles.map}>
@@ -805,6 +833,15 @@ export default function JobDetailsScreen() {
             <View><Text style={styles.label}>TRANSACTION ID</Text><Text style={styles.idText}>#{job.request_id.slice(-8).toUpperCase()}</Text></View>
             <View style={styles.headerStatusColumn}>
               <Badge label={(job.delivery_status || 'PENDING').toUpperCase()} status={job.delivery_status === 'in_progress' ? 'warning' : job.delivery_status === 'completed' ? 'success' : 'info'} />
+              {hasStatusAction && <Text style={[styles.syncLabel, syncStatus === 'sync_error' && styles.syncErrorLabel]}>
+                {syncStatus === 'sync_error' ? 'Needs attention' : syncStatus === 'synced' ? 'Synced' : 'Pending sync'}
+              </Text>}
+              {syncStatus === 'sync_error' && statusActionError ? <Text accessibilityRole="text" style={[styles.syncLabel, styles.syncErrorLabel]} numberOfLines={2}>{statusActionError}</Text> : null}
+              {cachedSavedAt ? <Text style={styles.syncLabel}>Saved on this device · {new Date(cachedSavedAt).toLocaleTimeString()}</Text> : null}
+              {Boolean(locationOutboxSummary?.pending || locationOutboxSummary?.rejected) && <Text style={[styles.syncLabel, Boolean(locationOutboxSummary?.rejected) && styles.syncErrorLabel]}>
+                {locationOutboxSummary?.rejected ? `${locationOutboxSummary.rejected} location update${locationOutboxSummary.rejected === 1 ? '' : 's'} need review` : `${locationOutboxSummary?.pending} location update${locationOutboxSummary?.pending === 1 ? '' : 's'} pending`}
+              </Text>}
+              {locationOutboxSummary?.rejected && locationOutboxSummary.lastError ? <Text accessibilityRole="text" style={[styles.syncLabel, styles.syncErrorLabel]} numberOfLines={2}>{locationOutboxSummary.lastError}</Text> : null}
             </View>
           </View>
 
@@ -986,6 +1023,8 @@ const styles = StyleSheet.create({
   warningBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginRight: 8, elevation: 4 },
   statusBadge: { paddingHorizontal: 12, height: 32, borderRadius: 16, justifyContent: 'center', elevation: 4 },
   statusText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  syncLabel: { color: '#A16207', fontSize: 10, fontWeight: '700', marginTop: 4, textAlign: 'right' },
+  syncErrorLabel: { color: '#B91C1C' },
   drawerInner: { padding: 24, paddingBottom: 60 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   headerStatusColumn: { alignItems: 'flex-end', marginLeft: 12 },

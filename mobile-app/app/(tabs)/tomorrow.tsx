@@ -15,8 +15,11 @@ import { ShiftControlDrawer } from '@/components/ShiftControlDrawer';
 import { TaskTabEmptyState } from '@/components/TaskTabEmptyState';
 import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
 import { TaskDetailIcon } from '@/components/jobs/TaskDetailIcon';
+import { useLocation } from '@/context/LocationContext';
+import { ShiftTaskAccessNotice } from '@/components/jobs/ShiftTaskAccessNotice';
 
 export default function TomorrowScreen() {
+  const { isOnDuty, hasOpenShift, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
   const {
     user,
     tasks: allTasks,
@@ -36,7 +39,8 @@ export default function TomorrowScreen() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowDateLabel = formatDisplayDate(getLocalDateStr(tomorrow));
-  const tasks = getRiderTasksForTab(allTasks, 'tomorrow');
+  const canShowAssignments = isShiftStatusReady && hasOpenShift && isOnDuty && !shiftHoursLocked && isNetworkReachable !== false;
+  const tasks = canShowAssignments ? getRiderTasksForTab(allTasks, 'tomorrow') : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -60,28 +64,34 @@ export default function TomorrowScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3B82F6']} tintColor="#3B82F6" />}
       >
-        {loading && !refreshing ? (
+        {canShowAssignments && loading && !refreshing ? (
           <>
             <SkeletonCard />
             <SkeletonCard />
           </>
+        ) : !canShowAssignments ? (
+          <ShiftTaskAccessNotice title="Upcoming tasks are locked" message={shiftHoursLocked ? 'Shift hours are closed. Return during your next shift.' : 'Press On Duty to record attendance and reveal your upcoming assignments.'} />
         ) : tasks.length === 0 ? (
           <TaskTabEmptyState
             variant="upcoming"
             icon={<MaterialIcons name="event-available" size={40} color="#3B82F6" />}
-            title="No upcoming jobs scheduled"
-            message="Pull down to check for schedule updates."
+            title={isShiftStatusReady ? "No upcoming jobs scheduled" : 'Checking your shift status'}
+            message={isShiftStatusReady
+              ? hasOpenShift ? 'Pull down to check for schedule updates.' : 'Start your shift to reveal your upcoming assignments.'
+              : 'Upcoming jobs will appear after the server confirms your shift and availability.'}
           />
         ) : (
-          tasks.map((task, index) => {
+          <>
+          {tasks.map((task, index) => {
             const isLocked = isTaskLocked(task, allTasks);
             const buildingName = task.dropoff_location?.businessName || task.pickup_location?.businessName || 'Building not provided';
 
             return (
-              <Card key={task.request_id} style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}) }}>
+              <Card key={task.request_id} style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isOnDuty ? styles.offDutyTaskCard : {}) }}>
                 <TouchableOpacity
                   testID={`tomorrow_task_card_${index}`}
                   activeOpacity={0.7}
+                  disabled={!isOnDuty && task.delivery_status !== 'in_progress'}
                   onPress={() => router.push(`/job/${task.request_id}`)}
                 >
                   <View style={styles.cardHeader}>
@@ -122,7 +132,8 @@ export default function TomorrowScreen() {
                 </TouchableOpacity>
               </Card>
             );
-          })
+          })}
+          </>
         )}
       </ScrollView>
 
@@ -142,6 +153,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: scale(16), paddingBottom: verticalScale(40), flexGrow: 1 },
   card: { marginBottom: verticalScale(10), padding: moderateScale(14) },
   lockedCard: { backgroundColor: '#FAFAFA', opacity: 0.85, borderColor: '#F1F5F9' },
+  offDutyTaskCard: { backgroundColor: '#F8FAFC', opacity: 0.62, borderColor: '#CBD5E1' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: verticalScale(10) },
   titleBlock: { flex: 1, minWidth: 0, marginRight: scale(8) },
   sequenceRow: { flexDirection: 'row', alignItems: 'center', gap: scale(5), marginBottom: verticalScale(4) },

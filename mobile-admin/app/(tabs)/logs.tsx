@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY } from '../../constants/Theme';
 import { moderateScale, verticalScale } from '../../utils/responsive';
-import { useRealTime } from '../../context/RealTimeContext';
+import { useRealTimeStore } from '../../store/useRealTimeStore';
 import api from '../../services/api';
+import { useDebounce } from '../../utils/useDebounce';
 
 interface LogReply {
   id: string;
@@ -126,7 +127,8 @@ const buildChatHistory = (req: any, replies: LogReply[]) => {
 };
 
 export default function SystemLogs() {
-  const { lastRequestUpdate } = useRealTime();
+  const rawLastRequestUpdate = useRealTimeStore(state => state.lastRequestUpdate);
+  const lastRequestUpdate = useDebounce(rawLastRequestUpdate, 2000);
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
@@ -308,18 +310,18 @@ export default function SystemLogs() {
   const chatHistory = selectedLog ? buildChatHistory(selectedLog.rawRequest, selectedLog.replies) : [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.background }}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>System Alerts</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+      <View className="border-b px-6 pt-3" style={{ backgroundColor: '#FFFFFF', borderBottomColor: COLORS.border }}>
+        <Text className="mb-4 text-2xl font-bold tracking-[-0.5px]" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>System Alerts</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
           {['All', 'Info', 'Success', 'Warning', 'Error'].map((f) => (
             <TouchableOpacity 
               key={f} 
               onPress={() => setFilter(f)}
-              style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
+              className="mr-2 rounded-xl px-4 py-2" style={{ backgroundColor: filter === f ? COLORS.primary : '#F1F5F9' }}
             >
-              <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f}</Text>
+              <Text className="text-[13px] font-bold" style={{ color: filter === f ? '#FFFFFF' : COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{f}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -327,35 +329,38 @@ export default function SystemLogs() {
 
       {/* Main Inbox Feed */}
       {loading && logs.length === 0 ? (
-        <View style={styles.loadingContainer}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Syncing real-time alerts...</Text>
+          <Text className="mt-3 text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Syncing real-time alerts...</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {filteredLogs.map((log) => {
+        <FlatList
+          data={filteredLogs}
+          keyExtractor={log => log.id}
+          contentContainerStyle={{ padding: moderateScale(20) }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item: log }) => {
             const iconColor = getLevelColor(log.level);
             return (
               <TouchableOpacity 
-                key={log.id} 
-                style={[styles.inboxItem, !log.read && styles.inboxItemUnread]}
+                className="mb-3 flex-row items-center rounded-3xl border p-4" style={{ backgroundColor: !log.read ? '#F8FAFC' : '#FFFFFF', borderColor: !log.read ? '#EFF6FF' : COLORS.border }}
                 onPress={() => handleOpenLog(log)}
               >
                 {/* Messenger style Left Circular Icon */}
-                <View style={[styles.avatarContainer, { backgroundColor: `${iconColor}15` }]}>
+                <View className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${iconColor}15` }}>
                   <FontAwesome5 name={getLogIcon(log.type)} size={18} color={iconColor} />
                 </View>
 
                 {/* Message Details */}
-                <View style={styles.messageContent}>
-                  <View style={styles.messageHeader}>
-                    <Text style={[styles.senderName, !log.read && styles.boldText]}>
+                <View className="ml-3.5 mr-1.5 flex-1">
+                  <View className="mb-1 flex-row items-center justify-between">
+                    <Text className="text-sm" style={{ color: !log.read ? '#0F172A' : COLORS.primary, fontFamily: !log.read ? TYPOGRAPHY.fontFamily.bold : TYPOGRAPHY.fontFamily.medium }}>
                       {log.type} Alert ({log.user})
                     </Text>
-                    <Text style={styles.timeText}>{log.time}</Text>
+                    <Text className="text-[11px]" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{log.time}</Text>
                   </View>
                   <Text 
-                    style={[styles.messagePreview, !log.read && styles.unreadPreviewText]} 
+                    className="text-[13px]" style={{ color: !log.read ? '#1E293B' : COLORS.secondary, fontFamily: !log.read ? TYPOGRAPHY.fontFamily.bold : TYPOGRAPHY.fontFamily.medium }}
                     numberOfLines={1}
                   >
                     {log.message}
@@ -363,14 +368,14 @@ export default function SystemLogs() {
                 </View>
 
                 {/* Far Right Status Indicator */}
-                <View style={styles.statusCol}>
-                  {!log.read && <View style={styles.unreadDot} />}
+                <View className="w-6 items-center justify-center">
+                  {!log.read && <View className="h-2.5 w-2.5 rounded-full bg-blue-500" />}
                   {log.read && <MaterialIcons name="chevron-right" size={20} color={COLORS.muted} />}
                 </View>
               </TouchableOpacity>
             );
-          })}
-        </ScrollView>
+          }}
+        />
       )}
 
       {/* Immersive Messenger Conversation Modal */}
@@ -379,32 +384,32 @@ export default function SystemLogs() {
         animationType="slide"
         transparent={false}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <SafeAreaView className="flex-1" style={{ backgroundColor: '#F8FAFC' }}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={{ flex: 1 }}
           >
             {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setSelectedLog(null)} style={styles.backButton}>
+            <View className="flex-row items-center justify-between border-b px-4 py-3.5" style={{ backgroundColor: '#FFFFFF', borderBottomColor: COLORS.border }}>
+              <TouchableOpacity onPress={() => setSelectedLog(null)} className="w-20 flex-row items-center">
                 <MaterialIcons name="arrow-back-ios" size={20} color={COLORS.primary} />
-                <Text style={styles.backText}>Alerts</Text>
+                <Text className="ml-0.5 text-[15px] font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Alerts</Text>
               </TouchableOpacity>
-              <View style={styles.headerInfo}>
-                <Text style={styles.headerTitle}>{selectedLog?.type} Notification</Text>
-                <Text style={styles.headerSubtitle}>{selectedLog?.user}</Text>
+              <View className="flex-1 items-center">
+                <Text className="text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedLog?.type} Notification</Text>
+                <Text className="mt-px text-[11px] font-bold" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedLog?.user}</Text>
               </View>
-              <View style={styles.headerSpacer} />
+              <View className="w-20" />
             </View>
 
             {/* Conversation Messages */}
             <ScrollView 
-              contentContainerStyle={styles.chatScrollContent}
+              contentContainerStyle={{ padding: moderateScale(20), paddingBottom: verticalScale(40) }}
               showsVerticalScrollIndicator={false}
             >
               {selectedLog && (
                 <>
-                  <Text style={styles.chatDivider}>REQ-{selectedLog.rawRequest.request_id?.slice(-6).toUpperCase()} TIMELINE</Text>
+                  <Text className="my-4 text-center text-[10px] font-bold tracking-wider" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>REQ-{selectedLog.rawRequest.request_id?.slice(-6).toUpperCase()} TIMELINE</Text>
 
                   {chatHistory.map((item) => {
                     const isSystem = item.sender === 'System';
@@ -413,15 +418,15 @@ export default function SystemLogs() {
                     if (isSystem) {
                       const bubbleColor = getLevelColor(item.level);
                       return (
-                        <View key={item.id} style={styles.incomingContainer}>
-                          <View style={[styles.chatAvatar, { backgroundColor: `${bubbleColor}15` }]}>
+                        <View key={item.id} className="mb-5 flex-row items-end">
+                          <View className="mr-2 h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: `${bubbleColor}15` }}>
                             <FontAwesome5 name={getLogIcon(item.icon || selectedLog.type)} size={12} color={bubbleColor} />
                           </View>
-                          <View style={styles.incomingWrapper}>
-                            <View style={[styles.incomingBubble, { borderLeftColor: bubbleColor }]}>
-                              <Text style={styles.incomingText}>{item.message}</Text>
+                          <View className="flex-1 items-start">
+                            <View className="max-w-[85%] rounded-3xl border border-l-4 px-4 py-3" style={{ backgroundColor: '#FFFFFF', borderColor: COLORS.border, borderLeftColor: bubbleColor }}>
+                              <Text className="text-sm leading-5" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{item.message}</Text>
                             </View>
-                            <Text style={styles.seenReceipt}>
+                            <Text className="ml-1 mt-1 text-[10px] font-bold" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                               {item.time}
                             </Text>
                           </View>
@@ -429,29 +434,29 @@ export default function SystemLogs() {
                       );
                     } else if (isOutgoing) {
                       return (
-                        <View key={item.id} style={styles.outgoingContainer}>
-                          <View style={styles.outgoingWrapper}>
-                            <View style={styles.outgoingBubble}>
-                              <Text style={styles.outgoingText}>{item.message}</Text>
+                        <View key={item.id} className="mb-5 flex-row justify-end">
+                          <View className="max-w-[80%] items-end">
+                            <View className="rounded-3xl bg-blue-500 px-4 py-3">
+                              <Text className="text-sm leading-5 text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.medium }}>{item.message}</Text>
                             </View>
-                            <Text style={styles.outgoingTime}>
-                              Admin • {item.time}
+                            <Text className="mr-1 mt-1 text-[10px] font-bold" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
+                              Admin â€¢ {item.time}
                             </Text>
                           </View>
                         </View>
                       );
                     } else {
                       return (
-                        <View key={item.id} style={styles.incomingContainer}>
-                          <View style={styles.chatAvatar}>
+                        <View key={item.id} className="mb-5 flex-row items-end">
+                          <View className="mr-2 h-7 w-7 items-center justify-center rounded-full">
                             <FontAwesome5 name="terminal" size={12} color={COLORS.secondary} />
                           </View>
-                          <View style={styles.incomingWrapper}>
-                            <View style={styles.incomingBubble}>
-                              <Text style={styles.incomingText}>{item.message}</Text>
+                          <View className="flex-1 items-start">
+                            <View className="max-w-[85%] rounded-3xl border border-l-4 px-4 py-3" style={{ backgroundColor: '#FFFFFF', borderColor: COLORS.border }}>
+                              <Text className="text-sm leading-5" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{item.message}</Text>
                             </View>
-                            <Text style={styles.seenReceipt}>
-                              {item.sender} • {item.time}
+                            <Text className="ml-1 mt-1 text-[10px] font-bold" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
+                              {item.sender} â€¢ {item.time}
                             </Text>
                           </View>
                         </View>
@@ -463,16 +468,16 @@ export default function SystemLogs() {
             </ScrollView>
 
             {/* Quick Action Chat Input Bar */}
-            <View style={styles.inputBar}>
+            <View className="flex-row items-center border-t px-4 py-3" style={{ backgroundColor: '#FFFFFF', borderTopColor: COLORS.border }}>
               <TextInput
-                style={styles.chatInput}
+                className="h-11 flex-1 rounded-3xl px-4 text-sm" style={{ backgroundColor: '#F1F5F9', color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium }}
                 placeholder="Acknowledge or type a reply note..."
                 placeholderTextColor={COLORS.muted}
                 value={replyText}
                 onChangeText={setReplyText}
               />
               <TouchableOpacity 
-                style={[styles.sendButton, !replyText.trim() && styles.disabledSendButton]}
+                className="ml-2 h-10 w-10 items-center justify-center" style={{ opacity: replyText.trim() ? 1 : 0.4 }}
                 onPress={handleSendReply}
                 disabled={!replyText.trim()}
               >
@@ -490,266 +495,3 @@ export default function SystemLogs() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { 
-    paddingTop: 12,
-    paddingHorizontal: moderateScale(24), 
-    backgroundColor: '#FFFFFF', 
-    borderBottomWidth: 1, 
-    borderBottomColor: COLORS.border 
-  },
-  title: { 
-    fontSize: TYPOGRAPHY.size['2xl'], 
-    fontFamily: TYPOGRAPHY.fontFamily.bold, 
-    color: COLORS.primary, 
-    marginBottom: verticalScale(16), 
-    letterSpacing: -0.5 
-  },
-  filterScroll: { marginBottom: verticalScale(12) },
-  filterBtn: { 
-    paddingHorizontal: moderateScale(16), 
-    paddingVertical: verticalScale(8), 
-    borderRadius: 12, 
-    marginRight: moderateScale(8), 
-    backgroundColor: '#F1F5F9' 
-  },
-  filterBtnActive: { backgroundColor: COLORS.primary },
-  filterText: { fontSize: 13, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary },
-  filterTextActive: { color: '#FFFFFF' },
-  scrollContent: { padding: moderateScale(20) },
-  inboxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: moderateScale(16),
-    borderRadius: 20,
-    marginBottom: verticalScale(12),
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  inboxItemUnread: {
-    borderColor: '#EFF6FF',
-    backgroundColor: '#F8FAFC',
-  },
-  avatarContainer: {
-    width: moderateScale(46),
-    height: moderateScale(46),
-    borderRadius: 23,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messageContent: {
-    flex: 1,
-    marginLeft: moderateScale(14),
-    marginRight: moderateScale(6),
-  },
-  messageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(4),
-  },
-  senderName: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  boldText: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: '#0F172A',
-  },
-  timeText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  messagePreview: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  unreadPreviewText: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: '#1E293B',
-  },
-  statusCol: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: moderateScale(24),
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3B82F6', 
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: verticalScale(12),
-    color: COLORS.secondary,
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  
-  // Modal layout
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(14),
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: moderateScale(80),
-  },
-  backText: {
-    fontSize: 15,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-    marginLeft: moderateScale(2),
-  },
-  headerInfo: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    marginTop: verticalScale(1),
-  },
-  headerSpacer: {
-    width: moderateScale(80),
-  },
-  chatScrollContent: {
-    padding: moderateScale(20),
-    paddingBottom: verticalScale(40),
-  },
-  chatDivider: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.muted,
-    textAlign: 'center',
-    marginVertical: verticalScale(18),
-    letterSpacing: 0.5,
-  },
-  incomingContainer: {
-    flexDirection: 'row',
-    marginBottom: verticalScale(20),
-    alignItems: 'flex-end',
-  },
-  chatAvatar: {
-    width: moderateScale(28),
-    height: moderateScale(28),
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#E2E8F0',
-    marginRight: moderateScale(8),
-  },
-  incomingWrapper: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  incomingBubble: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(12),
-    borderRadius: 20,
-    borderBottomLeftRadius: 4,
-    maxWidth: '85%',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderLeftWidth: 4,
-  },
-  incomingText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    lineHeight: 20,
-  },
-  seenReceipt: {
-    fontSize: 10,
-    color: COLORS.muted,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    marginTop: verticalScale(4),
-    marginLeft: moderateScale(4),
-  },
-  outgoingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: verticalScale(20),
-  },
-  outgoingWrapper: {
-    alignItems: 'flex-end',
-    maxWidth: '80%',
-  },
-  outgoingBubble: {
-    backgroundColor: '#3B82F6', 
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(12),
-    borderRadius: 20,
-    borderBottomRightRadius: 4,
-  },
-  outgoingText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    lineHeight: 20,
-  },
-  outgoingTime: {
-    fontSize: 10,
-    color: COLORS.muted,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    marginTop: verticalScale(4),
-    marginRight: moderateScale(4),
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(12),
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  chatInput: {
-    flex: 1,
-    height: verticalScale(42),
-    backgroundColor: '#F1F5F9',
-    borderRadius: 20,
-    paddingHorizontal: moderateScale(16),
-    fontSize: 14,
-    color: COLORS.primary,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-  },
-  sendButton: {
-    width: moderateScale(40),
-    height: moderateScale(40),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: moderateScale(8),
-  },
-  disabledSendButton: {
-    opacity: 0.4,
-  },
-});

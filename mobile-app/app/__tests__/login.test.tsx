@@ -5,9 +5,14 @@ import LoginScreen from '../login';
 
 const mockLogin = jest.fn();
 const mockApiGet = jest.fn();
+let mockConnectionState: 'checking' | 'online' | 'no_network' | 'service_unavailable' = 'online';
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ login: mockLogin }),
+}));
+
+jest.mock('@/context/ConnectionContext', () => ({
+  useConnection: () => ({ state: mockConnectionState, retry: jest.fn(), lastOnlineAt: Date.now() }),
 }));
 
 jest.mock('@/utils/api', () => ({
@@ -97,11 +102,21 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  mockConnectionState = 'online';
   mockApiGet.mockReturnValue(new Promise(() => undefined));
   mockLogin.mockResolvedValue({ success: true, requirePasswordReset: false });
 });
 
 describe('mobile login screen', () => {
+  it('keeps the branded login available while checking connectivity', () => {
+    mockConnectionState = 'checking';
+    const { getByText, getByTestId } = render(<LoginScreen />);
+
+    expect(getByText('Checking connection')).toBeTruthy();
+    expect(getByTestId('login_brand_lockup')).toBeTruthy();
+    expect(getByTestId('login_email_input')).toBeTruthy();
+  });
+
   it('renders the supplied hero and wordmark on the email step', () => {
     const { getByTestId } = render(<LoginScreen />);
 

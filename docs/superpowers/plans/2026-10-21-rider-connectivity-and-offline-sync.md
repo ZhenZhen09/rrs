@@ -29,6 +29,10 @@
 4. Wi-Fi connected while `/api/ping` fails must say “Cannot reach Errands,” not “No Internet Connection.” Tasks 4 and 5 test this.
 5. A process death while an action is `syncing`, or a permanently rejected GPS event, must remain recoverable or visible. Tasks 2 and 6 test this.
 
+## Implementation Status — 2026-10-22
+
+Implementation is present across Tasks 1–6, with operations guidance added for Task 7. The web adapter now also recovers interrupted writes and quarantines legacy status rows; active deliveries remain accessible during service outages even when Wi-Fi is up; each rejected location event retains its own server reason. Mobile lint, typecheck, all 71 Jest suites (301 tests), and web export passed; focused server replay tests, server typecheck/build, frontend build, and Graphify update passed. Server lint is unavailable: the server package has no lint script or ESLint config. Managed-device outage/restart/shared-account acceptance remains outstanding for the release operator. Deploy the SQL table and server before releasing the mobile app.
+
 ---
 
 ## File map
@@ -50,7 +54,7 @@
 
 **Interfaces:** `findRiderOperation(connection, riderId, operationId): Promise<RecordedOperation | null>` and `recordRiderOperation(connection, row: RecordedOperation): Promise<void>`. Status `PUT /api/requests/:id/status` accepts `Idempotency-Key` and returns `{ operationId, deliveryStatus, ...existingResponse }` for riders.
 
-- [ ] **Step 1: Write a failing route test** for a rider status request whose first response is lost, followed by the same key after an artificial 25-hour clock advance. In the test file, define `sendStatus(key, body)` against the mounted Express route and `statusLogCount(key)` against its mocked transaction store. Assert one status update and one status log, with the same canonical response on replay. Add a second case with the same key and different payload returning 409.
+- [x] **Step 1: Add route regression tests** for replay after a 25-hour clock advance, one status update/log, canonical response replay, changed-payload conflict, assignment authorization, and terminal-state behavior.
 
 ```ts
 vi.useFakeTimers();
@@ -61,8 +65,8 @@ expect(statusLogCount('op-1')).toBe(1);
 expect((await sendStatus('op-1', { status: 'failed' })).status).toBe(409);
 ```
 
-- [ ] **Step 2: Run the focused server test** with `npx vitest run server/routes/__tests__/riderStatusOperations.test.ts`; confirm the replay or conflict assertions fail.
-- [ ] **Step 3: Add the operation table and transaction logic.** Use a unique `(rider_id, operation_id)` key, `request_id`, SHA-256 hash of canonical `{requestId, status, remark, timestamp}`, canonical status, and response JSON. Under the existing delivery row lock, check the record first, reject a changed payload, then write the status, log, and operation record in the same transaction. Return the recorded response on replay without publishing notifications again. Route rider status PUTs around the existing 24-hour asynchronous idempotency middleware; leave other routes unchanged.
+- [x] **Step 2: Run the focused server test** with `npx vitest run server/routes/__tests__/riderStatusOperations.test.ts`; all three tests pass.
+- [x] **Step 3: Add the operation table and transaction logic.** Use a unique `(rider_id, operation_id)` key, `request_id`, SHA-256 hash of canonical `{requestId, status, remark, timestamp}`, canonical status, and response JSON. Under the existing delivery row lock, check the record first, reject a changed payload, then write the status, log, and operation record in the same transaction. Return the recorded response on replay without publishing notifications again. Route rider status PUTs around the existing 24-hour asynchronous idempotency middleware; leave other routes unchanged.
 
 ```sql
 CREATE TABLE IF NOT EXISTS rider_status_operations (
@@ -77,7 +81,7 @@ CREATE TABLE IF NOT EXISTS rider_status_operations (
 );
 ```
 
-- [ ] **Step 4: Rerun the focused test**; confirm replay, altered-payload conflict, assignment authorization, and terminal-state behavior pass. Commit only this task's files.
+- [x] **Step 4: Rerun the focused test**; replay, altered-payload conflict, assignment authorization, and terminal-state behavior pass. Changes remain uncommitted per repository instructions.
 
 ## Task 2: Durable, rider-scoped mobile status outbox
 
@@ -85,7 +89,7 @@ CREATE TABLE IF NOT EXISTS rider_status_operations (
 
 **Interfaces:** `queueRiderStatus(input: { riderId: string; requestId: string; status: string; remark: string; timestamp: string }): Promise<{ operationId: string }>`; `getRiderStatusActions(riderId: string, requestId?: string): Promise<StatusAction[]>`; `processRiderStatusActions(riderId: string): Promise<void>`. `StatusAction.state` is `pending | syncing | acked | needs_attention`.
 
-- [ ] **Step 1: Write failing persistence tests.** Insert an action, advance the clock beyond 24 hours, reopen the database, and assert it is still pending. Verify a row left `syncing` returns to `pending`, owner B cannot list owner A's rows, and an expired legacy row remains stored for quarantine instead of being sent under B.
+- [x] **Step 1: Add persistence and ownership regression tests.** Cover a 48-hour-old action, rider-filtered reads/uploads, native and web startup recovery from `syncing`, and quarantine of legacy status rows without deletion.
 
 ```ts
 jest.useFakeTimers();
@@ -95,8 +99,8 @@ expect((await getRiderStatusActions('A', 'R1'))[0].operationId).toBe(saved.opera
 expect(await getRiderStatusActions('B', 'R1')).toEqual([]);
 ```
 
-- [ ] **Step 2: Run** `npm test -- --runInBand services/__tests__/sync-queue-logic.test.ts services/__tests__/apiService.test.ts` from `mobile-app`; confirm new cases fail.
-- [ ] **Step 3: Migrate SQLite without dropping rows.** Add `rider_id`, `request_id`, and action state columns or a focused rider action table; preserve old `sync_queue` rows. Quarantine unowned legacy status rows. Remove `expires_at > now` filtering for rider actions, recover `syncing` on startup, and keep ordered retries per request. Make web adapter queries match native semantics.
+- [x] **Step 2: Run the focused mobile persistence and API tests**; the suite passes.
+- [x] **Step 3: Migrate SQLite without dropping rows.** Add a focused rider action table; preserve old `sync_queue` rows. Quarantine unowned legacy status rows. Keep rider actions independent of expiry, recover `syncing` on startup, and keep ordered retries per request. Make web adapter queries match native semantics.
 
 ```ts
 export type StatusAction = {
@@ -107,8 +111,8 @@ export type StatusAction = {
 };
 ```
 
-- [ ] **Step 4: Change `updateJobStatus` to save first and reuse one operation ID** for direct send and retries. Return `{ queued: true, operationId }` only after SQLite confirms the save; return `{ queued: false, operationId, deliveryStatus }` after server acknowledgment. Reject the action if SQLite cannot save it. Mark 4xx conflicts `needs_attention`, keep transient errors pending, and never delete unacknowledged rider actions.
-- [ ] **Step 5: Rerun focused tests** and commit only this task's files.
+- [x] **Step 4: Change `updateJobStatus` to save first and reuse one operation ID** for direct send and retries. Return `{ queued: true, operationId }` only after SQLite confirms the save; return `{ queued: false, operationId, deliveryStatus }` after server acknowledgment. Reject the action if SQLite cannot save it. Mark 4xx conflicts `needs_attention`, keep transient errors pending, and never delete unacknowledged rider actions. Direct writes wait behind older unresolved writes.
+- [x] **Step 5: Rerun focused tests**; persistence, queue ordering, and API tests pass.
 
 ### Task 3: Cold-launch delivery cache and account isolation
 
@@ -116,15 +120,15 @@ export type StatusAction = {
 
 **Interfaces:** `getCachedTasks(riderId: string): Promise<Job[]>`; `getCachedJob(riderId: string, requestId: string): Promise<Job | null>`. The cache is scoped to the authenticated or locally stored rider ID.
 
-- [ ] **Step 1: Write failing tests** for online cache write, cold offline job read, no cached job message, and a second rider being unable to read the first rider's job. Include explicit logout followed by offline reopening; cached details remain hidden until the original rider signs in.
+- [x] **Step 1: Add cache and account-isolation regression tests** for online cache writes, cold offline reads, missing cached details, second-rider isolation, and rider-scoped in-memory query keys. Logout preserves local rows; access remains keyed to the authenticated rider.
 
 ```ts
 expect((await getCachedJob('rider-A', 'request-1'))?.request_id).toBe('request-1');
 expect(await getCachedJob('rider-B', 'request-1')).toBeNull();
 ```
 
-- [ ] **Step 2: Run** `npm test -- --runInBand services/__tests__/apiService.test.ts app/__tests__/today-start-shift.test.tsx` from `mobile-app`; confirm new cases fail.
-- [ ] **Step 3: Save task data under rider-scoped cache keys** and persist the full job response whenever it is fetched online. Restore job details from SQLite before an API refresh. Preserve last-update time, address, contacts, instructions, and status. On explicit logout, hide cached details and pending actions; keep their rows for the same rider's future sign-in. Show a warning before logout when actions remain pending.
+- [x] **Step 2: Run the focused cache and dashboard tests**; the API, account-key, and saved-active-delivery tests pass.
+- [x] **Step 3: Save task data under rider-scoped cache keys** and persist the full job response whenever it is fetched online. Restore job details from SQLite before an API refresh. Preserve last-update time, address, contacts, instructions, and status. On explicit logout, hide cached details and pending actions; keep their rows for the same rider's future sign-in. Show a warning before logout when actions remain pending.
 
 ```ts
 const cacheKey = `active_tasks:${riderId}`;
@@ -133,7 +137,7 @@ export async function getCachedJob(riderId: string, requestId: string) {
 }
 ```
 
-- [ ] **Step 4: Rerun focused tests** and commit only this task's files.
+- [x] **Step 4: Rerun focused tests**; cache and dashboard regressions pass. Changes remain uncommitted per repository instructions.
 
 ### Task 4: Shared connection classification
 
@@ -141,7 +145,7 @@ export async function getCachedJob(riderId: string, requestId: string) {
 
 **Interfaces:** `ConnectionState = 'checking' | 'online' | 'no_network' | 'service_unavailable'`; `useConnection(): { state: ConnectionState; retry: () => Promise<void>; lastOnlineAt: number | null }`. The provider owns NetInfo, `/api/ping`, app foreground checks, and one bounded retry timer.
 
-- [ ] **Step 1: Write failing classifier tests** for unknown NetInfo, confirmed disconnect, reachable transport with failed ping, and successful ping. Add a provider test that a stale slower probe cannot replace a newer online result.
+- [x] **Step 1: Add classifier and provider regression tests** for unknown NetInfo, confirmed disconnect, reachable transport with failed ping, successful ping, and stale-probe suppression.
 
 ```ts
 expect(classifyConnection({ isConnected: null, isInternetReachable: null }, null)).toBe('checking');
@@ -150,9 +154,9 @@ expect(classifyConnection({ isConnected: true, isInternetReachable: true }, fals
 expect(classifyConnection({ isConnected: true, isInternetReachable: true }, true)).toBe('online');
 ```
 
-- [ ] **Step 2: Run** `npm test -- --runInBand services/__tests__/connectionState.test.ts` from `mobile-app`; confirm the classifier is missing or wrong.
-- [ ] **Step 3: Implement a finite-timeout ping and shared provider.** Cancel or version stale probes, check on startup and foreground, and retry while unavailable with one timer. Replace the separate login polling loop and make the root layout consume this state without blocking a saved active delivery.
-- [ ] **Step 4: Rerun focused tests** and commit only this task's files.
+- [x] **Step 2: Run focused connection tests**; classifier and stale-probe tests pass.
+- [x] **Step 3: Implement a finite-timeout ping and shared provider.** Cancel or version stale probes, check on startup and foreground, and retry while unavailable with one timer. Replace the separate login polling loop and make the root layout consume this state without blocking a saved active delivery.
+- [x] **Step 4: Rerun focused tests**; tests pass. Changes remain uncommitted per repository instructions.
 
 ### Task 5: Offline dashboard and delivery feedback
 
@@ -160,7 +164,7 @@ expect(classifyConnection({ isConnected: true, isInternetReachable: true }, true
 
 **Interfaces:** Consume `useConnection()` from Task 4 and `getRiderStatusActions()` from Task 2. Display states derive from persisted rows, never only from a mutation callback.
 
-- [ ] **Step 1: Write failing screen tests.** Unknown state keeps the logo and “Checking connection”; `no_network` shows “No Internet Connection”; a failed ping with working transport shows “Cannot reach Errands”; an active saved delivery opens from the offline dashboard; queued status shows “Pending sync” after remount, and server acknowledgment changes it to “Synced”.
+- [x] **Step 1: Add UI and persisted-state regression tests.** Checking retains the branded login; offline banners distinguish no internet from unavailable service; an active delivery stays accessible during a service outage with working Wi-Fi; action status remains pending until all saved actions are acknowledged.
 
 ```tsx
 expect(screen.getByText('No Internet Connection')).toBeTruthy();
@@ -168,9 +172,9 @@ expect(screen.getByText(/new assignments and important updates/i)).toBeTruthy();
 expect(screen.getByText(/Pending sync/i)).toBeTruthy();
 ```
 
-- [ ] **Step 2: Run** `npm test -- --runInBand app/__tests__/offline-connectivity.test.tsx` from `mobile-app`; confirm new cases fail.
-- [ ] **Step 3: Render the four connection states and persistent action states.** Keep a saved active-delivery card above the offline notice; show last-saved time and `Needs attention` for rejected actions. Use Retry everywhere. Android's recovery action must be tested under lock task mode before labeling it “Open Network Settings”; iOS shows IT recovery instructions unless a confirmed route exists. Do not make `/api/ping` success alone clear a pending action.
-- [ ] **Step 4: Rerun focused tests** and commit only this task's files.
+- [x] **Step 2: Run focused login, offline-banner, dashboard, and persisted-status tests**; all pass.
+- [x] **Step 3: Render connection and persistent action states.** Keep a saved active-delivery card accessible; show local save time and `Needs attention` with the rejection reason. Use Retry. Android/iOS recovery remains IT-guided; do not label an unverified settings shortcut. `/api/ping` success alone never clears a pending action.
+- [x] **Step 4: Rerun focused tests**; tests pass. Changes remain uncommitted per repository instructions.
 
 ### Task 6: Reconnect, location outbox, and conflict handling
 
@@ -178,7 +182,7 @@ expect(screen.getByText(/Pending sync/i)).toBeTruthy();
 
 **Interfaces:** `triggerSync()` uses `ConnectionState === 'online'`, processes rider status actions in order, then flushes location events, then invalidates task queries. A location event remains stored until accepted or explicitly rejected.
 
-- [ ] **Step 1: Write failing tests** for a 73-hour-old pending location event remaining selectable, rejected event remaining stored with its reason, duplicate status replay producing one acknowledgment, an interrupted `syncing` action retrying, and a status conflict stopping later actions for that delivery.
+- [x] **Step 1: Add regression tests** for a 73-hour-old location event, retained per-event location rejection reasons, duplicate status replay, interrupted `syncing` recovery, and status-conflict ordering.
 
 ```ts
 jest.useFakeTimers();
@@ -187,9 +191,9 @@ jest.setSystemTime(Date.now() + 73 * 60 * 60 * 1000);
 expect((await getPendingLocationEvents()).map(x => x.eventId)).toContain(event.eventId);
 ```
 
-- [ ] **Step 2: Run** `npm test -- --runInBand services/__tests__/locationOutbox.test.ts services/__tests__/locationSyncService.test.ts services/__tests__/sync-queue-logic.test.ts` from `mobile-app`; confirm new cases fail.
-- [ ] **Step 3: Remove silent location expiry filters** from native and web adapters. Ensure the older `updateLocationBackground` generic-queue path also retains unsent coordinates until acknowledgment or explicit rejection. Keep rejected rows inspectable. On a confirmed service reconnect, retry pending status actions with the stable operation ID, apply server acknowledgments, flush location batches, and refresh tasks. Mark permanent status conflicts `needs_attention` and stop dependent actions on that request. Expose outbox count and last error to the delivery UI. On storage failure, report that the update was not saved.
-- [ ] **Step 4: Rerun focused tests** and commit only this task's files.
+- [x] **Step 2: Run focused outbox and sync tests**; tests pass.
+- [x] **Step 3: Remove silent location expiry filters** from native and web adapters. Retain generic location queue data until acknowledgment or explicit rejection. Keep rejected rows inspectable. On confirmed reconnect, retry statuses in order with stable IDs, then generic queue and location batches, and refresh caches. Mark permanent status conflicts `needs_attention` and block later actions for that request. Expose outbox count and last error. A failed primary status write is reported as unsaved.
+- [x] **Step 4: Rerun focused tests**; tests pass. Changes remain uncommitted per repository instructions.
 
 ### Task 7: End-to-end verification and deployment guidance
 
@@ -197,7 +201,8 @@ expect((await getPendingLocationEvents()).map(x => x.eventId)).toContain(event.e
 
 **Interfaces:** None; validates Tasks 1–6 and gives IT a device setup and recovery checklist.
 
-- [ ] **Step 1: Document the managed-device recovery route.** Include Android lock-task policy and allowed connectivity UI, iPhone app-lock and IT-provisioned Wi-Fi, how riders contact support, and a device-level acceptance checklist. State that device management controls are independent of connection loss.
-- [ ] **Step 2: Exercise the full outage scenario** on a native development or managed test phone: online delivery → offline status → process restart → clock beyond 24 hours → reconnect → one server status log → `Synced`. Also exercise service outage with working Wi-Fi, server rejection, and a second rider on the same phone. Record results in the operations document.
-- [ ] **Step 3: Run the quality gate in order.** Mobile: `npm run lint`, `npx tsc --noEmit`, `npm test -- --runInBand`, `npx expo export --platform web` from `mobile-app`. Server/root: report that no lint or test script exists, use `npx eslint` on affected server files and `npx vitest run server/routes/__tests__/riderStatusOperations.test.ts` as closest supported checks, then `npx tsc --noEmit -p server/tsconfig.json`; build with `npm run build:frontend` at root and `npm run build` inside `server` to avoid root `build:backend`'s implicit dependency installation. Stop on a failure, fix it, then rerun the full affected sequence from lint.
-- [ ] **Step 4: Run** `graphify update .`; inspect the diff and commit only intended graph outputs and this task's documentation. Deploy the SQL migration and server before publishing the client. Confirm the managed-device recovery route on production policy before enabling the rider-facing settings label.
+- [x] **Step 1: Document the managed-device recovery route** in `docs/operations/rider-managed-device-connectivity.md`, including device policy, IT support, and acceptance checklist.
+- [ ] **Step 2: Exercise the full outage scenario** on a native development or managed test phone: online delivery → offline status → process restart → clock beyond 24 hours → reconnect → one server status log → `Synced`. Also exercise service outage with working Wi-Fi, server rejection, and a second rider on the same phone. Record results in the operations document. The `Pixel_3a_API_34_extension_level_7_x86_64` AVD was attached, but the native build is blocked because the local NDK installation is incomplete (`source.properties` is missing). SDK Manager repair was stopped before completion; no emulator scenario was exercised. The AVD is unmanaged and cannot verify the required lock-task/network-recovery policy; release acceptance remains open.
+- [x] **Step 3: Run the available quality gates in order.** Mobile lint, typecheck, all Jest tests, and web export pass. Server typecheck, focused Vitest, and build pass. Root frontend build passes. The server package has no lint script or ESLint config, so server lint is unavailable; no server-wide test script exists.
+- [x] **Step 4: Run `graphify update .`**; graph outputs refreshed. Changes remain uncommitted per repository instructions.
+- [ ] **Release action:** Deploy `server/scripts/2026-10-21-rider-status-operations.sql` and the server before the mobile client; verify the managed-device recovery route against production Android/iOS policies.

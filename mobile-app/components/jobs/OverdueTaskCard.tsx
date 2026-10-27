@@ -15,6 +15,7 @@ type OverdueTaskCardProps = {
   index: number;
   allTasks: Job[];
   isLocked: boolean;
+  isAvailable?: boolean;
   onPress: () => void;
 };
 
@@ -22,18 +23,18 @@ const getDeadlineTime = (deadline?: string | null) => deadline
   ? new Date(deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   : 'Not set';
 
-export function OverdueTaskCard({ task, index, allTasks, isLocked, onPress }: OverdueTaskCardProps) {
+export function OverdueTaskCard({ task, index, allTasks, isLocked, isAvailable = true, onPress }: OverdueTaskCardProps) {
   const buildingName = task.dropoff_location?.businessName
     || task.pickup_location?.businessName
     || 'Building not provided';
   const status = task.delivery_status || 'pending';
 
   return (
-    <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}) }}>
+    <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isAvailable ? styles.unavailableCard : {}) }}>
       <TouchableOpacity
         testID={`overdue_task_card_${index}`}
         activeOpacity={0.7}
-        disabled={isLocked}
+        disabled={isLocked || !isAvailable}
         onPress={onPress}
       >
         <View style={styles.cardHeader}>
@@ -120,6 +121,12 @@ export function OverdueTaskCard({ task, index, allTasks, isLocked, onPress }: Ov
             <Text style={styles.lockOverlayText}>FOLLOW SEQUENCE</Text>
           </View>
         )}
+        {!isLocked && !isAvailable && (
+          <View style={styles.lockOverlay}>
+            <MaterialIcons name="wifi-off" size={16} color="#94A3B8" />
+            <Text style={styles.lockOverlayText}>GO ONLINE TO OPEN</Text>
+          </View>
+        )}
       </TouchableOpacity>
     </Card>
   );
@@ -133,6 +140,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#EF4444',
   },
   lockedCard: { backgroundColor: '#FAFAFA', opacity: 0.85, borderColor: '#F1F5F9', borderLeftColor: '#94A3B8' },
+  unavailableCard: { backgroundColor: '#F8FAFC', opacity: 0.62, borderColor: '#CBD5E1', borderLeftColor: '#94A3B8' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: verticalScale(10) },
   headerDetails: { flex: 1, minWidth: 0, marginRight: scale(8) },
   sequenceRow: { flexDirection: 'row', alignItems: 'center', gap: scale(5), marginBottom: verticalScale(4) },

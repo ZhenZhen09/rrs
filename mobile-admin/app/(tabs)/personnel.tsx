@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert, ScrollView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import api from '../../services/api';
-import { COLORS as DEFAULT_COLORS, RADIUS as DEFAULT_RADIUS, TYPOGRAPHY as DEFAULT_TYPOGRAPHY } from '../../constants/Theme';
 import { useTheme } from '../../context/ThemeContext';
 import { Badge } from '../../components/UI/Badge';
 
@@ -17,340 +16,38 @@ interface User {
   mfa_enabled?: boolean;
 }
 
+function PersonnelHeroIcon({ primary, success }: { primary: string; success: string }) {
+  return (
+    <View className="h-24 w-24 items-center justify-center" accessible={false}>
+      <View
+        className="absolute h-[68px] w-[68px] rounded-[22px]"
+        style={{ backgroundColor: `${primary}18`, transform: [{ rotate: '-10deg' }, { translateY: 5 }] }}
+      />
+      <View
+        className="absolute h-[68px] w-[68px] rounded-[22px]"
+        style={{ backgroundColor: `${primary}28`, transform: [{ rotate: '9deg' }, { translateY: 2 }] }}
+      />
+      <View
+        className="h-[68px] w-[68px] items-center justify-center rounded-[22px]"
+        style={{ backgroundColor: '#FFFFFF', shadowColor: primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 10, elevation: 5 }}
+      >
+        <MaterialIcons name="groups" size={36} color={primary} />
+        <View className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: success }}>
+          <MaterialIcons name="verified" size={16} color="#FFFFFF" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function PersonnelScreen() {
   const { theme } = useTheme();
   const { COLORS, RADIUS, TYPOGRAPHY, SPACING } = theme;
 
-  const styles = React.useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: COLORS.background,
-    },
-    center: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    header: {
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.lg,
-      paddingBottom: SPACING.sm,
-    },
-    title: {
-      fontSize: TYPOGRAPHY.size['3xl'],
-      fontFamily: TYPOGRAPHY.fontFamily.bold,
-      color: COLORS.primary,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: TYPOGRAPHY.size.sm,
-      fontFamily: TYPOGRAPHY.fontFamily.medium,
-      color: COLORS.secondary,
-    },
-    listContainer: {
-      padding: SPACING.xl,
-      gap: SPACING.lg,
-    },
-    card: {
-      backgroundColor: COLORS.surface,
-      borderRadius: RADIUS.card,
-      padding: SPACING.lg,
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      elevation: 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-    },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: COLORS.onPrimary,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.sm,
-  },
-  statusDot: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.base,
-    color: COLORS.foreground,
-  },
-  userEmail: {
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.secondary,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.background,
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  footerText: {
-    fontFamily: TYPOGRAPHY.fontFamily.mono,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.muted,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: RADIUS.modal,
-    borderTopRightRadius: RADIUS.modal,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.xl,
-    color: COLORS.primary,
-  },
-  detailIdText: {
-    fontFamily: TYPOGRAPHY.fontFamily.mono,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.secondary,
-    marginTop: 4,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.base,
-    color: COLORS.primary,
-  },
-  editText: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.accentBlue,
-  },
-  detailGrid: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.card,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  detailLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.secondary,
-  },
-  detailValue: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.foreground,
-  },
-  editCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.card,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  dangerCard: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    marginTop: 8,
-  },
-  dangerActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FECACA',
-  },
-  dangerActionText: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.danger,
-    marginLeft: 12,
-  },
-  deleteConfirmBox: {
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomLeftRadius: RADIUS.card,
-    borderBottomRightRadius: RADIUS.card,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: 10,
-    color: COLORS.muted,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.button,
-    paddingHorizontal: 16,
-    height: 52,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.foreground,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  roleTabs: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  roleTab: {
-    flex: 1,
-    height: 44,
-    borderRadius: RADIUS.button,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  roleTabActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  roleTabText: {
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: 12,
-    color: COLORS.secondary,
-  },
-  roleTabTextActive: {
-    color: COLORS.onPrimary,
-  },
-  submitButton: {
-    height: 52,
-    backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.button,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: SPACING.xl,
-  },
-  submitButtonText: {
-    color: COLORS.onPrimary,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    fontSize: TYPOGRAPHY.size.base,
-  },
-  successContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xl,
-  },
-  successIcon: {
-    marginBottom: SPACING.lg,
-  },
-  successTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  successSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.fontFamily.medium,
-    color: COLORS.secondary,
-    textAlign: 'center',
-    marginBottom: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-  },
-  passwordBox: {
-    width: '100%',
-    backgroundColor: COLORS.background,
-    padding: SPACING.lg,
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    marginBottom: SPACING.xl,
-  },
-  passwordLabel: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.fontFamily.bold,
-    color: COLORS.secondary,
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  passwordValue: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.fontFamily.monoMedium,
-    color: COLORS.primary,
-    letterSpacing: 2,
-  },
-}), [theme]);
-
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Modals
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -392,6 +89,9 @@ export default function PersonnelScreen() {
     setRefreshing(true);
     fetchUsers();
   };
+
+  const activeUsers = users.filter((user) => user.status !== 'suspended').length;
+  const riderCount = users.filter((user) => user.role === 'rider').length;
 
   // --- Create User Flow ---
   const handleCreateSubmit = async () => {
@@ -468,8 +168,8 @@ export default function PersonnelScreen() {
       "Are you sure you want to invalidate their current password and generate a new one?",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Reset", 
+        {
+          text: "Reset",
           style: "destructive",
           onPress: async () => {
             setIsActionLoading(true);
@@ -495,8 +195,8 @@ export default function PersonnelScreen() {
       "Are you sure you want to disable Multi-Factor Authentication for this user?",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Reset", 
+        {
+          text: "Reset",
           style: "destructive",
           onPress: async () => {
             setIsActionLoading(true);
@@ -551,37 +251,37 @@ export default function PersonnelScreen() {
   };
 
   const renderItem = ({ item }: { item: User }) => (
-    <TouchableOpacity 
-      style={styles.card} 
+    <TouchableOpacity
+      className="rounded-xl border p-4 shadow-sm" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border, borderRadius: RADIUS.card, padding: SPACING.lg, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
       activeOpacity={0.7}
       onPress={() => openUserDetail(item)}
     >
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.name.substring(0, 2).toUpperCase()}</Text>
-          <View style={[styles.statusDot, { 
-            backgroundColor: item.status === 'online' ? COLORS.success : 
-                             item.status === 'suspended' ? COLORS.danger : COLORS.muted 
-          }]} />
+      <View className="mb-3 flex-row items-center">
+        <View className="relative mr-3 h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: COLORS.primary }}>
+          <Text className="text-sm font-bold" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{item.name.substring(0, 2).toUpperCase()}</Text>
+          <View className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2" style={{ borderColor: COLORS.surface, backgroundColor:
+            item.status === 'online' ? COLORS.success :
+                             item.status === 'suspended' ? COLORS.danger : COLORS.muted
+          }} />
         </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.name}</Text>
-          <Text style={styles.userEmail}>{item.email}</Text>
+        <View className="flex-1">
+          <Text className="text-base font-bold" style={{ color: COLORS.foreground, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{item.name}</Text>
+          <Text className="text-xs" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{item.email}</Text>
         </View>
-        <Badge 
-          label={item.role.toUpperCase()} 
-          status={item.role === 'admin' ? 'danger' : item.role === 'personnel' ? 'warning' : 'info'} 
+        <Badge
+          label={item.role.toUpperCase()}
+          status={item.role === 'admin' ? 'danger' : item.role === 'personnel' ? 'warning' : 'info'}
         />
       </View>
-      <View style={styles.cardFooter}>
-        <View style={styles.footerItem}>
+      <View className="flex-row items-center gap-4 border-t pt-3" style={{ borderTopColor: COLORS.background }}>
+        <View className="flex-row items-center gap-1">
           <MaterialIcons name="badge" size={14} color={COLORS.muted} />
-          <Text style={styles.footerText}>{item.id}</Text>
+          <Text className="text-xs" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.mono }}>{item.id}</Text>
         </View>
         {item.department && (
-          <View style={styles.footerItem}>
+          <View className="flex-row items-center gap-1">
             <MaterialIcons name="business" size={14} color={COLORS.muted} />
-            <Text style={styles.footerText}>{item.department}</Text>
+            <Text className="text-xs" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.mono }}>{item.department}</Text>
           </View>
         )}
       </View>
@@ -589,14 +289,14 @@ export default function PersonnelScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Personnel</Text>
-        <Text style={styles.subtitle}>{users.length} Total Registered</Text>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.background }} edges={['top']}>
+      <View className="px-6 pt-4 pb-2" style={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: SPACING.sm }}>
+        <Text className="text-3xl tracking-[-0.5px]" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Personnel</Text>
+        <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{users.length} Total Registered</Text>
       </View>
 
       {loading ? (
-        <View style={styles.center}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
@@ -604,7 +304,29 @@ export default function PersonnelScreen() {
           data={users}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
+          ListHeaderComponent={
+            <View
+              className="mb-1 flex-row items-center justify-between rounded-3xl border p-5"
+              style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border, borderRadius: RADIUS.card, padding: SPACING.xl, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 }}
+              accessible
+              accessibilityLabel={`${users.length} personnel registered, ${activeUsers} active accounts, ${riderCount} riders`}
+            >
+              <View className="flex-1 pr-3">
+                <Text className="mb-1 text-[10px] font-bold tracking-[1.5px]" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>WORKFORCE OVERVIEW</Text>
+                <Text className="text-3xl font-bold" style={{ color: COLORS.foreground, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{users.length}</Text>
+                <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Total personnel</Text>
+                <View className="mt-4 flex-row items-center gap-2">
+                  <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: `${COLORS.success}18` }}>
+                    <Text className="text-[11px] font-bold" style={{ color: COLORS.success, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{activeUsers} active</Text>
+                  </View>
+                  <Text className="text-[11px]" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>{riderCount} riders</Text>
+                </View>
+              </View>
+              <PersonnelHeroIcon primary={COLORS.primary} success={COLORS.success} />
+            </View>
+          }
+          ListHeaderComponentStyle={{ marginBottom: SPACING.lg }}
+          contentContainerStyle={{ padding: SPACING.xl, gap: SPACING.lg }}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           showsVerticalScrollIndicator={false}
@@ -612,43 +334,45 @@ export default function PersonnelScreen() {
       )}
 
       {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={styles.fab} 
+      <TouchableOpacity
+        className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: COLORS.accent, elevation: 8, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 }}
         onPress={() => setCreateModalVisible(true)}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Add personnel"
       >
         <MaterialIcons name="person-add" size={24} color={COLORS.onPrimary} />
       </TouchableOpacity>
 
       {/* --- CREATE WIZARD MODAL --- */}
       <Modal visible={createModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="rounded-t-3xl p-6 pb-10" style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.modal, borderTopRightRadius: RADIUS.modal }}>
             {!tempPassword ? (
               <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>New Personnel</Text>
+                <View className="mb-6 flex-row items-start justify-between">
+                  <Text className="text-xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>New Personnel</Text>
                   <TouchableOpacity onPress={closeCreateWizard}>
                     <MaterialIcons name="close" size={24} color={COLORS.muted} />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>FULL NAME</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    value={newName} 
+                <View className="mb-5">
+                  <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>FULL NAME</Text>
+                  <TextInput
+                    className="h-[52px] rounded-xl border px-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.foreground }}
+                    value={newName}
                     onChangeText={setNewName}
                     placeholder="e.g. Juan Dela Cruz"
                     placeholderTextColor={COLORS.muted}
                   />
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>EMAIL ADDRESS</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    value={newEmail} 
+                <View className="mb-5">
+                  <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>EMAIL ADDRESS</Text>
+                  <TextInput
+                    className="h-[52px] rounded-xl border px-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.foreground }}
+                    value={newEmail}
                     onChangeText={setNewEmail}
                     placeholder="juan@example.com"
                     placeholderTextColor={COLORS.muted}
@@ -657,16 +381,16 @@ export default function PersonnelScreen() {
                   />
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>ROLE</Text>
-                  <View style={styles.roleTabs}>
+                <View className="mb-5">
+                  <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>ROLE</Text>
+                  <View className="flex-row gap-2">
                     {(['rider', 'personnel', 'admin'] as const).map(r => (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         key={r}
-                        style={[styles.roleTab, newRole === r && styles.roleTabActive]}
+                        className="h-11 flex-1 items-center justify-center rounded-lg border" style={{ backgroundColor: newRole === r ? COLORS.primary : COLORS.background, borderColor: newRole === r ? COLORS.primary : COLORS.border }}
                         onPress={() => setNewRole(r)}
                       >
-                        <Text style={[styles.roleTabText, newRole === r && styles.roleTabTextActive]}>
+                        <Text className="text-xs font-bold" style={{ color: newRole === r ? COLORS.onPrimary : COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                           {r.toUpperCase()}
                         </Text>
                       </TouchableOpacity>
@@ -675,11 +399,11 @@ export default function PersonnelScreen() {
                 </View>
 
                 {newRole !== 'rider' && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>DEPARTMENT (OPTIONAL)</Text>
-                    <TextInput 
-                      style={styles.input} 
-                      value={newDepartment} 
+                  <View className="mb-5">
+                    <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>DEPARTMENT (OPTIONAL)</Text>
+                    <TextInput
+                      className="h-[52px] rounded-xl border px-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.foreground }}
+                      value={newDepartment}
                       onChangeText={setNewDepartment}
                       placeholder="e.g. Logistics"
                       placeholderTextColor={COLORS.muted}
@@ -687,33 +411,33 @@ export default function PersonnelScreen() {
                   </View>
                 )}
 
-                <TouchableOpacity 
-                  style={styles.submitButton} 
+                <TouchableOpacity
+                  className="mt-6 h-[52px] items-center justify-center rounded-xl" style={{ backgroundColor: COLORS.accent, marginTop: SPACING.xl }}
                   onPress={handleCreateSubmit}
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
                     <ActivityIndicator color={COLORS.onPrimary} />
                   ) : (
-                    <Text style={styles.submitButtonText}>PROVISION ACCOUNT</Text>
+                    <Text className="text-base font-bold" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>PROVISION ACCOUNT</Text>
                   )}
                 </TouchableOpacity>
               </>
             ) : (
-              <View style={styles.successContainer}>
-                <View style={styles.successIcon}>
+              <View className="items-center py-6" style={{ paddingVertical: SPACING.xl }}>
+                <View className="mb-6" style={{ marginBottom: SPACING.lg }}>
                   <MaterialIcons name="check-circle" size={64} color={COLORS.success} />
                 </View>
-                <Text style={styles.successTitle}>Account Provisioned</Text>
-                <Text style={styles.successSubtitle}>Please securely share the temporary password with the user. They will be forced to change it upon first login.</Text>
-                
-                <View style={styles.passwordBox}>
-                  <Text style={styles.passwordLabel}>TEMPORARY PASSWORD</Text>
-                  <Text style={styles.passwordValue} selectable>{tempPassword}</Text>
+                <Text className="mb-2 text-xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Account Provisioned</Text>
+                <Text className="mb-6 px-4 text-center text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium, marginBottom: SPACING.xl, paddingHorizontal: SPACING.lg }}>Please securely share the temporary password with the user. They will be forced to change it upon first login.</Text>
+
+                <View className="mb-6 w-full items-center rounded-xl border p-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, padding: SPACING.lg, marginBottom: SPACING.xl }}>
+                  <Text className="mb-2 text-[10px] font-bold tracking-widest" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>TEMPORARY PASSWORD</Text>
+                  <Text className="text-2xl tracking-widest" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.monoMedium }} selectable>{tempPassword}</Text>
                 </View>
 
-                <TouchableOpacity style={styles.submitButton} onPress={closeCreateWizard}>
-                  <Text style={styles.submitButtonText}>DONE</Text>
+                <TouchableOpacity className="mt-6 h-[52px] w-full items-center justify-center rounded-xl" style={{ backgroundColor: COLORS.accent }} onPress={closeCreateWizard}>
+                  <Text className="text-base font-bold" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>DONE</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -723,14 +447,14 @@ export default function PersonnelScreen() {
 
       {/* --- DETAIL & MANAGEMENT MODAL --- */}
       <Modal visible={detailModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="max-h-[90%] rounded-t-3xl p-6 pb-10" style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.modal, borderTopRightRadius: RADIUS.modal }}>
             {selectedUser && (
               <>
-                <View style={styles.modalHeader}>
+                <View className="mb-6 flex-row items-start justify-between">
                   <View>
-                    <Text style={styles.modalTitle}>{selectedUser.name}</Text>
-                    <Text style={styles.detailIdText}>{selectedUser.id}</Text>
+                    <Text className="text-xl font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedUser.name}</Text>
+                    <Text className="mt-1 text-xs" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.mono }}>{selectedUser.id}</Text>
                   </View>
                   <TouchableOpacity onPress={closeDetailWizard} style={{ padding: 4 }}>
                     <MaterialIcons name="close" size={24} color={COLORS.muted} />
@@ -739,127 +463,125 @@ export default function PersonnelScreen() {
 
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {tempPassword ? (
-                    <View style={styles.passwordBox}>
-                      <Text style={styles.passwordLabel}>NEW TEMPORARY PASSWORD</Text>
-                      <Text style={styles.passwordValue} selectable>{tempPassword}</Text>
-                      <Text style={[styles.successSubtitle, { marginTop: 8 }]}>Copy and share this securely.</Text>
+                    <View className="mb-6 w-full items-center rounded-xl border p-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, padding: SPACING.lg, marginBottom: SPACING.xl }}>
+                      <Text className="mb-2 text-[10px] font-bold tracking-widest" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>NEW TEMPORARY PASSWORD</Text>
+                      <Text className="text-2xl tracking-widest" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.monoMedium }} selectable>{tempPassword}</Text>
+                      <Text className="mt-2 text-center text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Copy and share this securely.</Text>
                     </View>
                   ) : null}
 
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionTitle}>Account Details</Text>
+                  <View className="mb-4 mt-2 flex-row items-center justify-between">
+                    <Text className="text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Account Details</Text>
                     <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
-                      <Text style={styles.editText}>{isEditing ? 'Cancel' : 'Edit'}</Text>
+                      <Text className="text-sm font-bold" style={{ color: COLORS.accentBlue, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{isEditing ? 'Cancel' : 'Edit'}</Text>
                     </TouchableOpacity>
                   </View>
 
                   {isEditing ? (
-                    <View style={styles.editCard}>
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.label}>ROLE</Text>
-                        <View style={styles.roleTabs}>
+                    <View className="rounded-xl border p-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}>
+                      <View className="mb-5">
+                        <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>ROLE</Text>
+                        <View className="flex-row gap-2">
                           {(['rider', 'personnel', 'admin'] as const).map(r => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               key={r}
-                              style={[styles.roleTab, editRole === r && styles.roleTabActive]}
+                              className="h-11 flex-1 items-center justify-center rounded-lg border" style={{ backgroundColor: editRole === r ? COLORS.primary : COLORS.background, borderColor: editRole === r ? COLORS.primary : COLORS.border }}
                               onPress={() => setEditRole(r)}
                             >
-                              <Text style={[styles.roleTabText, editRole === r && styles.roleTabTextActive]}>
+                              <Text className="text-xs font-bold" style={{ color: editRole === r ? COLORS.onPrimary : COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                                 {r.toUpperCase()}
                               </Text>
                             </TouchableOpacity>
                           ))}
                         </View>
                       </View>
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.label}>DEPARTMENT</Text>
-                        <TextInput 
-                          style={styles.input} 
-                          value={editDepartment} 
+                      <View className="mb-5">
+                        <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>DEPARTMENT</Text>
+                        <TextInput
+                          className="h-[52px] rounded-xl border px-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.foreground }}
+                          value={editDepartment}
                           onChangeText={setEditDepartment}
                           placeholder="e.g. Logistics"
                           placeholderTextColor={COLORS.muted}
                         />
                       </View>
-                      <TouchableOpacity 
-                        style={[styles.submitButton, { marginTop: 0, height: 48 }]} 
+                      <TouchableOpacity
+                        className="h-12 items-center justify-center rounded-xl" style={{ backgroundColor: COLORS.accent }}
                         onPress={handleSaveEdits}
                         disabled={isActionLoading}
                       >
-                        {isActionLoading ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.submitButtonText}>SAVE CHANGES</Text>}
+                        {isActionLoading ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text className="text-base font-bold" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>SAVE CHANGES</Text>}
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <View style={styles.detailGrid}>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Email</Text>
-                        <Text style={styles.detailValue}>{selectedUser.email}</Text>
+                    <View className="rounded-xl border p-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}>
+                      <View className="flex-row justify-between border-b py-2" style={{ borderBottomColor: COLORS.border }}>
+                        <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Email</Text>
+                        <Text className="text-sm font-bold" style={{ color: COLORS.foreground, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedUser.email}</Text>
                       </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Role</Text>
-                        <Text style={styles.detailValue}>{selectedUser.role.toUpperCase()}</Text>
+                      <View className="flex-row justify-between border-b py-2" style={{ borderBottomColor: COLORS.border }}>
+                        <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Role</Text>
+                        <Text className="text-sm font-bold" style={{ color: COLORS.foreground, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedUser.role.toUpperCase()}</Text>
                       </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Department</Text>
-                        <Text style={styles.detailValue}>{selectedUser.department || 'N/A'}</Text>
+                      <View className="flex-row justify-between border-b py-2" style={{ borderBottomColor: COLORS.border }}>
+                        <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Department</Text>
+                        <Text className="text-sm font-bold" style={{ color: COLORS.foreground, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{selectedUser.department || 'N/A'}</Text>
                       </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Status</Text>
-                        <Text style={[styles.detailValue, { 
-                          color: selectedUser.status === 'suspended' ? COLORS.danger : COLORS.success 
-                        }]}>
+                      <View className="flex-row justify-between py-2">
+                        <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Status</Text>
+                        <Text className="text-sm font-bold" style={{ color: selectedUser.status === 'suspended' ? COLORS.danger : COLORS.success, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                           {selectedUser.status.toUpperCase()}
                         </Text>
                       </View>
                     </View>
                   )}
 
-                  <Text style={[styles.sectionTitle, { color: COLORS.danger, marginTop: 24 }]}>Danger Zone</Text>
-                  <View style={styles.dangerCard}>
-                    <TouchableOpacity style={styles.dangerActionRow} onPress={handleResetPassword} disabled={isActionLoading}>
+                  <Text className="mb-4 mt-6 text-base font-bold" style={{ color: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Danger Zone</Text>
+                  <View className="mt-2 rounded-xl border" style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA' }}>
+                    <TouchableOpacity className="flex-row items-center border-b p-4" style={{ borderBottomColor: '#FECACA' }} onPress={handleResetPassword} disabled={isActionLoading}>
                       <MaterialIcons name="vpn-key" size={20} color={COLORS.danger} />
-                      <Text style={styles.dangerActionText}>Force Password Reset</Text>
+                      <Text className="ml-3 text-sm font-bold" style={{ color: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Force Password Reset</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.dangerActionRow} onPress={handleResetMFA} disabled={isActionLoading}>
+                    <TouchableOpacity className="flex-row items-center border-b p-4" style={{ borderBottomColor: '#FECACA' }} onPress={handleResetMFA} disabled={isActionLoading}>
                       <MaterialIcons name="phonelink-erase" size={20} color={COLORS.danger} />
-                      <Text style={styles.dangerActionText}>Reset MFA Device</Text>
+                      <Text className="ml-3 text-sm font-bold" style={{ color: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Reset MFA Device</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.dangerActionRow} onPress={handleToggleStatus} disabled={isActionLoading}>
+                    <TouchableOpacity className="flex-row items-center border-b p-4" style={{ borderBottomColor: '#FECACA' }} onPress={handleToggleStatus} disabled={isActionLoading}>
                       <MaterialIcons name={selectedUser.status === 'suspended' ? 'play-circle-outline' : 'pause-circle-outline'} size={20} color={COLORS.danger} />
-                      <Text style={styles.dangerActionText}>
+                      <Text className="ml-3 text-sm font-bold" style={{ color: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
                         {selectedUser.status === 'suspended' ? 'Activate Account' : 'Suspend Account'}
                       </Text>
                     </TouchableOpacity>
-                    
+
                     {isDeleting ? (
-                      <View style={styles.deleteConfirmBox}>
-                        <Text style={styles.label}>TYPE "{selectedUser.name.toUpperCase()}" TO CONFIRM</Text>
-                        <TextInput 
-                          style={[styles.input, { borderColor: COLORS.danger, height: 44, marginBottom: 8 }]} 
+                      <View className="rounded-b-xl bg-white p-4">
+                        <Text className="mb-2 text-[10px] font-bold tracking-wide" style={{ color: COLORS.muted, fontFamily: TYPOGRAPHY.fontFamily.bold }}>TYPE &quot;{selectedUser.name.toUpperCase()}&quot; TO CONFIRM</Text>
+                        <TextInput
+                          className="mb-2 h-11 rounded-xl border px-4" style={{ backgroundColor: COLORS.background, borderColor: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.foreground }}
                           value={deleteConfirmText}
                           onChangeText={setDeleteConfirmText}
                           placeholder={selectedUser.name}
                         />
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity 
-                            style={[styles.roleTab, { flex: 1, borderColor: COLORS.border }]} 
+                        <View className="flex-row gap-2">
+                          <TouchableOpacity
+                            className="h-11 flex-1 items-center justify-center rounded-lg border" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}
                             onPress={() => { setIsDeleting(false); setDeleteConfirmText(''); }}
                           >
-                            <Text style={styles.roleTabText}>CANCEL</Text>
+                            <Text className="text-xs font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>CANCEL</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.roleTab, { flex: 1, backgroundColor: COLORS.danger, borderColor: COLORS.danger }]} 
+                          <TouchableOpacity
+                            className="h-11 flex-1 items-center justify-center rounded-lg border" style={{ backgroundColor: COLORS.danger, borderColor: COLORS.danger }}
                             onPress={handleDeleteAccount}
                             disabled={isActionLoading}
                           >
-                            <Text style={[styles.roleTabText, { color: '#FFF' }]}>DELETE</Text>
+                            <Text className="text-xs font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.bold }}>DELETE</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
                     ) : (
-                      <TouchableOpacity style={[styles.dangerActionRow, { borderBottomWidth: 0 }]} onPress={() => setIsDeleting(true)}>
+                      <TouchableOpacity className="flex-row items-center p-4" onPress={() => setIsDeleting(true)}>
                         <MaterialIcons name="delete-forever" size={20} color={COLORS.danger} />
-                        <Text style={styles.dangerActionText}>Permanently Delete Account</Text>
+                        <Text className="ml-3 text-sm font-bold" style={{ color: COLORS.danger, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Permanently Delete Account</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -872,4 +594,3 @@ export default function PersonnelScreen() {
     </SafeAreaView>
   );
 }
-

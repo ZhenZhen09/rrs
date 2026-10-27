@@ -16,7 +16,7 @@ describe('rider push event helpers', () => {
       ['notifications', 'rider-1'],
       ['tasks', 'rider-1'],
       ['historyTasks', 'rider-1'],
-      ['job', 'job-1'],
+      ['job', 'rider-1', 'job-1'],
     ]);
   });
 

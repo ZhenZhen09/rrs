@@ -1,8 +1,18 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { io, Socket } from 'socket.io-client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONFIG } from '../constants/Config';
 import { useAuth } from './AuthContext';
+import { useRealTimeStore } from '../store/useRealTimeStore';
+import { Platform } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
+
+const isAndroidExpoGo = Platform.OS === 'android' && isRunningInExpoGo();
+// The package barrel registers a push-token listener at module load. Android Expo Go
+// throws from that listener, so notification tray alerts are skipped there.
+const Notifications = isAndroidExpoGo
+  ? undefined
+  : (require('expo-notifications') as typeof import('expo-notifications'));
 
 export interface RiderLocation {
   lat: number;
@@ -20,46 +30,30 @@ export interface RealTimeToast {
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
-interface RealTimeContextType {
-  riderLocations: Map<string, RiderLocation>;
-  riderPresence: Map<string, PresenceStatus>;
-  isConnected: boolean;
-  lastRequestUpdate: number;
-  toast: RealTimeToast | null;
-  showToast: (message: string, type?: RealTimeToast['type']) => void;
-  hideToast: () => void;
-}
-
-const RealTimeContext = createContext<RealTimeContextType | undefined>(undefined);
-
 export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, token, isAuthenticated } = useAuth();
-  const [riderLocations, setRiderLocations] = useState<Map<string, RiderLocation>>(new Map());
-  const [riderPresence, setRiderPresence] = useState<Map<string, PresenceStatus>>(new Map());
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastRequestUpdate, setLastRequestUpdate] = useState<number>(0);
-  const [toast, setToast] = useState<RealTimeToast | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  const showToast = (message: string, type: RealTimeToast['type'] = 'info') => {
-    const id = Date.now().toString();
-    setToast({ id, message, type });
-  };
-
-  const hideToast = () => setToast(null);
+  const {
+    setRiderLocations,
+    setRiderPresence,
+    setConnectionState,
+    triggerRequestUpdate,
+    showToast,
+  } = useRealTimeStore();
 
   useEffect(() => {
     let socket: Socket | null = null;
+    let appStateSubscription: { remove: () => void } | null = null;
 
     if (!isAuthenticated || !token || !user) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
-      setIsConnected(false);
-      setRiderLocations(new Map());
+      setConnectionState(false);
+      setRiderLocations(() => new Map());
       setRiderPresence(new Map());
-      setLastRequestUpdate(0);
       return;
     }
 
@@ -69,7 +63,7 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         socket = io(CONFIG.SOCKET_URL, {
           transports: ['websocket'],
           autoConnect: true,
-          auth: { token }, // Initial token
+          auth: { token },
           reconnection: true,
           reconnectionAttempts: 10,
           reconnectionDelay: 2000
@@ -79,8 +73,8 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         socket.on('connect', () => {
           console.log('Admin socket connected');
-          setIsConnected(true);
-          setLastRequestUpdate(Date.now());
+          setConnectionState(true);
+          triggerRequestUpdate();
           
           if (user.role === 'admin') {
             console.log('Joining admin-room');
@@ -92,17 +86,13 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         socket.on('disconnect', (reason) => {
           console.log('Admin socket disconnected:', reason);
-          setIsConnected(false);
+          setConnectionState(false);
         });
 
-        // Ensure reconnection attempts use the latest token if it changed
         socket.on('connect_error', (error) => {
           console.error('Socket connection error:', error.message);
-          
           if (error.message === 'Authentication error: Invalid token') {
             console.log('Socket token rejected by server.');
-            // We could trigger a logout here if we're sure it's invalid,
-            // but let's just log it for now to avoid aggressive logouts.
           }
         });
 
@@ -129,19 +119,43 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
 
         socket.on('rider-presence-changed', (data: { riderId: string; status: PresenceStatus }) => {
-          setRiderPresence((prev) => {
-            const next = new Map(prev);
-            next.set(data.riderId, data.status);
-            return next;
-          });
+          // Inzustand we need to pass a new map. Wait, let's use useRealTimeStore.getState()
+          const currentPresence = useRealTimeStore.getState().riderPresence;
+          const next = new Map(currentPresence);
+          next.set(data.riderId, data.status);
+          setRiderPresence(next);
         });
+
+        const triggerPushNotification = async (title: string, body: string, data: Record<string, string> = {}) => {
+          // The in-app toast above remains available in Expo Go; skip system alerts.
+          if (!Notifications) return;
+
+          try {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title,
+                body,
+                sound: 'default',
+                data,
+              },
+              trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                date: new Date(),
+                channelId: 'delivery-updates',
+              },
+            });
+          } catch (error) {
+            console.log('Notification skipped (unsupported in Expo Go Android):', title);
+          }
+        };
 
         socket.on('request-updated', (data: any) => {
           console.log('Request updated event received');
           const id = data.request_id?.slice(-6).toUpperCase() || '---';
           const status = data.status?.replace('_', ' ').toUpperCase() || 'UPDATED';
           showToast(`Request #${id} is now ${status}`, 'info');
-          setLastRequestUpdate(Date.now());
+          triggerPushNotification('Request Updated', `Request #${id} is now ${status}`);
+          triggerRequestUpdate();
         });
 
         socket.on('delivery-status-updated', (data: any) => {
@@ -168,33 +182,48 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           } else {
             showToast(`Delivery #${id}: ${status}`, type);
           }
-          setLastRequestUpdate(Date.now());
+          triggerPushNotification(
+            `Delivery ${status}`,
+            `Delivery #${id} status changed to ${status}`,
+            { requestId: data.request_id || '' },
+          );
+          triggerRequestUpdate();
         });
 
         socket.on('notification-added', (data: any) => {
           console.log('New notification added event received');
           if (data.message) {
             showToast(data.message, 'info');
+            triggerPushNotification('New Notification', data.message);
           }
-          setLastRequestUpdate(Date.now());
+          triggerRequestUpdate();
         });
 
         socket.on('new_assignment', (data: any) => {
           console.log('New assignment event received');
           const id = data.request_id?.slice(-6).toUpperCase() || '---';
           showToast(`Job #${id} assigned to ${data.rider_name || 'Rider'}`, 'success');
-          setLastRequestUpdate(Date.now());
+          triggerPushNotification('New Assignment', `Job #${id} assigned to ${data.rider_name || 'Rider'}`);
+          triggerRequestUpdate();
         });
 
         socket.on('exception-detected', (data: any) => {
           console.log('System exception detected');
           showToast(`ALERT: Exception on Req #${data.requestId?.slice(-6).toUpperCase()}`, 'warning');
-          setLastRequestUpdate(Date.now());
+          triggerPushNotification('⚠️ System Alert', `Exception on Request #${data.requestId?.slice(-6).toUpperCase()}`);
+          triggerRequestUpdate();
         });
 
         socket.on('exception-cleared', (data: any) => {
           console.log('System exception cleared');
-          setLastRequestUpdate(Date.now());
+          triggerRequestUpdate();
+        });
+
+        appStateSubscription = AppState.addEventListener('change', (nextState) => {
+          if (nextState === 'active') {
+            socket?.connect();
+            triggerRequestUpdate();
+          }
         });
       } catch (err) {
         console.error('Failed to initialize socket:', err);
@@ -204,24 +233,13 @@ export const RealTimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     initSocket();
 
     return () => {
+      appStateSubscription?.remove();
       if (socket) {
         socket.disconnect();
       }
       socketRef.current = null;
     };
-  }, [isAuthenticated, token, user]);
+  }, [isAuthenticated, token, user, setRiderLocations, setRiderPresence, setConnectionState, triggerRequestUpdate, showToast]);
 
-  return (
-    <RealTimeContext.Provider value={{ riderLocations, riderPresence, isConnected, lastRequestUpdate, toast, showToast, hideToast }}>
-      {children}
-    </RealTimeContext.Provider>
-  );
-};
-
-export const useRealTime = () => {
-  const context = useContext(RealTimeContext);
-  if (context === undefined) {
-    throw new Error('useRealTime must be used within a RealTimeProvider');
-  }
-  return context;
+  return <>{children}</>;
 };

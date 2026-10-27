@@ -12,8 +12,11 @@ import { ShiftControlDrawer } from '@/components/ShiftControlDrawer';
 import { TaskTabEmptyState } from '@/components/TaskTabEmptyState';
 import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
 import { OverdueTaskCard } from '@/components/jobs/OverdueTaskCard';
+import { useLocation } from '@/context/LocationContext';
+import { ShiftTaskAccessNotice } from '@/components/jobs/ShiftTaskAccessNotice';
 
 export default function OverdueScreen() {
+  const { isOnDuty, hasOpenShift, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
   // --- SENIOR REFACTOR: USE REACTIVE HOOK ---
   const { 
     user,
@@ -31,14 +34,15 @@ export default function OverdueScreen() {
     router
   } = useDashboard();
 
-  const tasks = allTasks
+  const canShowAssignments = isShiftStatusReady && hasOpenShift && isOnDuty && !shiftHoursLocked && isNetworkReachable !== false;
+  const tasks = canShowAssignments ? allTasks
     .filter(req => getRiderTaskTab(req) === 'overdue')
     .sort((a, b) => {
       const orderA = a.queue_order || 999;
       const orderB = b.queue_order || 999;
       if (orderA !== orderB) return orderA - orderB;
       return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-    });
+    }) : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -62,20 +66,25 @@ export default function OverdueScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {loading && !refreshing ? (
+        {canShowAssignments && loading && !refreshing ? (
           <>
             <SkeletonCard />
             <SkeletonCard />
           </>
+        ) : !canShowAssignments ? (
+          <ShiftTaskAccessNotice title="Overdue tasks are locked" message={shiftHoursLocked ? 'Shift hours are closed. Return during your next shift.' : 'Press On Duty to record attendance and reveal your overdue assignments.'} />
         ) : tasks.length === 0 ? (
           <TaskTabEmptyState
             variant="overdue"
             icon={<MaterialIcons name="check-circle" size={40} color="#10B981" />}
-            title="All caught up!"
-            message="You have no overdue tasks."
+            title={isShiftStatusReady ? isOnDuty ? 'All caught up!' : hasOpenShift ? 'No overdue tasks' : 'Start your shift to see tasks' : 'Checking your shift status'}
+            message={isShiftStatusReady
+              ? 'You have no overdue tasks.'
+              : 'Tasks will appear after the server confirms your shift and availability.'}
           />
         ) : (
-          tasks.map((task, index) => {
+          <>
+          {tasks.map((task, index) => {
             const isLocked = isTaskLocked(task, allTasks);
             
             return (
@@ -85,10 +94,12 @@ export default function OverdueScreen() {
                 index={index}
                 allTasks={allTasks}
                 isLocked={isLocked}
+                isAvailable={isOnDuty || task.delivery_status === 'in_progress'}
                 onPress={() => router.push(`/job/${task.request_id}`)}
               />
             );
-          })
+          })}
+          </>
         )}
       </ScrollView>
 

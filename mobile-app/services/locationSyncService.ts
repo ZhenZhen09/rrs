@@ -22,7 +22,7 @@ export const flushLocationOutbox = async (trigger: LocationSyncTrigger) => {
     ]);
     if (!token || !user?.id) return { accepted: 0, rejected: 0 };
 
-    const events = await getPendingLocationEvents(50);
+    const events = await getPendingLocationEvents(user.id, 50);
     if (events.length === 0) return { accepted: 0, rejected: 0 };
 
     const riderEvents = events.filter((event) => event.riderId === user.id);
@@ -39,16 +39,20 @@ export const flushLocationOutbox = async (trigger: LocationSyncTrigger) => {
 
       await acknowledgeLocationEvents(accepted);
       if (rejected.length > 0) {
-        await markLocationEventsRejected(
-          rejected.map((item: { eventId: string }) => item.eventId),
-          rejected.map((item: { reason: string }) => item.reason).join(', '),
-        );
+        for (const item of rejected as Array<{ eventId: string; reason: string }>) {
+          await markLocationEventsRejected([item.eventId], item.reason || 'Location event rejected by the server');
+        }
       }
 
       return { accepted: accepted.length, rejected: rejected.length };
     } catch (error: any) {
+      const status = error?.response?.status;
+      if (status >= 400 && status < 500 && status !== 429) {
+        await markLocationEventsRejected(riderEvents.map((event) => event.eventId), error?.response?.data?.error || error.message || 'Location update rejected');
+        return { accepted: 0, rejected: riderEvents.length };
+      }
       await markLocationEventsForRetry(
-          riderEvents.map((event) => event.eventId),
+        riderEvents.map((event) => event.eventId),
         error?.message || 'location sync failed',
       );
       return { accepted: 0, rejected: 0 };

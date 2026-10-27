@@ -17,5 +17,5 @@ export function invalidateRiderPushQueries(
   queryClient.invalidateQueries({ queryKey: ['tasks', userId] });
   queryClient.invalidateQueries({ queryKey: ['historyTasks', userId] });
   const requestId = data.request_id || data.requestId;
-  if (requestId) queryClient.invalidateQueries({ queryKey: ['job', String(requestId)] });
+  if (requestId) queryClient.invalidateQueries({ queryKey: ['job', userId, String(requestId)] });
 }

@@ -3,23 +3,27 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Linking, Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJobDetails, updateJobStatus, getTasks, getDeliveryEta } from '@/services/apiService';
+import { getJobDetails, updateJobStatus, getTasks, getDeliveryEta, getJobQueryKey, getCachedJobSnapshot } from '@/services/apiService';
 import { useAuth } from '@/context/AuthContext';
 import { useLocation } from '@/context/LocationContext';
 import { Job } from '@/types';
 import { compareRiderQueueTasks } from '@/utils/taskFilters';
 import { Config } from '@/constants/Config';
 
-import NetInfo from '@react-native-community/netinfo';
 import { EtaStatus, RouteEstimate } from '@/utils/eta';
 import { updateActiveDeliveryNotification } from '@/services/deliveryNotifications';
+import { getGenericLocationQueueSummary, getRiderStatusActions } from '@/services/syncQueue';
+import { getLocationOutboxSummary } from '@/services/locationOutbox';
+import { useConnection } from '@/context/ConnectionContext';
+import { getRiderStatusSyncState, type JobSyncStatus } from '@/utils/riderStatusSync';
 
-export type JobSyncStatus = 'synced' | 'pending' | 'verifying' | 'sync_pending' | 'sync_error';
+export type { JobSyncStatus } from '@/utils/riderStatusSync';
 
 export const useJobDetails = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { state: connectionState } = useConnection();
   const { startTracking, stopTracking, isTracking, lastLocation } = useLocation();
   const queryClient = useQueryClient();
   
@@ -28,6 +32,7 @@ export const useJobDetails = () => {
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [customRemark, setCustomRemark] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<JobSyncStatus>('synced');
+  const [cachedSavedAt, setCachedSavedAt] = useState<number | null>(null);
   const [isSelfUpdated, setIsSelfUpdated] = useState(false);
   const [eta, setEta] = useState<RouteEstimate | null>(null);
   const [etaLocationAt, setEtaLocationAt] = useState<number | null>(null);
@@ -42,9 +47,11 @@ export const useJobDetails = () => {
     isLoading: loading,
     refetch: fetchJobDetails,
   } = useQuery({
-    queryKey: ['job', id],
-    queryFn: () => getJobDetails(id as string),
-    enabled: !!id,
+    queryKey: getJobQueryKey(user?.id || '', String(id || '')),
+    queryFn: () => getJobDetails(id as string, user?.id),
+    enabled: Boolean(id && user?.id),
+    initialData: () => queryClient.getQueryData<Job[]>(['tasks', user?.id])
+      ?.find((task) => String(task.request_id) === String(id)),
     staleTime: 30000, // 30 seconds
   });
 
@@ -54,7 +61,7 @@ export const useJobDetails = () => {
    */
   const { data: allActiveTasks = [] } = useQuery<Job[]>({
     queryKey: ['tasks', user?.id],
-    queryFn: getTasks,
+    queryFn: () => getTasks(user!.id),
     enabled: !!user?.id,
   });
 
@@ -106,8 +113,8 @@ export const useJobDetails = () => {
 
   // Use TanStack Mutation for Status Updates (Optimistic UI)
   const updateMutation = useMutation({
-    mutationFn: ({ status, remark }: { status: string; remark: string }) => 
-      updateJobStatus(id as string, status, remark),
+    mutationFn: ({ status, remark }: { status: string; remark: string }) =>
+      updateJobStatus(id as string, status, remark, user?.id),
     
     // When mutate is called:
     onMutate: async (newStatusData) => {
@@ -115,14 +122,14 @@ export const useJobDetails = () => {
       setIsSelfUpdated(true);
       
       // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
-      await queryClient.cancelQueries({ queryKey: ['job', id] });
+      await queryClient.cancelQueries({ queryKey: getJobQueryKey(user?.id || '', String(id || '')) });
 
       // Snapshot the previous value
-      const previousJob = queryClient.getQueryData<Job>(['job', id]);
+      const previousJob = queryClient.getQueryData<Job>(getJobQueryKey(user?.id || '', String(id || '')));
 
       // Optimistically update to the new value
       if (previousJob) {
-        queryClient.setQueryData(['job', id], {
+        queryClient.setQueryData(getJobQueryKey(user?.id || '', String(id || '')), {
           ...previousJob,
           delivery_status: newStatusData.status
         });
@@ -136,10 +143,10 @@ export const useJobDetails = () => {
       
       // Attempt to verify the actual status from server before assuming failure
       try {
-        const latestJob = await getJobDetails(id as string);
+        const latestJob = await getJobDetails(id as string, user?.id);
         if (latestJob.delivery_status === newStatusData.status) {
           // It actually succeeded on the server!
-          queryClient.setQueryData(['job', id], latestJob);
+          queryClient.setQueryData(getJobQueryKey(user?.id || '', String(id || '')), latestJob);
           setSyncStatus('synced');
           return;
         }
@@ -153,11 +160,12 @@ export const useJobDetails = () => {
     },
     // Always refetch after error or success to ensure we have the correct server state
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['job', id] });
+      queryClient.invalidateQueries({ queryKey: getJobQueryKey(user?.id || '', String(id || '')) });
       queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['riderStatusActions', user?.id, id] });
     },
-    onSuccess: (data, variables) => {
-      setSyncStatus('synced');
+    onSuccess: (_data, variables) => {
+      setSyncStatus('sync_pending');
       if (variables.status === 'in_progress') {
         startTracking(id as string);
       } else if (['completed', 'failed', 'cancelled'].includes(variables.status)) {
@@ -167,6 +175,48 @@ export const useJobDetails = () => {
       // Small success feedback is fine, but not blocking
     }
   });
+
+  const { data: riderStatusActions = [] } = useQuery({
+    queryKey: ['riderStatusActions', user?.id, id],
+    queryFn: () => getRiderStatusActions(user!.id, String(id)),
+    enabled: Boolean(user?.id && id),
+    refetchInterval: (query) => query.state.data?.some((action) => action.state === 'pending' || action.state === 'syncing') ? 3000 : false,
+  });
+  const statusActionError = riderStatusActions.find((action) => action.state === 'needs_attention')?.last_error || null;
+  const { data: locationOutboxSummary } = useQuery({
+    queryKey: ['locationOutbox', user?.id],
+    queryFn: async () => {
+      const [outbox, genericQueue] = await Promise.all([
+        getLocationOutboxSummary(user!.id), getGenericLocationQueueSummary(user!.id),
+      ]);
+      return {
+        pending: outbox.pending + genericQueue.pending,
+        rejected: outbox.rejected + genericQueue.rejected,
+        lastError: outbox.lastError || genericQueue.lastError,
+      };
+    },
+    enabled: Boolean(user?.id),
+    refetchInterval: 5000,
+  });
+
+  useEffect(() => {
+    const nextStatus = getRiderStatusSyncState(riderStatusActions);
+    if (nextStatus) setSyncStatus(nextStatus);
+  }, [riderStatusActions]);
+
+  useEffect(() => {
+    let active = true;
+    if (!user?.id || !id) {
+      setCachedSavedAt(null);
+      return () => { active = false; };
+    }
+    void getCachedJobSnapshot(user.id, String(id)).then((snapshot) => {
+      if (active) setCachedSavedAt(snapshot.savedAt);
+    }).catch(() => {
+      if (active) setCachedSavedAt(null);
+    });
+    return () => { active = false; };
+  }, [user?.id, id, jobData]);
 
   const updating = updateMutation.isPending || syncStatus === 'pending' || syncStatus === 'verifying';
   const isStartingDelivery = updateMutation.isPending && updateMutation.variables?.status === 'in_progress';
@@ -316,15 +366,11 @@ export const useJobDetails = () => {
 
   // Auto-retry when connection returns
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
-      if (state.isConnected && state.isInternetReachable && syncStatus === 'sync_pending') {
-        setSyncStatus('verifying');
-        fetchJobDetails();
-      }
-    });
-
-    return () => unsubscribe();
-  }, [syncStatus, fetchJobDetails]);
+    if (connectionState === 'online' && syncStatus === 'sync_pending') {
+      setSyncStatus('verifying');
+      void fetchJobDetails();
+    }
+  }, [connectionState, syncStatus, fetchJobDetails]);
 
   return {
     job,
@@ -346,6 +392,10 @@ export const useJobDetails = () => {
     callPickupContact,
     router,
     syncStatus,
+    hasStatusAction: riderStatusActions.length > 0,
+    statusActionError,
+    cachedSavedAt,
+    locationOutboxSummary,
     isTracking,
     isStartingDelivery,
     fetchJobDetails,

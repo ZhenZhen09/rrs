@@ -41,7 +41,27 @@ const setupSchema = async (database: SQLite.SQLiteDatabase) => {
       data TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS rider_status_actions (
+      operation_id TEXT PRIMARY KEY,
+      rider_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      remark TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'pending',
+      last_error TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rider_status_actions_owner
+      ON rider_status_actions(rider_id, state, created_at);
   `);
+
+  await database.runAsync("UPDATE rider_status_actions SET state='pending' WHERE state='syncing'");
+  await database.runAsync("UPDATE sync_queue SET status='pending' WHERE status='syncing'");
+  await database.runAsync(`UPDATE sync_queue SET status='failed', last_error='Legacy rider status action requires review'
+    WHERE endpoint LIKE '/api/requests/%/status' AND status IN ('pending', 'syncing')`);
 
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS active_tracking_session (

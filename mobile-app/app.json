@@ -38,6 +38,7 @@
     },
     "plugins": [
       "./plugins/withFcmNotificationColorManifest",
+      "./plugins/withAndroidWorkManagerR8Rules",
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
@@ -59,7 +60,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/errands-rider-wordmark.png",
+          "image": "./assets/images/errands-parcel-mark.png",
           "imageWidth": 240,
           "resizeMode": "contain",
           "backgroundColor": "#F8FAFC"
@@ -77,9 +78,6 @@
       "reactCompiler": true
     },
     "extra": {
-      "bugsnag": {
-        "apiKey": "f186e0505f78cc13537a0c788f408201"
-      },
       "router": {},
       "eas": {
         "projectId": "4d83c756-c551-4da9-aca2-1ead526e5361"

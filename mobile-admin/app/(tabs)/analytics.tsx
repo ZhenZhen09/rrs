@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { BarChart, PieChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -19,48 +20,6 @@ const TIMEFRAMES = [
 export default function AnalyticsDashboard() {
   const { theme } = useTheme();
   const { COLORS, RADIUS, TYPOGRAPHY, SPACING } = theme;
-
-  const styles = React.useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-    title: { fontSize: TYPOGRAPHY.size['2xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: -0.5 },
-    subtitle: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.secondary },
-    exportBtn: { padding: 10, backgroundColor: COLORS.background, borderRadius: RADIUS.button, borderWidth: 1, borderColor: COLORS.border },
-    tabContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, padding: SPACING.sm, gap: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-    tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.sm, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
-    activeTab: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    tabText: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary },
-    activeTabText: { color: COLORS.onPrimary },
-    scrollContent: { padding: SPACING.xl },
-    loadingContainer: { marginTop: 40, alignItems: 'center' },
-    revenueCard: { backgroundColor: COLORS.primary, padding: SPACING.xl, borderRadius: RADIUS.card, marginBottom: SPACING.xl },
-    revenueLabel: { fontSize: TYPOGRAPHY.size.sm, color: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium },
-    revenueValue: { fontSize: TYPOGRAPHY.size['3xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.onPrimary, marginVertical: 8 },
-    growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.sm, alignSelf: 'flex-start' },
-    growthText: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.success, marginLeft: 4 },
-    sectionTitle: { fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginBottom: 16, marginTop: 8 },
-    chartPlaceholder: { backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: SPACING.xl, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.xl },
-    chartHeader: { marginBottom: 20 },
-    chartTitle: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary },
-    chartScrollWrapper: { marginLeft: -10, marginRight: -10 },
-    barContainer: { flexDirection: 'row', alignItems: 'flex-end', height: 160, paddingHorizontal: 10 },
-    barWrapper: { alignItems: 'center', marginHorizontal: 8, width: 30 },
-    barTooltip: { position: 'absolute', top: -20, backgroundColor: COLORS.muted, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
-    barTooltipText: { color: '#FFF', fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold },
-    bar: { width: 16, backgroundColor: COLORS.primary, borderRadius: RADIUS.sm, marginTop: 24 },
-    barLabel: { fontSize: TYPOGRAPHY.size.xs - 2, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, marginTop: 8 },
-    metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 8 },
-    metricCard: { backgroundColor: COLORS.surface, width: '48%', padding: SPACING.xl, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16, alignItems: 'center' },
-    metricValue: { fontSize: TYPOGRAPHY.size.lg, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginVertical: 4 },
-    metricLabel: { fontSize: TYPOGRAPHY.size.xs - 1, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary },
-    listCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
-    listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-    locationName: { flex: 1, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginRight: 8 },
-    locationRight: { flexDirection: 'row', alignItems: 'center' },
-    locationCount: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary },
-    emptyList: { padding: 20, alignItems: 'center' },
-    emptyText: { color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium, alignSelf: 'center' },
-  }), [theme]);
 
   const [timeframe, setTimeframe] = useState('weekly');
   const [summary, setSummary] = useState<any>(null);
@@ -149,14 +108,14 @@ export default function AnalyticsDashboard() {
   const maxVolume = peakHours.length > 0 ? Math.max(...peakHours.map(p => p.volume)) : 10;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.background }} edges={['top']}>
+      <View className="flex-row items-center justify-between border-b px-6 py-4" style={{ backgroundColor: COLORS.surface, borderBottomColor: COLORS.border }}>
         <View>
-          <Text style={styles.title}>System Analytics</Text>
-          <Text style={styles.subtitle}>Performance Overview</Text>
+          <Text className="font-bold text-2xl tracking-[-0.5px]" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>System Analytics</Text>
+          <Text className="text-sm" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Performance Overview</Text>
         </View>
         <TouchableOpacity 
-          style={styles.exportBtn} 
+          className="rounded-xl border p-2.5" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}
           onPress={exportCSV} 
           disabled={isExporting || loading}
         >
@@ -164,105 +123,157 @@ export default function AnalyticsDashboard() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabContainer}>
+      <View className="flex-row gap-2 border-b p-2" style={{ backgroundColor: COLORS.surface, borderBottomColor: COLORS.border }}>
         {TIMEFRAMES.map(tf => (
           <TouchableOpacity 
             key={tf.id} 
-            style={[styles.tab, timeframe === tf.id && styles.activeTab]}
+            className="flex-1 items-center rounded-lg border py-2.5" style={{ backgroundColor: timeframe === tf.id ? COLORS.primary : COLORS.background, borderColor: timeframe === tf.id ? COLORS.primary : COLORS.border }}
             onPress={() => setTimeframe(tf.id)}
           >
-            <Text style={[styles.tabText, timeframe === tf.id && styles.activeTabText]}>
+            <Text className="text-xs font-bold" style={{ color: timeframe === tf.id ? COLORS.onPrimary : COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>
               {tf.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: SPACING.xl }} showsVerticalScrollIndicator={false}>
         {loading ? (
-          <View style={styles.loadingContainer}>
+          <View className="mt-10 items-center">
              <ActivityIndicator size="large" color={COLORS.primary} />
           </View>
         ) : (
           <>
             {/* Fleet Utilization Summary */}
-            <View style={styles.revenueCard}>
-              <Text style={styles.revenueLabel}>Fleet Utilization</Text>
-              <Text style={styles.revenueValue}>{summary?.utilization || 0}%</Text>
-              <View style={styles.growthBadge}>
+            <View className="mb-6 rounded-3xl p-6" style={{ backgroundColor: COLORS.primary }}>
+              <Text className="text-sm" style={{ color: COLORS.border, fontFamily: TYPOGRAPHY.fontFamily.medium }}>Fleet Utilization</Text>
+              <Text className="my-2 text-3xl font-bold" style={{ color: COLORS.onPrimary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{summary?.utilization || 0}%</Text>
+              <View className="flex-row items-center self-start rounded-lg px-2.5 py-1" style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)' }}>
                 <MaterialIcons name="trending-up" size={16} color={COLORS.success} />
-                <Text style={styles.growthText}>Live fleet efficiency</Text>
+                <Text className="ml-1 text-xs font-bold" style={{ color: COLORS.success, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Live fleet efficiency</Text>
               </View>
             </View>
 
             {/* Dynamic Peak Hours Chart */}
-            <Text style={styles.sectionTitle}>Peak Hours (Delivery Volume)</Text>
-            <View style={styles.chartPlaceholder}>
-              <View style={styles.chartHeader}>
-                <Text style={styles.chartTitle}>Total Requests: {summary?.counts?.total || 0}</Text>
+            <Text className="mb-4 mt-2 text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Peak Hours (Delivery Volume)</Text>
+            <View className="mb-6 rounded-2xl border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
+              <View className="mb-5">
+                <Text className="text-sm font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Total Requests: {summary?.counts?.total || 0}</Text>
               </View>
               {peakHours.length > 0 ? (
-                <View style={styles.chartScrollWrapper}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.barContainer}>
-                      {peakHours.map((hourData, i) => (
-                        <View key={i} style={styles.barWrapper}>
-                          <View style={styles.barTooltip}>
-                            <Text style={styles.barTooltipText}>{hourData.volume}</Text>
-                          </View>
-                          <View style={[styles.bar, { height: Math.max((hourData.volume / maxVolume) * 120, 5) }]} />
-                          <Text style={styles.barLabel}>{hourData.hour}:00</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </ScrollView>
+                <View style={{ marginLeft: -SPACING.xl }}>
+                  <BarChart
+                    data={{
+                      labels: peakHours.map(h => `${h.hour}h`),
+                      datasets: [{ data: peakHours.map(h => h.volume) }]
+                    }}
+                    width={width - 40}
+                    height={220}
+                    yAxisLabel=""
+                    yAxisSuffix=""
+                    chartConfig={{
+                      backgroundColor: COLORS.surface,
+                      backgroundGradientFrom: COLORS.surface,
+                      backgroundGradientTo: COLORS.surface,
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => COLORS.primary,
+                      labelColor: (opacity = 1) => COLORS.secondary,
+                      style: { borderRadius: 16 },
+                      propsForBackgroundLines: {
+                        strokeWidth: 1,
+                        stroke: COLORS.border,
+                        strokeDasharray: "0",
+                      }
+                    }}
+                    style={{ marginVertical: 8, borderRadius: 16 }}
+                    showValuesOnTopOfBars={true}
+                  />
                 </View>
               ) : (
-                <Text style={styles.emptyText}>No data available for this timeframe</Text>
+                <Text className="self-center" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>No data available for this timeframe</Text>
               )}
             </View>
 
             {/* Performance Metrics Grid */}
-            <Text style={styles.sectionTitle}>Key Metrics</Text>
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
+            <Text className="mb-4 mt-2 text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Key Metrics</Text>
+            <View className="mb-2 flex-row flex-wrap justify-between">
+              <View className="mb-4 w-[48%] items-center rounded-2xl border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
                 <MaterialIcons name="timer" size={24} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{getAvgDeliveryTime()}</Text>
-                <Text style={styles.metricLabel}>Avg. Delivery</Text>
+                <Text className="my-1 text-lg font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{getAvgDeliveryTime()}</Text>
+                <Text className="text-xs font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Avg. Delivery</Text>
               </View>
-              <View style={styles.metricCard}>
+              <View className="mb-4 w-[48%] items-center rounded-2xl border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
                 <MaterialIcons name="star-outline" size={24} color={COLORS.warning} />
-                <Text style={styles.metricValue}>4.85</Text>
-                <Text style={styles.metricLabel}>Service Rating</Text>
+                <Text className="my-1 text-lg font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>4.85</Text>
+                <Text className="text-xs font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Service Rating</Text>
               </View>
-              <View style={styles.metricCard}>
+              <View className="mb-4 w-[48%] items-center rounded-2xl border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
                 <MaterialIcons name="check-circle-outline" size={24} color={COLORS.success} />
-                <Text style={styles.metricValue}>{getSuccessRate()}</Text>
-                <Text style={styles.metricLabel}>Success Rate</Text>
+                <Text className="my-1 text-lg font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{getSuccessRate()}</Text>
+                <Text className="text-xs font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Success Rate</Text>
               </View>
-              <View style={styles.metricCard}>
+              <View className="mb-4 w-[48%] items-center rounded-2xl border p-6" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
                 <MaterialIcons name="error-outline" size={24} color={COLORS.danger} />
-                <Text style={styles.metricValue}>{getCancellationRate()}</Text>
-                <Text style={styles.metricLabel}>Cancellation</Text>
+                <Text className="my-1 text-lg font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{getCancellationRate()}</Text>
+                <Text className="text-xs font-bold" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Cancellation</Text>
               </View>
             </View>
 
+            {/* Status Distribution Pie Chart */}
+            <Text className="mb-4 mt-2 text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Request Status</Text>
+            <View className="mb-6 items-center rounded-3xl border px-6 py-2.5" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border, padding: SPACING.xl }}>
+              <PieChart
+                data={[
+                  {
+                    name: "Completed",
+                    population: summary?.counts?.completed || 0,
+                    color: COLORS.success,
+                    legendFontColor: COLORS.secondary,
+                    legendFontSize: 12
+                  },
+                  {
+                    name: "Failed",
+                    population: summary?.counts?.failed || 0,
+                    color: COLORS.danger,
+                    legendFontColor: COLORS.secondary,
+                    legendFontSize: 12
+                  },
+                  {
+                    name: "Other",
+                    population: Math.max(0, (summary?.counts?.total || 0) - (summary?.counts?.completed || 0) - (summary?.counts?.failed || 0)),
+                    color: COLORS.warning,
+                    legendFontColor: COLORS.secondary,
+                    legendFontSize: 12
+                  }
+                ].filter(d => d.population > 0)}
+                width={width - 60}
+                height={160}
+                chartConfig={{
+                  color: (opacity = 1) => COLORS.primary,
+                }}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"15"}
+                absolute
+              />
+            </View>
+
             {/* Top Regions */}
-            <Text style={styles.sectionTitle}>Top Dropoff Locations</Text>
-            <View style={styles.listCard}>
+            <Text className="mb-4 mt-2 text-base font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>Top Dropoff Locations</Text>
+            <View className="mb-5 overflow-hidden rounded-3xl border" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.border }}>
               {locations.length > 0 ? (
                 locations.map((loc, i) => (
-                  <View key={i} style={[styles.listItem, i === locations.length - 1 && { borderBottomWidth: 0 }]}>
-                    <Text style={styles.locationName} numberOfLines={1}>{loc.name}</Text>
-                    <View style={styles.locationRight}>
-                      <Text style={styles.locationCount}>{loc.count}</Text>
+                  <View key={i} className="flex-row items-center justify-between border-b p-4" style={{ borderBottomColor: i === locations.length - 1 ? 'transparent' : COLORS.border }}>
+                    <Text className="mr-2 flex-1 text-sm font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }} numberOfLines={1}>{loc.name}</Text>
+                    <View className="flex-row items-center">
+                      <Text className="text-sm font-bold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.bold }}>{loc.count}</Text>
                       <MaterialIcons name="local-fire-department" size={16} color={COLORS.warning} style={{ marginLeft: 8 }} />
                     </View>
                   </View>
                 ))
               ) : (
-                <View style={styles.emptyList}>
-                  <Text style={styles.emptyText}>No location data available</Text>
+                <View className="items-center p-5">
+                  <Text className="self-center" style={{ color: COLORS.secondary, fontFamily: TYPOGRAPHY.fontFamily.medium }}>No location data available</Text>
                 </View>
               )}
             </View>

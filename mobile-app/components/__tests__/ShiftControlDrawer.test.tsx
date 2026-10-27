@@ -27,15 +27,15 @@ describe('ShiftControlDrawer', () => {
   it('floats the shift controls over the list and toggles them from the boundary handle', () => {
     render(<ShiftControlDrawer tasks={[]} />);
 
-    const handle = screen.getByRole('button', { name: 'Open shift controls, Online' });
+    const handle = screen.getByRole('button', { name: 'Show shift controls, On Duty' });
     expect(handle.props.style).toEqual(expect.arrayContaining([
-      expect.objectContaining({ minHeight: expect.any(Number), minWidth: 64, top: 0, zIndex: 51, elevation: 51 }),
+      expect.objectContaining({ minHeight: expect.any(Number), marginHorizontal: 16 }),
     ]));
     expect(screen.getByTestId('shift-drawer-handle-visual').props.style).toEqual(
-      expect.objectContaining({ width: 36, height: 24 }),
+      expect.objectContaining({ width: '100%', minHeight: 44 }),
     );
     expect(screen.queryByText('Shift')).toBeNull();
-    expect(screen.queryByText('Online')).toBeNull();
+    expect(screen.getByText('On Duty')).toBeTruthy();
     expect(handle.props.accessibilityState).toEqual({ expanded: false });
     expect(screen.queryByTestId('shift-control-card')).toBeNull();
 
@@ -43,27 +43,38 @@ describe('ShiftControlDrawer', () => {
 
     expect(screen.getByTestId('shift-control-card')).toBeTruthy();
     expect(screen.getByTestId('shift-drawer-anchor').props.style).toEqual(
-      expect.objectContaining({ height: 0, overflow: 'visible' }),
+      expect.objectContaining({ zIndex: 50 }),
     );
     expect(screen.getByTestId('shift-drawer-panel').props.style).toEqual(
-      expect.objectContaining({ position: 'absolute' }),
+      expect.objectContaining({ zIndex: 49 }),
     );
-    expect(screen.getByRole('button', { name: 'Close shift controls, Online' }).props.accessibilityState)
+    expect(screen.getByRole('button', { name: 'Hide shift controls, On Duty' }).props.accessibilityState)
       .toEqual({ expanded: true });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Close shift controls, Online' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Hide shift controls, On Duty' }));
 
     expect(screen.queryByTestId('shift-control-card')).toBeNull();
+  });
+
+  it('shows On Duty directly before attendance exists', () => {
+    (useLocation as jest.Mock).mockReturnValue({
+      hasOpenShift: false,
+      isOnDuty: false,
+      attendanceStatus: null,
+      isShiftStatusReady: true,
+    });
+    render(<ShiftControlDrawer tasks={[]} />);
+    expect(screen.getByRole('button', { name: 'On Duty' })).toBeTruthy();
   });
 
   it('removes the card immediately on close instead of fading its shadow over the list', () => {
     (useReducedMotionPreference as jest.Mock).mockReturnValue(false);
     render(<ShiftControlDrawer tasks={[]} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open shift controls, Online' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Show shift controls, On Duty' }));
     expect(screen.getByTestId('shift-control-card')).toBeTruthy();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Close shift controls, Online' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Hide shift controls, On Duty' }));
 
     expect(screen.queryByTestId('shift-control-card')).toBeNull();
   });
@@ -78,7 +89,7 @@ describe('ShiftControlDrawer', () => {
     (useReducedMotionPreference as jest.Mock).mockReturnValue(false);
     render(<ShiftControlDrawer tasks={[]} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open shift controls, Online' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Show shift controls, On Duty' }));
 
     expect(Animated.timing).toHaveBeenCalledWith(
       expect.anything(),
@@ -92,7 +103,7 @@ describe('ShiftControlDrawer', () => {
     (useReducedMotionPreference as jest.Mock).mockReturnValue(false);
     render(<ShiftControlDrawer tasks={[]} />);
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open shift controls, Online' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Show shift controls, On Duty' }));
 
     expect(screen.getByTestId('shift-drawer-panel').props.style.opacity).toBeUndefined();
   });

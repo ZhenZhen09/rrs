@@ -3,7 +3,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-naviga
 import { Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppState, AppStateStatus, Image, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -14,8 +14,8 @@ import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { LocationProvider } from '@/context/LocationContext';
-import { BugsnagFallback } from '@/components/ui/BugsnagFallback';
-import { BugsnagErrorBoundary } from '@/utils/bugsnag';
+import { ErrorFallback } from '@/components/ui/ErrorFallback';
+import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { queryClient } from '@/utils/queryClient';
 import { wakeUpServer } from '@/utils/api';
 import { initSyncManager, stopSyncManager } from '@/services/SyncManager';
@@ -26,6 +26,7 @@ import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { syncActiveDeliveryNotifications } from '@/services/deliveryNotifications';
 import { DashboardTransitionOverlay } from '@/components/ui/DashboardTransitionOverlay';
 import { getDashboardTransitionState } from '@/utils/dashboardTransition';
+import { ConnectionProvider } from '@/context/ConnectionContext';
 
 
 // Keep the splash screen visible while we fetch resources
@@ -38,6 +39,7 @@ export const unstable_settings = {
 };
 
 const BRIEFING_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const startupSplashImage = require('../assets/images/errands-parcel-mark.png');
 
 function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
   const { isLoading, isAuthenticating, user } = useAuth();
@@ -93,7 +95,18 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
   }, [isLoading, user, tasks.length]);
 
   if (isLoading) {
-    return null;
+    return (
+      <View testID="startup_splash" style={styles.startupSplash}>
+        <Image
+          source={startupSplashImage}
+          resizeMode="contain"
+          style={StyleSheet.absoluteFill}
+          accessible={false}
+          onLoad={onLoaded}
+          onError={onLoaded}
+        />
+      </View>
+    );
   }
 
   const overdueTasks = tasks.filter(t => getRiderTaskTab(t) === 'overdue');
@@ -139,6 +152,13 @@ function RootLayoutNav({ onLoaded }: { onLoaded: () => void }) {
   );
 }
 
+const styles = StyleSheet.create({
+  startupSplash: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+});
+
 function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -153,31 +173,25 @@ function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BugsnagErrorBoundary FallbackComponent={BugsnagFallback}>
+      <AppErrorBoundary FallbackComponent={ErrorFallback}>
         <QueryClientProvider client={queryClient}>
           <SafeAreaProvider>
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <AuthProvider>
-                <LocationProvider>
-                  <OfflineBanner />
-                  <RootLayoutNav onLoaded={handleLoaded} />
-                </LocationProvider>
-              </AuthProvider>
-              <StatusBar style="auto" />
-            </ThemeProvider>
+            <ConnectionProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <AuthProvider>
+                  <LocationProvider>
+                    <OfflineBanner />
+                    <RootLayoutNav onLoaded={handleLoaded} />
+                  </LocationProvider>
+                </AuthProvider>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </ConnectionProvider>
           </SafeAreaProvider>
         </QueryClientProvider>
-      </BugsnagErrorBoundary>
+      </AppErrorBoundary>
     </GestureHandlerRootView>
   );
 }
 
-let App: any = RootLayout;
-if (Platform.OS !== 'web') {
-  // Keep this native-only module out of the web bundle and web runtime.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const BugsnagPerformance = require('@bugsnag/expo-performance').default;
-  App = BugsnagPerformance.withInstrumentedAppStarts(RootLayout);
-}
-
-export default App;
+export default RootLayout;

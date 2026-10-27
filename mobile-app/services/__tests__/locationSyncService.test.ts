@@ -9,7 +9,7 @@ jest.mock('@/utils/AuthManager', () => ({
 }));
 
 import { flushLocationOutbox } from '../locationSyncService';
-import { getPendingLocationEvents, acknowledgeLocationEvents, markLocationEventsForRetry } from '../locationOutbox';
+import { getPendingLocationEvents, acknowledgeLocationEvents, markLocationEventsForRetry, markLocationEventsRejected } from '../locationOutbox';
 import { api } from '@/utils/api';
 import { AuthManager } from '@/utils/AuthManager';
 import type { LocationEvent } from '../../types/tracking';
@@ -59,10 +59,35 @@ describe('location sync service', () => {
     expect(acknowledgeLocationEvents).toHaveBeenCalledWith([event.eventId]);
   });
 
+  it('retains each batch rejection with its individual server reason', async () => {
+    (api.post as jest.Mock).mockResolvedValue({ data: {
+      acceptedEventIds: [],
+      rejected: [
+        { eventId: 'session-1:1', reason: 'stale timestamp' },
+        { eventId: 'session-1:2', reason: 'accuracy too low' },
+      ],
+    } });
+
+    await expect(flushLocationOutbox('network_recovered')).resolves.toEqual({ accepted: 0, rejected: 2 });
+    expect(markLocationEventsRejected).toHaveBeenNthCalledWith(1, ['session-1:1'], 'stale timestamp');
+    expect(markLocationEventsRejected).toHaveBeenNthCalledWith(2, ['session-1:2'], 'accuracy too low');
+  });
+
   it('keeps events pending when the batch request fails', async () => {
     (api.post as jest.Mock).mockRejectedValue(new Error('offline'));
 
     await expect(flushLocationOutbox('startup')).resolves.toEqual({ accepted: 0, rejected: 0 });
     expect(markLocationEventsForRetry).toHaveBeenCalledWith([event.eventId], 'offline');
+  });
+
+  it('keeps permanently rejected events inspectable with the server reason', async () => {
+    const rejection: any = new Error('stale location');
+    rejection.response = { status: 400, data: { error: 'Location timestamp is outside the accepted window.' } };
+    (api.post as jest.Mock).mockRejectedValue(rejection);
+
+    await expect(flushLocationOutbox('network_recovered')).resolves.toEqual({ accepted: 0, rejected: 1 });
+    expect(markLocationEventsRejected).toHaveBeenCalledWith(
+      [event.eventId], 'Location timestamp is outside the accepted window.',
+    );
   });
 });

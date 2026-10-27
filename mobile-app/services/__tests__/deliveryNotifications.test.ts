@@ -15,11 +15,19 @@ jest.mock('expo-notifications', () => ({
 
 import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
-import { formatOverdueBody, routeNotificationResponse, initializeDeliveryNotificationChannels, presentForegroundPushNotification, updateActiveDeliveryNotification, syncActiveDeliveryNotifications } from '../deliveryNotifications';
+import { formatOverdueBody, routeNotificationResponse, routePushData, initializeDeliveryNotificationChannels, presentForegroundPushNotification, updateActiveDeliveryNotification, syncActiveDeliveryNotifications } from '../deliveryNotifications';
 
 beforeEach(() => jest.clearAllMocks());
 
 describe('delivery notifications', () => {
+  it('routes campaign pushes to the configured screen with a dashboard fallback', () => {
+    const router = { push: jest.fn(), navigate: jest.fn() };
+    routePushData({ type: 'campaign', destination: 'overdue' }, router as any);
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/overdue');
+    routePushData({ type: 'campaign', destination: 'unknown' }, router as any);
+    expect(router.navigate).toHaveBeenLastCalledWith('/(tabs)');
+  });
+
   it('formats overdue minutes and routes legacy request_id payloads', () => {
     expect(formatOverdueBody('123', 1)).toBe('Delivery #123 is overdue by 1 minute.');
     expect(formatOverdueBody('123', 3)).toBe('Delivery #123 is overdue by 3 minutes.');

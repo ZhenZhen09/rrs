@@ -1,12 +1,19 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
-import { COLORS, TYPOGRAPHY } from '../../constants/Theme';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (!isLoading && !isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
   
   // Compute safe, screen-adaptive heights and bottom spacing
   const safeBottomPadding = insets.bottom > 0 ? insets.bottom : 8;
@@ -15,19 +22,22 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      tabBarActiveTintColor: COLORS.primary,
-      tabBarInactiveTintColor: COLORS.muted,
+      tabBarActiveTintColor: theme.COLORS.primary,
+      tabBarInactiveTintColor: theme.COLORS.textSecondary,
+      tabBarItemStyle: {
+        minHeight: 48,
+      },
       tabBarStyle: {
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.COLORS.surface,
         borderTopWidth: 1,
-        borderTopColor: COLORS.border,
+        borderTopColor: theme.COLORS.border,
         height: safeTabHeight,
         paddingBottom: safeBottomPadding,
         paddingTop: 8,
       },
       tabBarLabelStyle: {
-        fontSize: 10,
-        fontFamily: TYPOGRAPHY.fontFamily.bold,
+        fontSize: 11,
+        fontFamily: theme.TYPOGRAPHY.fontFamily.bold,
       }
     }}>
       <Tabs.Screen
@@ -72,6 +82,15 @@ export default function TabsLayout() {
           title: 'Attendance',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="access-time" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="person" size={size} color={color} />
           ),
         }}
       />

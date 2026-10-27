@@ -47,10 +47,7 @@ it('updates the profile only after the avatar API confirms and persists it', asy
   mockPatch.mockReturnValue(new Promise(resolve => { finish = resolve; }));
   render(<AuthProvider><Harness /></AuthProvider>);
   await act(async () => fireEvent.press(screen.getByTestId('login')));
-  expect(mockFetchQuery).toHaveBeenCalledWith(expect.objectContaining({
-    queryKey: ['tasks', 'rider-1'],
-    staleTime: 0,
-  }));
+  expect(mockFetchQuery).not.toHaveBeenCalled();
   expect(screen.getByTestId('saved-avatar')).toHaveTextContent('avatar_01');
   fireEvent.press(screen.getByTestId('save-avatar'));
   expect(screen.getByTestId('saved-avatar')).toHaveTextContent('avatar_01');

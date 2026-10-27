@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, FlatList } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS as DEFAULT_COLORS, RADIUS as DEFAULT_RADIUS, TYPOGRAPHY as DEFAULT_TYPOGRAPHY } from '../../constants/Theme';
 import { useTheme } from '../../context/ThemeContext';
-import { moderateScale, verticalScale } from '../../utils/responsive';
+import { FilterModal } from '../../components/Dispatch/FilterModal';
+import { SequenceModal } from '../../components/Dispatch/SequenceModal';
+import { DispatchModal } from '../../components/Dispatch/DispatchModal';
 import { PremiumJobCard } from '../../components/Dispatch/PremiumJobCard';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LiveActivityCard } from '../../components/Dispatch/LiveActivityCard';
-import { useRealTime } from '../../context/RealTimeContext';
+import { useRealTimeStore } from '../../store/useRealTimeStore';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { getGroupedStatus } from '../../utils/statusMapping';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { useDebounce } from '../../utils/useDebounce';
 
 const parseSafeDate = (dateStr: any) => {
   if (!dateStr) return null;
@@ -32,87 +34,19 @@ const parseSafeDate = (dateStr: any) => {
   return null;
 };
 
-const TABS = ['Pending', 'Active', 'Done'];
+const TABS = ['Pending', 'Active', 'Overdue', 'Done'];
 
 export default function DispatchCenter() {
   const router = useRouter();
-  const { lastRequestUpdate } = useRealTime();
+  const rawLastRequestUpdate = useRealTimeStore(state => state.lastRequestUpdate);
+  const lastRequestUpdate = useDebounce(rawLastRequestUpdate, 2000);
+  const riderPresence = useRealTimeStore(state => state.riderPresence);
+  const riderLocations = useRealTimeStore(state => state.riderLocations);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   
   const { theme } = useTheme();
-  const { COLORS, RADIUS, TYPOGRAPHY, SPACING } = theme;
+  const { COLORS, SPACING } = theme;
 
-  const styles = React.useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
-    header: { padding: SPACING.xl, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-    title: { fontSize: TYPOGRAPHY.size['2xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, letterSpacing: -0.5 },
-    headerActions: { flexDirection: 'row', gap: 8 },
-    iconBtn: { padding: 8, backgroundColor: COLORS.background, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border },
-    iconBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: RADIUS.md, paddingHorizontal: 12, height: 48, borderWidth: 1, borderColor: COLORS.border },
-    searchIcon: { marginRight: 10 },
-    searchInput: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.primary },
-    tabContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-    tab: { flex: 1, alignItems: 'center', paddingVertical: 16 },
-    activeTab: {},
-    tabText: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.muted },
-    activeTabText: { color: COLORS.primary },
-    activeIndicator: { position: 'absolute', bottom: 0, width: '40%', height: 3, backgroundColor: COLORS.primary, borderRadius: 3 },
-    scrollContent: { padding: SPACING.xl, paddingBottom: 100 },
-    emptyContainer: { alignItems: 'center', marginTop: 100 },
-    emptyText: { marginTop: 16, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.muted },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: SPACING.xl, maxHeight: '85%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xl },
-    modalTitle: { fontSize: TYPOGRAPHY.size.xl, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary },
-    modalSectionTitle: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, marginBottom: 16, textTransform: 'uppercase' },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background },
-    filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    filterChipText: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: 12, color: COLORS.secondary },
-    filterChipTextActive: { color: '#FFF' },
-    riderGroup: { marginBottom: SPACING.xl },
-    riderGroupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 },
-    riderGroupName: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: TYPOGRAPHY.size.base, color: COLORS.primary, marginLeft: 8 },
-    resequenceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.button, borderWidth: 1, borderColor: COLORS.border },
-    resequenceBtnText: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: 10, color: COLORS.accentBlue, marginLeft: 4, textTransform: 'uppercase' },
-    selectableRow: { flexDirection: 'row', alignItems: 'center' },
-    checkbox: { marginRight: 12 },
-    bulkActionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border, padding: SPACING.xl, paddingBottom: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 20 },
-    bulkActionText: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: TYPOGRAPHY.size.lg, color: COLORS.primary },
-    bulkActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: RADIUS.button },
-    bulkActionBtnText: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: TYPOGRAPHY.size.sm, color: '#FFF' },
-    sequenceItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, padding: 12, borderRadius: RADIUS.card, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border },
-    sequenceNumberBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    sequenceNumberText: { fontFamily: TYPOGRAPHY.fontFamily.bold, color: '#FFF', fontSize: 14 },
-    sequenceCustomer: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontSize: TYPOGRAPHY.size.sm, color: COLORS.primary },
-    sequenceId: { fontFamily: TYPOGRAPHY.fontFamily.mono, fontSize: 10, color: COLORS.secondary, marginTop: 2 },
-    sequenceControls: { flexDirection: 'row', gap: 4 },
-    modalJobInfo: { marginBottom: SPACING.xl },
-    modalJobId: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.monoMedium, color: COLORS.primary, textTransform: 'uppercase' },
-    modalCustomer: { fontSize: TYPOGRAPHY.size['2xl'], fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary, marginTop: 4, marginBottom: 16 },
-    detailRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
-    detailIconContainer: { width: 24, alignItems: 'center', marginRight: 12, marginTop: 2 },
-    detailTextContent: { flex: 1 },
-    detailLabel: { fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, textTransform: 'uppercase' },
-    detailValue: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.fontFamily.medium, color: COLORS.primary, marginTop: 2 },
-    instructionSection: { marginBottom: 12 },
-    instructionInputContainer: { backgroundColor: COLORS.background, borderRadius: RADIUS.md, borderLeftWidth: 4, borderLeftColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6 },
-    instructionInput: { fontSize: TYPOGRAPHY.size.sm, color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.medium, lineHeight: 20, minHeight: 60, textAlignVertical: 'top' },
-    actionButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-    actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: RADIUS.md, marginHorizontal: 4 },
-    returnButton: { backgroundColor: COLORS.warning },
-    cancelButton: { backgroundColor: COLORS.danger },
-    actionButtonText: { color: '#FFFFFF', fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.fontFamily.bold, marginLeft: 6 },
-    riderOption: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, padding: 16, borderRadius: RADIUS.card, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
-    riderOptionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.muted },
-    riderOptionText: { flex: 1, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.secondary, marginLeft: 12 },
-    riderOptionTextSelected: { color: COLORS.primary },
-    confirmDispatchButton: { backgroundColor: COLORS.accent, padding: 18, borderRadius: RADIUS.button, alignItems: 'center', marginTop: 12 },
-    disabledButton: { opacity: 0.5 },
-    confirmDispatchText: { color: COLORS.onPrimary, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.fontFamily.bold },
-    loadingContainer: { marginVertical: 20, alignItems: 'center' },
-  }), [theme]);
 
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,9 +105,20 @@ export default function DispatchCenter() {
           return {
             id: bj.request_id,
             customer: bj.requester_name,
+            requesterName: bj.requester_name,
+            onBehalfOf: bj.on_behalf_of,
+            requesterDepartment: bj.requester_department,
             building: bj.dropoff_business_name || bj.pickup_business_name || 'N/A',
             location: bj.dropoff_location?.address || bj.dropoff_address || 'Unknown',
             time: bj.time_window || 'ASAP',
+            deliveryDate: bj.delivery_date,
+            timeWindow: bj.time_window,
+            pickupAddress: bj.pickup_location?.address || bj.pickup_address || 'Unknown',
+            pickupContactName: bj.pickup_contact_name,
+            destinationAddress: bj.dropoff_location?.address || bj.dropoff_address || 'Unknown',
+            recipientName: bj.recipient_name,
+            destinationBuilding: bj.dropoff_location?.businessName || bj.dropoff_business_name,
+            recipientContact: bj.recipient_contact,
             status: status,
             uiGroup,
             type: bj.request_type || 'Delivery',
@@ -183,9 +128,14 @@ export default function DispatchCenter() {
             delivery_status: bj.delivery_status,
             created_at: bj.created_at,
             updated_at: bj.updated_at,
+            delivery_date: bj.delivery_date,
             admin_remark: bj.admin_remark,
             personnel_instructions: bj.personnel_instructions,
             sequence_order: bj.queue_order || 0,
+            is_overdue: Boolean(bj.is_overdue),
+            overdue_minutes: bj.overdue_minutes || 0,
+            overdue_label: bj.overdue_label || '',
+            recommended_action: bj.recommended_action || null,
           };
         });
       setJobs(mappedJobs);
@@ -199,7 +149,7 @@ export default function DispatchCenter() {
   const fetchRiders = async () => {
     if (user?.role !== 'admin' && user?.role !== 'personnel') return;
     try {
-      const response = await api.get('/users/riders');
+      const response = await api.get('/users/riders/live');
       const allUsers = Array.isArray(response.data) ? response.data : response.data.data || [];
       setRiders(allUsers);
     } catch (error) {
@@ -216,6 +166,12 @@ export default function DispatchCenter() {
 
   const handleAssignRider = async () => {
     if (!selectedRiderId || !selectedJob) return;
+    const selectedRider = riders.find((rider) => rider.id === selectedRiderId);
+    const unavailableReason = getRiderUnavailableReason(selectedRider, [selectedJob]);
+    if (unavailableReason) {
+      Alert.alert('Rider unavailable', `Cannot assign rider: ${unavailableReason}`);
+      return;
+    }
     try {
       setIsAssigning(true);
       await api.put(`/requests/${selectedJob.id}/approve`, {
@@ -225,8 +181,8 @@ export default function DispatchCenter() {
       setSelectedJob(null);
       setSelectedRiderId(null);
       fetchJobs();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to assign rider');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to assign rider');
     } finally {
       setIsAssigning(false);
     }
@@ -234,6 +190,13 @@ export default function DispatchCenter() {
 
   const handleBulkAssign = async () => {
     if (!selectedRiderId || selectedJobIds.length === 0) return;
+    const selectedRider = riders.find((rider) => rider.id === selectedRiderId);
+    const selectedJobs = jobs.filter((job) => selectedJobIds.includes(job.id));
+    const unavailableReason = getRiderUnavailableReason(selectedRider, selectedJobs);
+    if (unavailableReason) {
+      Alert.alert('Rider unavailable', `Cannot assign rider: ${unavailableReason}`);
+      return;
+    }
     try {
       setIsAssigning(true);
       await api.post(`/requests/mass-update`, {
@@ -248,8 +211,8 @@ export default function DispatchCenter() {
       setSelectedRiderId(null);
       fetchJobs();
       Alert.alert('Success', 'Requests have been bulk assigned.');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to bulk assign riders');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to bulk assign riders');
     } finally {
       setIsAssigning(false);
     }
@@ -357,11 +320,16 @@ export default function DispatchCenter() {
 
   const filteredJobs = jobs
     .filter(job => 
-      job.status === activeTab &&
+      (activeTab === 'Overdue' ? job.is_overdue : job.status === activeTab) &&
       (job.customer?.toLowerCase().includes(search.toLowerCase()) || String(job.id).includes(search)) &&
       (filterPriority === 'All' || (filterPriority === 'Urgent' && job.priority === 'urgent') || (filterPriority === 'Normal' && job.priority !== 'urgent'))
     )
     .sort((a, b) => {
+      if (activeTab === 'Overdue') {
+        const overdueDelta = (b.overdue_minutes || 0) - (a.overdue_minutes || 0);
+        if (overdueDelta !== 0) return overdueDelta;
+        return (a.priority || '').localeCompare(b.priority || '');
+      }
       if (activeTab === 'Active') {
         return (a.sequence_order || 0) - (b.sequence_order || 0);
       }
@@ -372,16 +340,37 @@ export default function DispatchCenter() {
 
   const activeRidersSet = Array.from(new Set(filteredJobs.filter(j => j.status === 'Active').map(j => j.rider_id)));
 
+  const toDateString = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const normalizeDateString = (date?: string) => typeof date === 'string' ? date.split('T')[0] : '';
+  const getRiderUnavailableReason = (rider: any, targetJobs: any[]) => {
+    if (!rider) return 'not found';
+    if (rider.attendance_status === 'on_leave') return 'on leave';
+    const hasTodayJob = targetJobs.some((job) => normalizeDateString(job?.delivery_date) === toDateString(new Date()));
+    if (!hasTodayJob) return null;
+    if (rider.attendance_status === 'absent') return 'absent today';
+    if (!rider.attendance_status) return 'no attendance report';
+    if (!rider.is_on_duty) return 'off duty';
+    const presenceStatus = riderPresence.get(rider.id);
+    const isOnline = presenceStatus ? presenceStatus === 'online' : !!rider.is_online;
+    if (!isOnline) return 'offline';
+    return null;
+  };
+
+  const modalTargetJobs = isBulkAssignModalOpen
+    ? jobs.filter((job) => selectedJobIds.includes(job.id))
+    : (selectedJob ? [selectedJob] : []);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.title}>Dispatch Console</Text>
-          <View style={styles.headerActions}>
+      <View className="border-b" style={{ padding: SPACING.xl, backgroundColor: COLORS.surface, borderBottomColor: COLORS.border }}>
+        <View className="mb-4 flex-row items-center justify-between" style={{ marginBottom: SPACING.lg }}>
+          <Text className="font-fira-bold text-2xl tracking-[-0.5px]" style={{ color: COLORS.primary }}>Dispatch Console</Text>
+          <View className="flex-row gap-2">
             {activeTab === 'Pending' && (
               <TouchableOpacity 
-                style={[styles.iconBtn, isSelectionMode && styles.iconBtnActive]}
+                className="rounded-[4px] border p-2"
+                style={{ backgroundColor: isSelectionMode ? COLORS.primary : COLORS.background, borderColor: isSelectionMode ? COLORS.primary : COLORS.border }}
                 onPress={() => {
                   setIsSelectionMode(!isSelectionMode);
                   setSelectedJobIds([]);
@@ -390,16 +379,17 @@ export default function DispatchCenter() {
                 <MaterialIcons name="checklist" size={20} color={isSelectionMode ? COLORS.onPrimary : COLORS.primary} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.iconBtn} onPress={() => setIsFilterModalOpen(true)}>
+            <TouchableOpacity className="rounded-[4px] border p-2" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }} onPress={() => setIsFilterModalOpen(true)}>
               <MaterialIcons name="filter-list" size={20} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
         </View>
         
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color={COLORS.muted} style={styles.searchIcon} />
+        <View className="h-12 flex-row items-center rounded-lg border px-3" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}>
+          <MaterialIcons name="search" size={20} color={COLORS.muted} style={{ marginRight: 10 }} />
           <TextInput
-            style={styles.searchInput}
+            className="flex-1 font-fira-medium text-base"
+            style={{ color: COLORS.primary }}
             placeholder="Search requests..."
             placeholderTextColor={COLORS.muted}
             value={search}
@@ -409,42 +399,41 @@ export default function DispatchCenter() {
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabContainer}>
+      <View className="flex-row border-b" style={{ backgroundColor: COLORS.surface, borderBottomColor: COLORS.border }}>
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
+            className="flex-1 items-center py-4"
             onPress={() => { setActiveTab(tab); setIsSelectionMode(false); setSelectedJobIds([]); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-            {activeTab === tab && <View style={styles.activeIndicator} />}
+            <Text className="font-fira-bold text-sm" style={{ color: activeTab === tab ? COLORS.primary : COLORS.muted }}>{tab}</Text>
+            {activeTab === tab && <View className="absolute bottom-0 h-[3px] w-[40%] rounded-[3px]" style={{ backgroundColor: COLORS.primary }} />}
           </TouchableOpacity>
         ))}
       </View>
 
       {/* Main Content */}
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          </View>
-        ) : activeTab === 'Active' ? (
-          /* ACTIVE TAB - Grouped by Rider */
-          activeRidersSet.length > 0 ? (
+      {activeTab === 'Active' ? (
+        <ScrollView contentContainerStyle={{ padding: SPACING.xl, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {loading ? (
+             <View className="my-5 items-center">
+               <ActivityIndicator size="large" color={COLORS.primary} />
+             </View>
+          ) : activeRidersSet.length > 0 ? (
             activeRidersSet.map(riderId => {
               const riderJobs = filteredJobs.filter(j => j.rider_id === riderId);
               const riderName = riderJobs[0]?.rider || 'Unknown Rider';
               return (
-                <View key={riderId} style={styles.riderGroup}>
-                  <View style={styles.riderGroupHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View key={riderId} className="mb-6" style={{ marginBottom: SPACING.xl }}>
+                  <View className="mb-3 flex-row items-center justify-between px-1">
+                    <View className="flex-row items-center">
                       <MaterialIcons name="two-wheeler" size={20} color={COLORS.primary} />
-                      <Text style={styles.riderGroupName}>{riderName}</Text>
+                      <Text className="ml-2 font-fira-bold text-base" style={{ color: COLORS.primary, marginLeft: 8 }}>{riderName}</Text>
                     </View>
-                    <TouchableOpacity style={styles.resequenceBtn} onPress={() => openSequenceModal(riderId as string)}>
+                    <TouchableOpacity className="flex-row items-center rounded-lg border px-3 py-1.5" style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }} onPress={() => openSequenceModal(riderId as string)}>
                       <MaterialIcons name="swap-vert" size={16} color={COLORS.accentBlue} />
-                      <Text style={styles.resequenceBtnText}>Edit Route</Text>
+                      <Text className="ml-1 font-fira-bold text-[10px] uppercase" style={{ color: COLORS.accentBlue, marginLeft: 4 }}>Edit Route</Text>
                     </TouchableOpacity>
                   </View>
                   {riderJobs.map((job, index) => (
@@ -454,24 +443,43 @@ export default function DispatchCenter() {
                       onPress={() => router.push({ pathname: '/job/[id]', params: { id: job.id } })}
                       activeTab="Active"
                       sequenceNumber={index + 1}
+                      riderPresence={riderPresence.get(job.rider_id)}
+                      riderLocation={riderLocations.get(job.rider_id)}
                     />
                   ))}
                 </View>
               );
             })
           ) : (
-             <View style={styles.emptyContainer}>
+             <View className="mt-[100px] items-center">
                <MaterialIcons name="assignment" size={50} color={COLORS.border} />
-               <Text style={styles.emptyText}>No active requests</Text>
+               <Text className="mt-4 font-fira-medium text-base" style={{ color: COLORS.muted }}>No active requests</Text>
              </View>
-          )
-        ) : filteredJobs.length > 0 ? (
-          /* PENDING / DONE TAB - Flat List */
-          filteredJobs.map(job => (
-            <View key={job.id} style={isSelectionMode ? styles.selectableRow : {}}>
+          )}
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={filteredJobs}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: SPACING.xl, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            loading ? (
+              <View className="my-5 items-center">
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              </View>
+            ) : (
+              <View className="mt-[100px] items-center">
+                <MaterialIcons name="assignment" size={50} color={COLORS.border} />
+                <Text className="mt-4 font-fira-medium text-base" style={{ color: COLORS.muted }}>No {activeTab.toLowerCase()} requests</Text>
+              </View>
+            )
+          }
+          renderItem={({ item: job }) => (
+            <View className={isSelectionMode ? 'flex-row items-center' : ''}>
               {isSelectionMode && (
                 <TouchableOpacity 
-                  style={styles.checkbox}
+                  className="mr-3"
                   onPress={() => toggleJobSelection(job.id)}
                 >
                   <MaterialIcons 
@@ -481,7 +489,7 @@ export default function DispatchCenter() {
                   />
                 </TouchableOpacity>
               )}
-              <View style={{ flex: 1 }}>
+              <View className="flex-1">
                 <PremiumJobCard 
                   job={job} 
                   onPress={(j) => activeTab === 'Pending' ? setSelectedJob(j) : router.push({ pathname: '/job/[id]', params: { id: j.id } })}
@@ -491,325 +499,80 @@ export default function DispatchCenter() {
                 />
               </View>
             </View>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="assignment" size={50} color={COLORS.border} />
-            <Text style={styles.emptyText}>No {activeTab.toLowerCase()} requests</Text>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        />
+      )}
 
       {/* Floating Bulk Action Bar */}
       {isSelectionMode && selectedJobIds.length > 0 && (
-        <View style={styles.bulkActionBar}>
-          <Text style={styles.bulkActionText}>{selectedJobIds.length} Selected</Text>
+        <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-between border-t" style={{ backgroundColor: COLORS.surface, borderTopColor: COLORS.border, padding: SPACING.xl, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 20 }}>
+          <Text className="font-fira-bold text-lg" style={{ color: COLORS.primary }}>{selectedJobIds.length} Selected</Text>
           <TouchableOpacity 
-            style={styles.bulkActionBtn}
+            className="flex-row items-center rounded-lg px-5 py-3"
+            style={{ backgroundColor: COLORS.accent }}
             onPress={() => setIsBulkAssignModalOpen(true)}
           >
-            <Text style={styles.bulkActionBtnText}>Bulk Assign</Text>
+            <Text className="font-fira-bold text-sm text-white">Bulk Assign</Text>
             <MaterialIcons name="send" size={16} color="#FFF" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Filtering Modal */}
-      <Modal visible={isFilterModalOpen} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Advanced Filters</Text>
-              <TouchableOpacity onPress={() => setIsFilterModalOpen(false)}>
-                <MaterialIcons name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.modalSectionTitle}>Priority Level</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
-              {['All', 'Urgent', 'Normal'].map(p => (
-                <TouchableOpacity 
-                  key={p} 
-                  style={[styles.filterChip, filterPriority === p && styles.filterChipActive]}
-                  onPress={() => setFilterPriority(p)}
-                >
-                  <Text style={[styles.filterChipText, filterPriority === p && styles.filterChipTextActive]}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            
-            <TouchableOpacity style={styles.confirmDispatchButton} onPress={() => setIsFilterModalOpen(false)}>
-              <Text style={styles.confirmDispatchText}>Apply Filters</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
-      {/* Resequencing Modal */}
-      <Modal visible={sequenceModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Route Editor</Text>
-              <TouchableOpacity onPress={() => setSequenceModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSectionTitle}>Adjust delivery sequence</Text>
-            
-            <View style={{ height: 400 }}>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <DraggableFlatList
-                  data={sequenceTasks}
-                  onDragEnd={({ data }) => setSequenceTasks(data)}
-                  keyExtractor={(item) => item.id}
-                  containerStyle={{ flex: 1 }}
-                  renderItem={({ item: task, drag, isActive, getIndex }: any) => {
-                    const index = getIndex() || 0;
-                    return (
-                      <ScaleDecorator>
-                        <TouchableOpacity
-                          activeOpacity={0.9}
-                          onLongPress={drag}
-                          disabled={isActive}
-                          style={[
-                            styles.sequenceItem,
-                            { 
-                              backgroundColor: isActive ? COLORS.surface : COLORS.background, 
-                              borderColor: isActive ? COLORS.primary : COLORS.border,
-                              elevation: isActive ? 5 : 0,
-                              shadowOpacity: isActive ? 0.2 : 0,
-                              opacity: isActive ? 0.9 : 1
-                            }
-                          ]}
-                        >
-                          <View style={styles.sequenceNumberBox}>
-                            <Text style={styles.sequenceNumberText}>{index + 1}</Text>
-                          </View>
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <Text style={styles.sequenceCustomer} numberOfLines={1}>
-                              {task.building !== 'N/A' && task.building ? task.building : 'No Building Specified'}
-                            </Text>
-                            <Text style={[styles.sequenceId, { fontFamily: TYPOGRAPHY.fontFamily.medium, fontSize: 11 }]} numberOfLines={1}>
-                              {task.location}
-                            </Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, alignItems: 'center' }}>
-                              <Text style={{ fontSize: 9, fontFamily: TYPOGRAPHY.fontFamily.mono, color: COLORS.secondary }}>#{task.id.slice(-8).toUpperCase()}</Text>
-                              <Text style={{ fontSize: 10, fontFamily: TYPOGRAPHY.fontFamily.bold, color: COLORS.primary }}>{task.customer}</Text>
-                            </View>
-                          </View>
-                          <View style={styles.sequenceControls}>
-                            <TouchableOpacity onPressIn={drag} style={{ padding: 8 }}>
-                              <MaterialIcons name="drag-indicator" size={28} color={isActive ? COLORS.primary : COLORS.muted} />
-                            </TouchableOpacity>
-                          </View>
-                        </TouchableOpacity>
-                      </ScaleDecorator>
-                    );
-                  }}
-                />
-              </GestureHandlerRootView>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.confirmDispatchButton, isAssigning && styles.disabledButton]} 
-              onPress={saveSequence}
-              disabled={isAssigning}
-            >
-              {isAssigning ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmDispatchText}>Save Sequence</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Single / Bulk Dispatch Modal */}
-      <Modal visible={!!selectedJob || isBulkAssignModalOpen} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{isBulkAssignModalOpen ? 'Bulk Dispatch' : 'Dispatch Management'}</Text>
-              <TouchableOpacity onPress={() => { setSelectedJob(null); setIsBulkAssignModalOpen(false); }}>
-                <MaterialIcons name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {!isBulkAssignModalOpen && selectedJob && (
-                <View style={styles.modalJobInfo}>
-                  <Text style={styles.modalJobId}>{selectedJob.id}</Text>
-                  <Text style={styles.modalCustomer}>{selectedJob.customer}</Text>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIconContainer}>
-                      <MaterialIcons name="local-shipping" size={16} color={COLORS.muted} />
-                    </View>
-                    <View style={styles.detailTextContent}>
-                      <Text style={styles.detailLabel}>Request Type</Text>
-                      <Text style={styles.detailValue}>{selectedJob.type}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIconContainer}>
-                      <MaterialIcons name="place" size={16} color={COLORS.muted} />
-                    </View>
-                    <View style={styles.detailTextContent}>
-                      <Text style={styles.detailLabel}>Location</Text>
-                      <Text style={styles.detailValue}>{selectedJob.location}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIconContainer}>
-                      <MaterialIcons name="calendar-today" size={16} color={COLORS.muted} />
-                    </View>
-                    <View style={styles.detailTextContent}>
-                      <Text style={styles.detailLabel}>Date Filed</Text>
-                      <Text style={styles.detailValue}>
-                        {selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIconContainer}>
-                      <MaterialIcons name="access-time" size={16} color={COLORS.muted} />
-                    </View>
-                    <View style={styles.detailTextContent}>
-                      <Text style={styles.detailLabel}>Time Window</Text>
-                      <Text style={styles.detailValue}>{selectedJob.time}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIconContainer}>
-                      <MaterialIcons name="warning" size={16} color={COLORS.muted} />
-                    </View>
-                    <View style={styles.detailTextContent}>
-                      <Text style={styles.detailLabel}>Priority</Text>
-                      <Text style={[styles.detailValue, { color: selectedJob.priority === 'Urgent' ? COLORS.danger : COLORS.primary, textTransform: 'capitalize' }]}>{selectedJob.priority}</Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-              {isBulkAssignModalOpen && (
-                <View style={styles.modalJobInfo}>
-                  <Text style={styles.modalCustomer}>{selectedJobIds.length} Requests Selected</Text>
-                </View>
-              )}
-
-              {!isBulkAssignModalOpen && selectedJob?.personnel_instructions && (
-                <View style={styles.instructionSection}>
-                  <Text style={styles.modalSectionTitle}>Personnel Notes</Text>
-                  <View style={[styles.instructionInputContainer, { borderLeftColor: COLORS.muted }]}>
-                    <Text style={[styles.instructionInput, { minHeight: 20 }]}>
-                      {selectedJob.personnel_instructions}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.instructionSection}>
-                <Text style={styles.modalSectionTitle}>Admin Instructions</Text>
-                <View style={styles.instructionInputContainer}>
-                  <TextInput
-                    style={styles.instructionInput}
-                    placeholder="Write instructions/remarks for the rider..."
-                    placeholderTextColor={COLORS.muted}
-                    value={adminInstructions}
-                    onChangeText={setAdminInstructions}
-                    multiline={true}
-                    numberOfLines={3}
-                  />
-                </View>
-              </View>
-
-              {!isBulkAssignModalOpen && (
-                <>
-                  <Text style={styles.modalSectionTitle}>Management Actions</Text>
-                  <View style={styles.actionButtonsRow}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.returnButton, isAssigning && styles.disabledButton]}
-                      onPress={() => handleReturnForRevision(selectedJob)}
-                      disabled={isAssigning}
-                    >
-                      <MaterialIcons name="assignment-return" size={18} color="#FFFFFF" />
-                      <Text style={styles.actionButtonText}>Return</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.cancelButton, isAssigning && styles.disabledButton]}
-                      onPress={handleCancelRequest}
-                      disabled={isAssigning}
-                    >
-                      <MaterialIcons name="cancel" size={18} color="#FFFFFF" />
-                      <Text style={styles.actionButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-
-              <Text style={styles.modalSectionTitle}>Select Available Rider</Text>
-              {riders.length > 0 ? (
-                riders.map((rider) => {
-                  const isSelected = selectedRiderId === rider.id;
-
-  return (
-                    <TouchableOpacity 
-                      key={rider.id} 
-                      style={[styles.riderOption, isSelected && styles.riderOptionSelected]}
-                      onPress={() => setSelectedRiderId(rider.id)}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons name="two-wheeler" size={24} color={isSelected ? COLORS.primary : COLORS.secondary} />
-                      <Text style={[styles.riderOptionText, isSelected && styles.riderOptionTextSelected]}>
-                        {rider.name || rider.email}
-                      </Text>
-                      <MaterialIcons 
-                        name={isSelected ? "check-circle" : "radio-button-unchecked"} 
-                        size={24} 
-                        color={isSelected ? COLORS.primary : COLORS.muted} 
-                      />
-                    </TouchableOpacity>
-                  );
-                })
-              ) : (
-                <Text style={styles.emptyText}>No available riders found</Text>
-              )}
-
-              <TouchableOpacity 
-                style={[styles.confirmDispatchButton, (!selectedRiderId || isAssigning) && styles.disabledButton]}
-                onPress={isBulkAssignModalOpen ? handleBulkAssign : handleAssignRider}
-                disabled={!selectedRiderId || isAssigning}
-                activeOpacity={0.8}
-              >
-                {isAssigning ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDispatchText}>Confirm Assignment</Text>}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
+      <FilterModal 
+        visible={isFilterModalOpen} 
+        onClose={() => setIsFilterModalOpen(false)} 
+        filterPriority={filterPriority} 
+        setFilterPriority={setFilterPriority} 
+      />
+      <SequenceModal 
+        visible={sequenceModalVisible} 
+        onClose={() => setSequenceModalVisible(false)} 
+        sequenceTasks={sequenceTasks} 
+        setSequenceTasks={setSequenceTasks} 
+        saveSequence={saveSequence} 
+        isAssigning={isAssigning} 
+      />
+      <DispatchModal 
+        selectedJob={selectedJob} 
+        setSelectedJob={setSelectedJob} 
+        isBulkAssignModalOpen={isBulkAssignModalOpen} 
+        setIsBulkAssignModalOpen={setIsBulkAssignModalOpen} 
+        selectedJobIds={selectedJobIds} 
+        adminInstructions={adminInstructions} 
+        setAdminInstructions={setAdminInstructions} 
+        handleReturnForRevision={handleReturnForRevision} 
+        handleCancelRequest={handleCancelRequest} 
+        riders={riders} 
+        selectedRiderId={selectedRiderId} 
+        setSelectedRiderId={setSelectedRiderId} 
+        getRiderUnavailableReason={(rider) => getRiderUnavailableReason(rider, modalTargetJobs)}
+        handleAssignRider={handleAssignRider} 
+        handleBulkAssign={handleBulkAssign} 
+        isAssigning={isAssigning} 
+      />
       {/* Return for Revision Modal */}
       <Modal visible={!!returnJob} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '60%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Return for Revision</Text>
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="max-h-[60%] rounded-t-2xl" style={{ backgroundColor: COLORS.surface, padding: SPACING.xl }}>
+            <View className="mb-6 flex-row items-center justify-between" style={{ marginBottom: SPACING.xl }}>
+              <Text className="font-fira-bold text-xl" style={{ color: COLORS.primary }}>Return for Revision</Text>
               <TouchableOpacity onPress={() => { setReturnJob(null); setRevisionNote(''); }}>
                 <MaterialIcons name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.modalJobInfo}>
-              <Text style={styles.modalJobId}>{returnJob?.id}</Text>
-              <Text style={styles.modalCustomer}>{returnJob?.customer}</Text>
+            <View className="mb-6" style={{ marginBottom: SPACING.xl }}>
+              <Text className="font-fira-code-medium text-sm uppercase" style={{ color: COLORS.primary }}>{returnJob?.id}</Text>
+              <Text className="mt-1 mb-4 font-fira-bold text-2xl" style={{ color: COLORS.primary, marginTop: 4, marginBottom: 16 }}>{returnJob?.customer}</Text>
             </View>
 
-            <View style={styles.instructionSection}>
-              <Text style={styles.modalSectionTitle}>Reason for Return (Required)</Text>
-              <View style={styles.instructionInputContainer}>
+            <View className="mb-3">
+              <Text className="mb-4 font-fira-bold text-xs uppercase" style={{ color: COLORS.secondary }}>Reason for Return (Required)</Text>
+              <View className="rounded-lg border-l-4 px-3 py-1.5" style={{ backgroundColor: COLORS.background, borderLeftColor: COLORS.primary }}>
                 <TextInput
-                  style={styles.instructionInput}
+                  className="font-fira-medium text-sm"
+                  style={{ color: COLORS.primary, lineHeight: 20, minHeight: 60, textAlignVertical: 'top' }}
                   placeholder="Explain what needs to be fixed..."
                   placeholderTextColor={COLORS.muted}
                   value={revisionNote}
@@ -822,16 +585,18 @@ export default function DispatchCenter() {
             </View>
 
             <TouchableOpacity 
-              style={[styles.confirmDispatchButton, { backgroundColor: COLORS.warning }, (!revisionNote.trim() || isAssigning) && styles.disabledButton]}
+              className="mt-3 items-center rounded-lg p-[18px]"
+              style={{ backgroundColor: COLORS.warning, opacity: (!revisionNote.trim() || isAssigning) ? 0.5 : 1 }}
               onPress={submitReturnForRevision}
               disabled={!revisionNote.trim() || isAssigning}
               activeOpacity={0.8}
             >
-              {isAssigning ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDispatchText}>Confirm Return</Text>}
+              {isAssigning ? <ActivityIndicator color="#FFFFFF" /> : <Text className="font-fira-bold text-base" style={{ color: COLORS.onPrimary }}>Confirm Return</Text>}
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }

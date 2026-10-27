@@ -1,20 +1,7 @@
-import { QueryClient, onlineManager } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import NetInfo from '@react-native-community/netinfo';
-
-/**
- * --- NETWORK AWARENESS (Industry Standard) ---
- * Tell TanStack Query exactly when we are online/offline
- * based on the native mobile connection state.
- */
-onlineManager.setEventListener((setOnline) => {
-  return NetInfo.addEventListener((state) => {
-    // Only consider online if it's reachable (avoids captive portals/no data)
-    setOnline(!!state.isConnected && !!state.isInternetReachable);
-  });
-});
 
 /**
  * Global Query Client config for Offline-First

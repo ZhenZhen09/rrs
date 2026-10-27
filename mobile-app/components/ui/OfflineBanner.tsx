@@ -1,24 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import NetInfo from '@react-native-community/netinfo';
+import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useConnection } from '@/context/ConnectionContext';
 
 export const OfflineBanner = () => {
   const insets = useSafeAreaInsets();
+  const { state, retry } = useConnection();
   const [slideAnim] = useState(() => new Animated.Value(-100));
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const offline = state.isConnected === false || state.isInternetReachable === false;
-      Animated.timing(slideAnim, {
-        toValue: offline ? 0 : -100,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    });
+    Animated.timing(slideAnim, {
+      toValue: state === 'no_network' || state === 'service_unavailable' ? 0 : -130,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [slideAnim, state]);
 
-    return () => unsubscribe();
-  }, [slideAnim]);
+  const title = state === 'no_network' ? 'No Internet Connection' : 'Cannot reach Errands';
 
   return (
     <Animated.View
@@ -27,11 +25,18 @@ export const OfflineBanner = () => {
         {
           transform: [{ translateY: slideAnim }],
           paddingTop: insets.top,
+          minHeight: 106 + insets.top,
         },
       ]}
     >
-      <View style={styles.banner}>
-        <Text style={styles.text}>Waiting for network...</Text>
+      <View style={styles.banner} accessibilityLiveRegion="polite">
+        <View style={styles.copy}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.text}>New assignments and important updates may be delayed.</Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => void retry()} style={styles.retry}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
       </View>
     </Animated.View>
   );
@@ -47,13 +52,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30',
   },
   banner: {
-    height: 40,
-    justifyContent: 'center',
+    minHeight: 72,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
+  copy: { flex: 1, paddingRight: 12 },
+  title: { color: '#FFF', fontSize: 14, fontWeight: '800' },
   text: {
     color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 3,
   },
+  retry: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#FFFFFF' },
+  retryText: { color: '#B42318', fontWeight: '800', fontSize: 12 },
 });
