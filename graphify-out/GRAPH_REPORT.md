@@ -1,16 +1,16 @@
-# Graph Report - rider-scheduling-system  (2026-11-01)
+# Graph Report - rider-scheduling-system  (2026-11-02)
 
 ## Corpus Check
-- 884 files · ~2,642,413 words
+- 887 files · ~2,647,924 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 9585 nodes · 18941 edges · 512 communities (340 shown, 172 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 1256 edges (avg confidence: 0.54)
+- 9610 nodes · 19005 edges · 509 communities (343 shown, 166 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 1258 edges (avg confidence: 0.54)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `fa0f649c`
+- Built from commit: `b2feb26c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -251,7 +251,6 @@
 - tw-animate-css
 - deliveryNotifications.ts
 - argon2
-- expo-battery
 - .getNativeScrollRef
 - .render
 - warn
@@ -364,11 +363,11 @@
 - expo
 - Location Data Auto-Recovery Implementation Plan
 - @bugsnag/browser-performance
+- @bugsnag/js
 - axios
 - ImageWithFallback.tsx
 - expo-battery
 - Welcome to your Expo app 👋
-- Assistant
 - next-themes
 - @bugsnag/js
 - @radix-ui/react-alert-dialog
@@ -407,7 +406,6 @@
 - .install
 - @bugsnag/expo
 - TodayRoadBackdrop.tsx
-- @tanstack/react-query-persist-client
 - react-native-gesture-handler
 - db.ts
 - react-native-chart-kit
@@ -442,18 +440,15 @@
 - react-native-maps
 - jwt-decode
 - Assistant
-- addNetworkingHandler
 - chart.tsx
 - bcryptjs
 - axios
-- stopImmediatePropagation
 - @types/cors
 - @types/express
 - typescript
 - zod
 - rider-fcm-migration.test.ts
 - recharts
-- setTranslucent
 - expo-notifications
 - expo-router
 - expo-status-bar
@@ -480,23 +475,23 @@
 ## Surprising Connections (you probably didn't know these)
 - `Sparkline()` --indirect_call--> `v()`  [INFERRED]
   .superpowers/sdd/2026-10-04-web-typecheck-repair/baseline/src/app/pages/Admin/AnalyticsHub.tsx → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
-- `transformPeakHours()` --indirect_call--> `i()`  [INFERRED]
-  src/app/pages/Admin/__tests__/analytics-logic.test.ts → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
 - `DispatchMapView()` --indirect_call--> `e()`  [INFERRED]
   .superpowers/sdd/2026-10-04-web-typecheck-repair/baseline/src/app/components/Admin/Dispatch/DispatchMapView.tsx → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
 - `RequestDetailsPanel()` --indirect_call--> `e()`  [INFERRED]
   .superpowers/sdd/2026-10-04-web-typecheck-repair/baseline/src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
 - `RiderSelectionList()` --indirect_call--> `a()`  [INFERRED]
   .superpowers/sdd/2026-10-04-web-typecheck-repair/baseline/src/app/components/Admin/Dispatch/RiderSelectionList.tsx → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
+- `RiderSelectionList()` --indirect_call--> `b()`  [INFERRED]
+  .superpowers/sdd/2026-10-04-web-typecheck-repair/baseline/src/app/components/Admin/Dispatch/RiderSelectionList.tsx → mobile-admin/.expo/login-redesign/android/_expo/static/js/android/entry-5394e4b3b24662aa4aa133877b65a004.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (512 total, 172 thin omitted)
+## Communities (509 total, 166 thin omitted)
 
 ### Community 0 - "index.tsx"
 Cohesion: 0.01
-Nodes (50): alpha(), announceForAccessibility(), announceForAccessibilityWithOptions(), applyWithGuard(), bn(), callReactNativeMicrotasks(), check(), checkPermission() (+42 more)
+Nodes (39): addNetworkingHandler(), alpha(), announceForAccessibility(), announceForAccessibilityWithOptions(), applyWithGuard(), callReactNativeMicrotasks(), check(), checkPermission() (+31 more)
 
 ### Community 1 - "utils.ts"
 Cohesion: 0.01
@@ -512,15 +507,15 @@ Nodes (190): 10. PWA update experience, 11. Mobile usability, 12. Accessibility,
 
 ### Community 4 - "sidebar.tsx"
 Cohesion: 0.02
-Nodes (14): add(), alert(), clearInteractionHandle(), closeDrawer(), createSerializableSet(), duration(), n(), onStateChange() (+6 more)
+Nodes (17): accessor(), add(), clearInteractionHandle(), closeDrawer(), createSerializableSet(), duration(), info(), n() (+9 more)
 
 ### Community 5 - "CalendarView.tsx"
 Cohesion: 0.02
-Nodes (20): checkConfig(), createSerializableImport(), enable(), enqueue(), error(), fetchThenEvalAsync(), getStateForRouteFocus(), getUser() (+12 more)
+Nodes (14): checkConfig(), createSerializableImport(), enable(), error(), fetchThenEvalAsync(), getStateForRouteFocus(), getUser(), isVisible() (+6 more)
 
 ### Community 6 - "devDependencies"
 Cohesion: 0.02
-Nodes (9): computeViewableItems(), createSerializableBigInt(), dismiss(), _onUpdateSync(), s(), setColor(), setHidden(), setState() (+1 more)
+Nodes (13): computeViewableItems(), createSerializableBigInt(), dismiss(), _onUpdateSync(), registerForEvents(), s(), setColor(), setHidden() (+5 more)
 
 ### Community 7 - "AuthContext.tsx"
 Cohesion: 0.01
@@ -528,11 +523,11 @@ Nodes (155): Activity, Activity, Activity, Activity, Activity, Activity, Activit
 
 ### Community 8 - "expo"
 Cohesion: 0.02
-Nodes (118): Avatar(), AvatarFallback(), AvatarImage(), BreadcrumbEllipsis(), BreadcrumbItem(), BreadcrumbLink(), BreadcrumbList(), BreadcrumbPage() (+110 more)
+Nodes (104): AlertDialogAction(), AlertDialogCancel(), Avatar(), AvatarFallback(), AvatarImage(), BreadcrumbEllipsis(), BreadcrumbItem(), BreadcrumbLink() (+96 more)
 
 ### Community 9 - "RequestDetailsPanel.tsx"
 Cohesion: 0.02
-Nodes (128): Alert(), AlertDescription(), AlertTitle(), alertVariants, AlertDialog(), AlertDialogAction(), AlertDialogCancel(), AlertDialogContent() (+120 more)
+Nodes (104): Badge(), Alert(), AlertDescription(), AlertTitle(), alertVariants, Avatar(), AvatarFallback(), AvatarImage() (+96 more)
 
 ### Community 10 - "_layout.tsx"
 Cohesion: 0.01
@@ -540,7 +535,7 @@ Nodes (144): Activity, Activity, Activity, Activity, Activity, Activity, Activit
 
 ### Community 11 - "useThemeColor"
 Cohesion: 0.02
-Nodes (113): AccessibilityInfo(), ActionSheetIOS(), ActivityIndicator(), Animated(), Appearance(), AppRegistry(), AppState(), BackHandler() (+105 more)
+Nodes (114): AccessibilityInfo(), ActionSheetIOS(), ActivityIndicator(), Animated(), Appearance(), AppRegistry(), AppState(), BackHandler() (+106 more)
 
 ### Community 12 - "AdminLayout.tsx"
 Cohesion: 0.01
@@ -555,8 +550,8 @@ Cohesion: 0.01
 Nodes (192): Activity, Activity, Activity, Activity, Activity, Activity, Activity, Activity (+184 more)
 
 ### Community 15 - "DispatchConsole.tsx"
-Cohesion: 0.06
-Nodes (47): avatarIds, getDefaultRiderAvatarId(), FloatingRiderMessagePreview(), Props, useIsMobile(), AdminMessagingContent(), ConversationDetail(), ConversationRow() (+39 more)
+Cohesion: 0.09
+Nodes (35): useIsMobile(), AdminMessagingContent(), ConversationDetail(), ConversationRow(), formatMessageDate(), formatSummaryDate(), getErrorMessage(), requestLabel() (+27 more)
 
 ### Community 16 - "taskFilters.ts"
 Cohesion: 0.02
@@ -564,35 +559,35 @@ Nodes (121): Activity, Activity, Activity, Activity, Activity, Activity, Activit
 
 ### Community 17 - "LiveTrackingMap.tsx"
 Cohesion: 0.02
-Nodes (13): clearWatch(), dispatchViewManagerCommand(), emitTimeDriftWarning(), lastUnhandledLink(), measure(), measureInWindow(), measureLayoutRelativeToParent(), sendOverSocket() (+5 more)
+Nodes (15): clearWatch(), createFromParts(), dispatchViewManagerCommand(), emitTimeDriftWarning(), lastUnhandledLink(), measure(), measureInWindow(), measureLayoutRelativeToParent() (+7 more)
 
 ### Community 18 - "_layout.tsx"
 Cohesion: 0.03
 Nodes (61): Activity, Activity, Activity, Activity, Activity, Activity, Activity, Activity (+53 more)
 
 ### Community 19 - "compilerOptions"
-Cohesion: 0.14
-Nodes (17): RequestCard(), RequestCardProps, LiveTrackingDashboard(), LiveTrackingDashboardProps, SyncPhase, TrackingLocation, TrackingPayload, TrackingStatus (+9 more)
+Cohesion: 0.07
+Nodes (28): getJwtSecret(), getRefreshSecret(), isPlaceholder(), validateProductionSecurityConfig(), secure, authenticate(), router, app (+20 more)
 
 ### Community 20 - "RealTimeContext.tsx"
 Cohesion: 0.07
-Nodes (52): AuthRequest, getRiderShiftAccess(), requireRiderWorkAccess(), audit(), campaignInput, getCampaign(), lifecycle, normalizeCampaign() (+44 more)
+Nodes (53): AuthRequest, getRiderShiftAccess(), requireRiderWorkAccess(), audit(), campaignInput, getCampaign(), lifecycle, normalizeCampaign() (+45 more)
 
 ### Community 23 - "index.ts"
 Cohesion: 0.02
-Nodes (9): c(), createSerializableWorklet(), getInitialState(), getIsInitial(), getKey(), getRehydratedState(), setKey(), update() (+1 more)
+Nodes (17): build(), c(), createCustomSerializable(), createSerializableInitializer(), createSerializableWorklet(), disableQueue(), f(), from() (+9 more)
 
 ### Community 24 - "compilerOptions"
-Cohesion: 0.11
-Nodes (28): HistoryScreen(), TodayScreen(), OverdueScreen(), TomorrowScreen(), getDeadlineTime(), OverdueTaskCard(), OverdueTaskCardProps, styles (+20 more)
+Cohesion: 0.09
+Nodes (34): HistoryScreen(), TodayScreen(), OverdueScreen(), TomorrowScreen(), getDeadlineTime(), OverdueTaskCard(), task, formatCountdown() (+26 more)
 
 ### Community 25 - "dependencies"
 Cohesion: 0.06
-Nodes (50): options(), ConversationScreen(), styles, MessageBubble(), styles, MessageComposer(), styles, incoming (+42 more)
+Nodes (51): options(), InboxScreen(), styles, TabLayout(), ConversationRow(), styles, MessageBubble(), styles (+43 more)
 
 ### Community 26 - "db.ts"
-Cohesion: 0.03
-Nodes (39): build(), clearCache(), clearFormData(), clearHistory(), Clipboard(), createCustomSerializable(), createSerializableHostObject(), disableQueue() (+31 more)
+Cohesion: 0.02
+Nodes (45): clearCache(), clearFormData(), clearHistory(), Clipboard(), createSerializableHostObject(), emitEvent(), enqueue(), getParts() (+37 more)
 
 ### Community 27 - "menubar.tsx"
 Cohesion: 0.03
@@ -603,8 +598,8 @@ Cohesion: 0.29
 Nodes (9): authorize(), fetchJson(), getGeoapifyEstimate(), getOsrmEstimate(), getRouteEstimate(), isValidPoint(), Point, RouteEstimate (+1 more)
 
 ### Community 29 - "locationTracking.ts"
-Cohesion: 0.07
-Nodes (52): DevSimulator(), OperationalIntegrityViewProps, PasswordResetOverlay(), Props, PasswordStrengthMeter(), Props, Badge(), badgeVariants (+44 more)
+Cohesion: 0.06
+Nodes (75): ConflictResolutionModalProps, DeviationApprovalModal(), DeviationApprovalModalProps, DevSimulator(), request, OperationalIntegrityViewProps, PasswordResetOverlay(), Props (+67 more)
 
 ### Community 30 - "dependencies"
 Cohesion: 0.03
@@ -616,35 +611,35 @@ Nodes (70): Activity, Activity, Activity, Activity, Activity, Activity, Activity
 
 ### Community 32 - "connectivityLogger.ts"
 Cohesion: 0.02
-Nodes (10): assert(), createSerializableString(), darken(), emit(), h(), requestPermission(), _reset(), setAnimatedNodeValue() (+2 more)
+Nodes (7): assert(), createSerializableString(), darken(), emit(), h(), setToolbarMenuElementOptions(), monitor()
 
 ### Community 33 - "auth.ts"
 Cohesion: 0.06
-Nodes (56): assertCounts(), invoke(), main(), ACCOUNTING_BUCKETS, ACCOUNTING_LABELS, AccountingBucket, AccountingRequest, buildRequestAccounting() (+48 more)
+Nodes (54): assertCounts(), invoke(), main(), ACCOUNTING_BUCKETS, ACCOUNTING_LABELS, AccountingBucket, AccountingRequest, buildRequestAccounting() (+46 more)
 
 ### Community 34 - "carousel.tsx"
-Cohesion: 0.06
-Nodes (34): DispatchMapViewProps, MapPickerProps, request(), clearLegacyPersonnelV2Draft(), clearPersonnelV2Draft(), getPersonnelV2DraftKey(), StorageRemover, ARRIVAL_TIME_SLOTS (+26 more)
+Cohesion: 0.05
+Nodes (41): destinationIcon, DispatchMapView(), DispatchMapViewProps, originIcon, riderIcon, DefaultIcon, formatAddress(), MapPickerContent() (+33 more)
 
 ### Community 35 - "hybrid-e2e-lifecycle.spec.ts"
-Cohesion: 0.06
-Nodes (44): DevSimulator(), OperationalIntegrityView(), OperationalIntegrityViewProps, LightTrails(), PasswordResetOverlay(), Props, PasswordStrengthMeter(), Props (+36 more)
+Cohesion: 0.09
+Nodes (27): OperationalIntegrityView(), AnalyticsHub(), COLORS, ConnectivityCard(), eventBadgeClass(), formatConnectivityEvent(), formatOverdueDuration(), formatSafeDate() (+19 more)
 
 ### Community 36 - "devDependencies"
-Cohesion: 0.06
-Nodes (40): App(), ConflictResolutionModal(), NotificationBell(), MapPickerContent(), ProtectedRoute(), ProtectedRouteProps, Toaster(), AuthContext (+32 more)
+Cohesion: 0.10
+Nodes (23): App(), Toaster(), AuthContext, AuthProvider(), DataContext, DataContextType, DataProvider(), RealTimeContext (+15 more)
 
 ### Community 37 - "dependencies"
 Cohesion: 0.02
-Nodes (7): al(), createSerializableMap(), createSerializableNonWorkletFunction(), d(), e(), Q(), register()
+Nodes (7): al(), createSerializableMap(), createSerializableNonWorkletFunction(), d(), e(), register(), requestPermission()
 
 ### Community 38 - "include"
-Cohesion: 0.06
-Nodes (41): destinationIcon, DispatchMapView(), DispatchMapViewProps, originIcon, riderIcon, MapPickerProps, useData(), BeforeInstallPromptEvent (+33 more)
+Cohesion: 0.04
+Nodes (52): destinationIcon, DispatchMapView(), DispatchMapViewProps, originIcon, riderIcon, DefaultIcon, MapPicker(), MapPickerContent() (+44 more)
 
 ### Community 39 - "PasswordResetOverlay.tsx"
-Cohesion: 0.03
-Nodes (14): abortRequest(), b(), back(), cancelSearch(), clearText(), createSerializableArrayBufferView(), di(), go() (+6 more)
+Cohesion: 0.04
+Nodes (9): abortRequest(), b(), back(), cancelSearch(), clearText(), createSerializableArrayBufferView(), sendRequest(), setText() (+1 more)
 
 ### Community 40 - "include"
 Cohesion: 0.11
@@ -655,8 +650,12 @@ Cohesion: 0.04
 Nodes (51): concurrently, @dicebear/core, @dicebear/styles, jsdom, devDependencies, concurrently, @dicebear/core, @dicebear/styles (+43 more)
 
 ### Community 42 - "pagination.tsx"
-Cohesion: 0.06
-Nodes (56): DeviationApprovalModal(), RequestCard(), RequestCardProps, RequestDetailsPanelProps, Badge(), BadgeProps, DAY_ORDER, DispatchFilter (+48 more)
+Cohesion: 0.05
+Nodes (66): RequestCard(), RequestCardProps, RequestDetailsPanel(), RequestDetailsPanelProps, Badge(), BadgeProps, DAY_ORDER, DispatchFilter (+58 more)
+
+### Community 43 - "form.tsx"
+Cohesion: 0.12
+Nodes (15): avatarIds, getDefaultRiderAvatarId(), FloatingRiderMessagePreview(), Props, DefaultIcon, RiderLive, RiderMap(), mockRider (+7 more)
 
 ### Community 44 - "package.json"
 Cohesion: 0.09
@@ -664,11 +663,11 @@ Nodes (21): fs, reactCompiler, typedRoutes, expo, experiments, icon, ios, name (
 
 ### Community 45 - "expo"
 Cohesion: 0.05
-Nodes (7): beginScroll(), createSerializableBoolean(), endScroll(), K(), metrics(), registerFrameCallback(), runOnUISync()
+Nodes (8): assertIsReady(), beginScroll(), createSerializableBoolean(), endScroll(), K(), metrics(), registerFrameCallback(), runOnUISync()
 
 ### Community 46 - "apiService.ts"
 Cohesion: 0.07
-Nodes (43): idempotency(), getPhilippineDateString(), getRiderAvailabilityIssue(), normalizeDateString(), router, app, connection, mocks (+35 more)
+Nodes (42): validate(), getPhilippineDateString(), getRiderAvailabilityIssue(), normalizeDateString(), router, app, connection, mocks (+34 more)
 
 ### Community 47 - "auth.ts"
 Cohesion: 0.20
@@ -676,51 +675,51 @@ Nodes (5): Bundle, ReactActivity, ReactActivityDelegate, String, MainActivity
 
 ### Community 48 - "devDependencies"
 Cohesion: 0.07
-Nodes (29): styles, ParallaxScrollView(), Props, styles, styles, ThemedText(), ThemedTextProps, ThemedView() (+21 more)
+Nodes (25): styles, ParallaxScrollView(), Props, styles, styles, ThemedText(), ThemedTextProps, ThemedView() (+17 more)
 
 ### Community 49 - "chart.tsx"
-Cohesion: 0.05
-Nodes (73): errandsWordmark, loginHero, loginRoadFooter, LoginScreen(), statusConfig, styles, styles, InboxScreen() (+65 more)
+Cohesion: 0.06
+Nodes (57): styles, styles, styles, styles, styles, ABSENCE_REASONS, AttendanceGate(), AttendanceGateProps (+49 more)
 
 ### Community 50 - "drawer.tsx"
 Cohesion: 0.04
 Nodes (45): @bugsnag/plugin-react, class-variance-authority, clsx, input-otp, dependencies, argon2, @bugsnag/js, @bugsnag/plugin-react (+37 more)
 
 ### Community 51 - "MainActivity"
-Cohesion: 0.14
-Nodes (25): ConflictResolutionModalProps, DeviationApprovalModalProps, DefaultIcon, MapPicker(), SearchResult, QuickStartGuide(), Badge(), badgeVariants (+17 more)
+Cohesion: 0.07
+Nodes (50): DevSimulator(), EnhancedBatchApproveModal(), OperationalIntegrityViewProps, LightTrails(), PasswordResetOverlay(), Props, PasswordStrengthMeter(), Props (+42 more)
 
 ### Community 52 - "index.tsx"
 Cohesion: 0.09
 Nodes (35): DeliveryNotification, DeliveryNotificationExecutor, DeliveryPushOptions, persistAdminDispatchNotifications(), persistDeliveryNotification(), publishDeliveryNotification(), publishSavedWebPushNotification(), { enqueueWebPush } (+27 more)
 
 ### Community 53 - "responsive.ts"
-Cohesion: 0.05
-Nodes (60): messageRateLimiter, parseOr400(), participantRoles, resolveRequestConversation(), router, sendServiceError(), app, emit (+52 more)
+Cohesion: 0.07
+Nodes (47): messageRateLimiter, parseOr400(), participantRoles, resolveRequestConversation(), sendServiceError(), conversationIdSchema, createMessageSchema, id (+39 more)
 
 ### Community 54 - "MainActivity"
 Cohesion: 0.05
 Nodes (36): 1. Administrator, 1. Authentication & Identity Management, 2. Data Management, 2. Department Personnel, 3. Location Selection, 3. Rider, 4. Calendar & Scheduling, 5. Notification System (+28 more)
 
 ### Community 55 - "compilerOptions"
-Cohesion: 0.15
-Nodes (19): allowedAvatarIds, isRiderAvatarId(), RIDER_AVATAR_IDS, RiderAvatarId, ensureRiderAvatarPreferencesTable(), saveRiderAvatarPreference(), approveLateCheckIn(), Db (+11 more)
+Cohesion: 0.14
+Nodes (22): ensureRiderAvatarPreferencesTable(), saveRiderAvatarPreference(), consumeApprovedShiftReopenRequest(), createShiftReopenRequest(), Db, getCurrentShiftReopenRequest(), ShiftReopenRequestError, ShiftReopenStatus (+14 more)
 
 ### Community 56 - "RequestCard.tsx"
-Cohesion: 0.07
-Nodes (39): RequestDetailsPanel(), RiderSelectionList(), MovementEvent, TimelineComponent(), TimelineComponentProps, EnhancedBatchApproveModal(), Accordion(), AccordionContent() (+31 more)
+Cohesion: 0.19
+Nodes (13): Carousel(), CarouselApi, CarouselContent(), CarouselContext, CarouselContextProps, CarouselItem(), CarouselNext(), CarouselOptions (+5 more)
 
 ### Community 57 - "dropdown-menu.tsx"
-Cohesion: 0.10
-Nodes (34): source(), RouteOptimizedModal(), AttendanceStatus, DutyToggleResult, isValidCoordinate(), LocationContext, LocationProvider(), LocationState (+26 more)
+Cohesion: 0.07
+Nodes (40): source(), mockDashboard, mockCheckIn, mockDashboard, mockRouter, mockToggleDuty, RouteOptimizedModal(), AttendanceStatus (+32 more)
 
 ### Community 58 - "navigation-menu.tsx"
 Cohesion: 0.03
 Nodes (68): Activity, Activity, Activity, Activity, Activity, Activity, Activity, Activity (+60 more)
 
 ### Community 59 - "MainApplication"
-Cohesion: 0.15
-Nodes (12): JobDetailsScreen(), styles, { width, height }, SequentialLockPanel(), SequentialLockPanelProps, styles, EtaStatus, formatDuration() (+4 more)
+Cohesion: 0.16
+Nodes (10): JobDetailsScreen(), styles, { width, height }, SequentialLockPanel(), SequentialLockPanelProps, styles, EtaStatus, formatDuration() (+2 more)
 
 ### Community 60 - "devDependencies"
 Cohesion: 0.06
@@ -728,23 +727,23 @@ Nodes (33): Changed files, Changes, Changes, Changes, Changes, Concerns, Diff wh
 
 ### Community 61 - "MainApplication"
 Cohesion: 0.10
-Nodes (26): formatRequestRow(), formatRequestRow(), router, TERMINAL_STATUSES, formatOverdueDuration(), processProactiveOverdueAlerts(), startProactiveOverdueWorker(), TERMINAL (+18 more)
+Nodes (27): sendPushNotification(), formatRequestRow(), formatRequestRow(), router, TERMINAL_STATUSES, formatOverdueDuration(), processProactiveOverdueAlerts(), startProactiveOverdueWorker() (+19 more)
 
 ### Community 62 - "reset-project.js"
-Cohesion: 0.13
-Nodes (29): useIsMobile(), AdminMessagingContent(), ConversationDetail(), ConversationRow(), formatMessageDate(), formatSummaryDate(), getErrorMessage(), requestLabel() (+21 more)
+Cohesion: 0.09
+Nodes (36): Sheet(), SheetContent(), SheetFooter(), SheetHeader(), SheetOverlay(), SheetTitle(), SheetTrigger(), AdminMessaging() (+28 more)
 
 ### Community 63 - "package.json"
-Cohesion: 0.12
-Nodes (16): typedRoutes, expo, experiments, icon, ios, name, orientation, scheme (+8 more)
+Cohesion: 0.09
+Nodes (21): backgroundColor, foregroundImage, adaptiveIcon, package, typedRoutes, expo, android, experiments (+13 more)
 
 ### Community 65 - "package.json"
 Cohesion: 0.02
 Nodes (36): _(), addAnimatedEventToView(), addEventListener(), addListener(), connectAnimatedNodeToShadowNodeFamily(), connectAnimatedNodeToView(), constructor(), createAnimatedNode() (+28 more)
 
 ### Community 66 - "scripts"
-Cohesion: 0.06
-Nodes (37): getJwtSecret(), getRefreshSecret(), isPlaceholder(), validateProductionSecurityConfig(), secure, authenticate(), validate(), generateAccessToken() (+29 more)
+Cohesion: 0.09
+Nodes (25): generateAccessToken(), generateTokens(), getSessionTtl(), router, toUserProfile(), getRememberMe(), app, { query } (+17 more)
 
 ### Community 67 - "android"
 Cohesion: 0.07
@@ -752,35 +751,35 @@ Nodes (26): Interceptor Rider Eligibility Implementation Plan, Review Focus, Tas
 
 ### Community 68 - "toggle-group.tsx"
 Cohesion: 0.04
-Nodes (53): expo-crypto, expo-network, @gorhom/bottom-sheet, dependencies, base-64, expo-constants, expo-crypto, expo-dev-client (+45 more)
+Nodes (53): expo-crypto, expo-network, @gorhom/bottom-sheet, dependencies, axios, expo-constants, expo-crypto, expo-dev-client (+45 more)
 
 ### Community 69 - "api.ts"
 Cohesion: 0.04
-Nodes (72): App(), destinationIcon, DispatchMapView(), originIcon, riderIcon, NotificationBell(), ProtectedRoute(), ProtectedRouteProps (+64 more)
+Nodes (79): App(), NotificationBell(), ProtectedRoute(), ProtectedRouteProps, QuickStartGuide(), DropdownMenu(), DropdownMenuCheckboxItem(), DropdownMenuContent() (+71 more)
 
 ### Community 70 - "permissions"
-Cohesion: 0.20
-Nodes (16): CalendarScreen(), isFabricRenderer, LiveActivityCard(), LiveActivityCardProps, PremiumJobCard(), styles, COLORS, DeliveryStatusPresentation (+8 more)
+Cohesion: 0.16
+Nodes (21): CalendarScreen(), isFabricRenderer, buildChatHistory(), formatTime(), LogItem, LogReply, SystemLogs(), LiveActivityCard() (+13 more)
 
 ### Community 71 - "extra"
 Cohesion: 0.11
 Nodes (16): mockAddNotificationReceivedListener, mockAddNotificationResponseReceivedListener, mockGetInitialNotification, mockGetLastNotificationResponseAsync, mockGetToken, mockInvalidateQueries, mockListenForFcmTokenRefresh, mockNavigate (+8 more)
 
 ### Community 72 - "personnel-to-admin-lifecycle.spec.ts"
-Cohesion: 0.20
-Nodes (12): DispatchCenter(), AdminDashboard(), MetricCardProps, RecentActivity, buildChatHistory(), formatTime(), LogItem, LogReply (+4 more)
+Cohesion: 0.27
+Nodes (10): br(), dn(), dr(), it(), kr(), mr(), ni(), ra() (+2 more)
 
 ### Community 73 - "tracking-visualization.test.ts"
 Cohesion: 0.06
 Nodes (38): RootLayout(), RootLayoutNav(), startupSplashImage, styles, unstable_settings, AppErrorBoundary, AppErrorBoundaryProps, AppErrorBoundaryState (+30 more)
 
 ### Community 74 - "ios"
-Cohesion: 0.10
-Nodes (32): bi(), bo(), ci(), createAttributePayload(), createPublicInstance(), diffAttributePayloads(), ei(), es() (+24 more)
+Cohesion: 0.09
+Nodes (33): bi(), bl(), bo(), ci(), createAttributePayload(), createPublicInstance(), diffAttributePayloads(), ei() (+25 more)
 
 ### Community 75 - "plugins"
 Cohesion: 0.08
-Nodes (26): createNotificationSchema, expo, isAllowedWebPushEndpoint(), isValidWebPushSubscription(), notificationCreateLimiter, pushTokenRemovalSchema, pushTokenSchema, router (+18 more)
+Nodes (25): createNotificationSchema, expo, isAllowedWebPushEndpoint(), isValidWebPushSubscription(), notificationCreateLimiter, pushTokenRemovalSchema, pushTokenSchema, router (+17 more)
 
 ### Community 76 - "setup.ts"
 Cohesion: 0.07
@@ -791,8 +790,8 @@ Cohesion: 0.14
 Nodes (20): { getWebPushStatus, enableWebPush, disableWebPush }, STATUS_COPY, WebPushSettings(), authenticatedFetch, getSubscription, localSubscription, originalDescriptors, registration (+12 more)
 
 ### Community 78 - "input-otp.tsx"
-Cohesion: 0.13
-Nodes (21): calculateBearing(), createRiderIcon(), dropoffIcon, fetchChunkedDrivingRoute(), fetchDrivingRoute(), flattenLngLatCoordinates(), isValidLatLng(), LatLng (+13 more)
+Cohesion: 0.15
+Nodes (19): calculateBearing(), createRiderIcon(), dropoffIcon, fetchChunkedDrivingRoute(), fetchDrivingRoute(), flattenLngLatCoordinates(), isValidLatLng(), LatLng (+11 more)
 
 ### Community 79 - "gradlew"
 Cohesion: 0.08
@@ -804,15 +803,15 @@ Nodes (24): DOM, DOM.Iterable, ./src/*, compilerOptions, allowImportingTsExtensi
 
 ### Community 81 - "gradlew"
 Cohesion: 0.07
-Nodes (34): Alert(), AlertDescription(), AlertTitle(), alertVariants, DropdownMenu(), DropdownMenuCheckboxItem(), DropdownMenuContent(), DropdownMenuItem() (+26 more)
+Nodes (53): ConflictResolutionModal(), ConflictResolutionModalProps, DeviationApprovalModal(), DeviationApprovalModalProps, NotificationBell(), QuickStartGuide(), Checkbox(), DialogContent (+45 more)
 
 ### Community 82 - "splash"
-Cohesion: 0.13
-Nodes (22): calculateBearing(), createRiderIcon(), dropoffIcon, fetchChunkedDrivingRoute(), fetchDrivingRoute(), flattenLngLatCoordinates(), getRouteProgress(), isValidLatLng() (+14 more)
+Cohesion: 0.08
+Nodes (34): calculateBearing(), createRiderIcon(), dropoffIcon, fetchChunkedDrivingRoute(), fetchDrivingRoute(), flattenLngLatCoordinates(), getRouteProgress(), isValidLatLng() (+26 more)
 
 ### Community 83 - "router.d.ts"
-Cohesion: 0.18
-Nodes (12): BugsnagGlobals, RootLayout(), PremiumJobCardProps, CONFIG, PresenceStatus, RealTimeProvider(), RealTimeToast, RiderLocation (+4 more)
+Cohesion: 0.28
+Nodes (6): BugsnagGlobals, RootLayout(), RealTimeProvider(), ThemeProvider(), PushNotificationState, usePushNotifications()
 
 ### Community 84 - "collapsible.tsx"
 Cohesion: 0.22
@@ -823,12 +822,12 @@ Cohesion: 0.09
 Nodes (23): jest, jest-expo, devDependencies, babel-preset-expo, eslint, eslint-config-expo, jest, jest-expo (+15 more)
 
 ### Community 86 - "dashboard-audit.test.ts"
-Cohesion: 0.17
-Nodes (15): Index(), AdminLoginScreen(), AnalyticsDashboard(), parseSafeDate(), TABS, TabsLayout(), ProfileScreen(), DispatchModal() (+7 more)
+Cohesion: 0.12
+Nodes (22): Index(), JobTrackingScreen(), AdminLoginScreen(), DispatchCenter(), parseSafeDate(), TABS, AdminDashboard(), MetricCardProps (+14 more)
 
 ### Community 87 - "locationTracking.test.ts"
-Cohesion: 0.03
-Nodes (133): a(), aa(), accessor(), ae(), ai(), ar(), assertIsReady(), at() (+125 more)
+Cohesion: 0.04
+Nodes (93): a(), ae(), alert(), ar(), at(), be(), bt(), ce() (+85 more)
 
 ### Community 88 - "eslint.config.js"
 Cohesion: 0.09
@@ -843,8 +842,8 @@ Cohesion: 0.25
 Nodes (5): Application, Configuration, ReactApplication, ReactHost, MainApplication
 
 ### Community 91 - "web"
-Cohesion: 0.18
-Nodes (10): ConflictResolutionModal(), useRealTime(), AttendanceDashboard(), AttendanceRecord, formatPhilippineTime(), getPhilippineDateString(), parsePhilippineDateTime(), autoAbsentRider (+2 more)
+Cohesion: 0.19
+Nodes (9): ConflictResolutionModal(), AttendanceDashboard(), AttendanceRecord, formatPhilippineTime(), getPhilippineDateString(), parsePhilippineDateTime(), autoAbsentRider, { socket, toastSuccess } (+1 more)
 
 ### Community 92 - "external-link.tsx"
 Cohesion: 0.11
@@ -871,16 +870,16 @@ Cohesion: 0.11
 Nodes (15): Active Route Selection Implementation Plan, File Structure, Global Constraints, Review Focus, Task 1: Add active selection state and route launch, Task 2: Add responsive selection controls and action bar, Task 3: Verify route review integration and quality gates, Acceptance criteria (+7 more)
 
 ### Community 98 - "tracking-status.test.ts"
-Cohesion: 0.24
-Nodes (13): TIMEFRAMES, { width }, BLACK_PINK_COLORS, DARK_COLORS, GOLD_COLORS, LIGHT_COLORS, RADIUS, SPACING (+5 more)
+Cohesion: 0.22
+Nodes (14): AnalyticsDashboard(), TIMEFRAMES, { width }, BLACK_PINK_COLORS, DARK_COLORS, GOLD_COLORS, LIGHT_COLORS, RADIUS (+6 more)
 
 ### Community 99 - "bcryptjs"
 Cohesion: 0.32
 Nodes (13): AuthContext, AuthContextType, AuthProvider(), decodeJwtPayload(), isTokenExpired(), User, refreshAccessToken(), clearTokens() (+5 more)
 
 ### Community 100 - "@bugsnag/browser-performance"
-Cohesion: 0.09
-Nodes (31): ao(), co(), En(), eo(), eu(), fo(), In(), io() (+23 more)
+Cohesion: 0.08
+Nodes (39): ao(), bn(), Bu(), co(), En(), eo(), fo(), hl() (+31 more)
 
 ### Community 101 - "@bugsnag/plugin-express"
 Cohesion: 0.12
@@ -919,8 +918,8 @@ Cohesion: 0.12
 Nodes (15): Approved direction, Data contract and persistence, Design review notes, Error handling and compatibility, Goals, Login success welcome, Non-goals, Rider app settings (+7 more)
 
 ### Community 110 - "@bugsnag/expo-performance"
-Cohesion: 0.13
-Nodes (23): CategoryPicker(), CategoryPickerProps, ICON_MAP, Command(), CommandEmpty(), CommandGroup(), CommandInput(), CommandItem() (+15 more)
+Cohesion: 0.11
+Nodes (27): CategoryPicker(), CategoryPickerProps, ICON_MAP, Command(), CommandEmpty(), CommandGroup(), CommandInput(), CommandItem() (+19 more)
 
 ### Community 111 - "expo-local-authentication"
 Cohesion: 0.12
@@ -932,7 +931,7 @@ Nodes (14): Current Gaps to Close, Explicit Non-Guarantees, Global Constraints, 
 
 ### Community 113 - "expo-secure-store"
 Cohesion: 0.13
-Nodes (15): @bugsnag/plugin-express, cors, qrcode, dependencies, argon2, @bugsnag/js, @bugsnag/plugin-express, cors (+7 more)
+Nodes (15): bcryptjs, @bugsnag/plugin-express, cors, qrcode, dependencies, argon2, bcryptjs, @bugsnag/plugin-express (+7 more)
 
 ### Community 114 - "expo-server-sdk"
 Cohesion: 0.83
@@ -971,8 +970,8 @@ Cohesion: 0.33
 Nodes (5): Acceptance checklist, Deployment order and limitations, Device management, Rider Managed-Device Connectivity and Recovery, Rider recovery
 
 ### Community 123 - "_layout.tsx"
-Cohesion: 0.04
-Nodes (66): ConflictResolutionModalProps, DeviationApprovalModal(), DeviationApprovalModalProps, RequestDetailsPanel(), RequestDetailsPanelProps, RiderSelectionList(), RiderSelectionListProps, RiderType (+58 more)
+Cohesion: 0.05
+Nodes (51): RequestDetailsPanel(), RequestDetailsPanelProps, RiderSelectionList(), RiderSelectionListProps, RiderType, rider, task, onlineRider (+43 more)
 
 ### Community 124 - "expo-env.d.ts"
 Cohesion: 0.21
@@ -995,12 +994,12 @@ Cohesion: 0.15
 Nodes (12): 1. Frontend Recovery Hook (`DispatchMapView.tsx`), 2. Backend Patch Endpoint (`server/routes/requests.ts`), 3. Visual Feedback, Backend, Design Spec: Location Data Auto-Recovery, Frontend, Overview, Problem Statement (+4 more)
 
 ### Community 129 - "argon2"
-Cohesion: 0.11
-Nodes (26): Badge(), BadgeProps, DAY_ORDER, RequestList(), RequestListProps, renderActiveList(), task(), CalendarTaskRow() (+18 more)
+Cohesion: 0.07
+Nodes (45): RequestCard(), RequestCardProps, BadgeProps, DAY_ORDER, RequestList(), RequestListProps, renderActiveList(), task() (+37 more)
 
 ### Community 131 - "carousel.tsx"
-Cohesion: 0.70
-Nodes (3): getPushEventKey(), invalidateRiderPushQueries(), QueryInvalidator
+Cohesion: 0.22
+Nodes (15): getPushErrorDetails(), loadFirebaseMessaging(), registerForPushNotificationsAsync(), usePushNotifications(), initializeDeliveryNotificationChannels(), presentForegroundPushNotification(), FcmMessagingClient, listenForFcmTokenRefresh() (+7 more)
 
 ### Community 132 - "expo-font"
 Cohesion: 0.15
@@ -1039,8 +1038,8 @@ Cohesion: 0.17
 Nodes (11): Approaches considered, Boundaries, Browser and service-worker behavior, Error handling and privacy, Existing system context, Goal, Personnel and Admin Web Push Notifications, Server and data flow (+3 more)
 
 ### Community 141 - ".constructor"
-Cohesion: 0.09
-Nodes (52): styles, TabLayout(), useAuth(), useDashboard(), useJobDetails(), getCachedJob(), getCachedJobSnapshot(), getCachedTasks() (+44 more)
+Cohesion: 0.07
+Nodes (59): Config, useAuth(), useDashboard(), useJobDetails(), getCachedJob(), getCachedJobSnapshot(), getCachedTasks(), getDeliveryEta() (+51 more)
 
 ### Community 142 - "plugins"
 Cohesion: 0.25
@@ -1080,7 +1079,7 @@ Nodes (10): Acceptance criteria, Admin behavior, Current problem, Data model, Go
 
 ### Community 151 - "react-native-webview"
 Cohesion: 0.21
-Nodes (18): loadFirebaseMessaging(), registerForPushNotificationsAsync(), usePushNotifications(), clearActiveDeliveryNotification(), DeliveryNotificationData, ExpoNotifications, ForegroundPushMessage, formatOverdueBody() (+10 more)
+Nodes (13): clearActiveDeliveryNotification(), DeliveryNotificationData, ExpoNotifications, ForegroundPushMessage, formatOverdueBody(), getNotifications(), ONGOING_DELIVERY_STATUSES, routeNotificationResponse() (+5 more)
 
 ### Community 152 - "react-native-worklets"
 Cohesion: 0.15
@@ -1091,8 +1090,8 @@ Cohesion: 0.18
 Nodes (11): devDependencies, ts-node-dev, @types/jsonwebtoken, @types/qrcode, @types/speakeasy, @types/uuid, ts-node-dev, @types/jsonwebtoken (+3 more)
 
 ### Community 154 - "bcryptjs"
-Cohesion: 0.11
-Nodes (29): ca(), Cn(), da(), El(), fa(), Ga(), gl(), Gu() (+21 more)
+Cohesion: 0.07
+Nodes (53): aa(), ai(), ba(), ca(), Cl(), Cn(), da(), dt() (+45 more)
 
 ### Community 155 - "base-64.d.ts"
 Cohesion: 0.25
@@ -1195,7 +1194,7 @@ Cohesion: 0.22
 Nodes (8): 1. Goal, 2. Status Mapping Logic, 3. UI Changes, 4. Technical Implementation, A. Header Legend, B. Sidebar Filters, C. List & Calendar Cells, Spec: Synchronizing Calendar Status with Dispatch Console
 
 ### Community 180 - "react-dom"
-Cohesion: 0.11
+Cohesion: 0.13
 Nodes (4): registerInterval(), registerView(), unregisterInterval(), unregisterView()
 
 ### Community 181 - "permissions"
@@ -1280,7 +1279,7 @@ Nodes (6): Assumptions, Automated Coverage Added, Execution, Functional Test Mat
 
 ### Community 205 - "carousel.tsx"
 Cohesion: 0.02
-Nodes (28): bubbles(), cancelable(), cancelBubble(), _checkCacheDirExists(), composed(), composedPath(), createSerializableTurboModuleLike(), currentTarget() (+20 more)
+Nodes (26): bubbles(), cancelable(), cancelBubble(), _checkCacheDirExists(), composed(), composedPath(), createSerializableTurboModuleLike(), currentTarget() (+18 more)
 
 ### Community 206 - "input-otp"
 Cohesion: 0.29
@@ -1382,10 +1381,6 @@ Nodes (4): Changes made, Deployment follow-up and residual risk, Security remedi
 Cohesion: 0.40
 Nodes (4): Maestro Flows, Notes, Prerequisites, Recommended execution order
 
-### Community 238 - "expo-battery"
-Cohesion: 0.16
-Nodes (11): Campaign, CampaignForm, CampaignStatus, Delivery, destinationOptions, emptyForm(), NotificationCampaigns(), philippineDate() (+3 more)
-
 ### Community 242 - ".text"
 Cohesion: 0.40
 Nodes (4): Progress ledger � multi rider shift sessions, Rulings, Tasks, Verification evidence
@@ -1417,6 +1412,10 @@ Nodes (3): Review focus, Tasks, Web Typecheck Repair Implementation Plan
 ### Community 249 - ".componentDidMount"
 Cohesion: 0.15
 Nodes (12): File map, Global Constraints, Implementation Status — 2026-10-22, Review Focus, Rider Connectivity and Offline Sync Implementation Plan, Task 1: Durable server acknowledgment for rider statuses, Task 2: Durable, rider-scoped mobile status outbox, Task 3: Cold-launch delivery cache and account isolation (+4 more)
+
+### Community 250 - ".constructor"
+Cohesion: 0.10
+Nodes (4): hr(), jr(), vr(), yr()
 
 ### Community 251 - "reportException"
 Cohesion: 0.17
@@ -1459,8 +1458,8 @@ Cohesion: 0.25
 Nodes (8): 1. Rider mobile-app flow, Absence or leave, Automatic end of shift, Automatic no-show and late check-in, Ending the shift, Login, Pause availability, Starting the shift
 
 ### Community 282 - "admin-self-healing.spec.ts"
-Cohesion: 0.18
-Nodes (11): AttendanceRecord, AttendanceScreen(), calculateDuration(), formatPhilippineTime(), parsePhilippineDateTime(), PersonnelScreen(), User, Badge() (+3 more)
+Cohesion: 0.36
+Nodes (6): AttendanceRecord, AttendanceScreen(), calculateDuration(), formatPhilippineTime(), parsePhilippineDateTime(), getPhilippineDateString()
 
 ### Community 288 - "hardened-security-audit.spec.ts"
 Cohesion: 0.33
@@ -1468,7 +1467,7 @@ Nodes (11): Campaign, deliver(), eligibilitySql(), eligibleRiders(), processDueN
 
 ### Community 289 - "next-gen-audit.spec.ts"
 Cohesion: 0.03
-Nodes (20): androidResetScreenShadowStateOnOrientationChangeEnabled(), createSerializableError(), debugLogging(), dispatchEvent(), [E.INTERNAL_SET](), extname(), flush(), get() (+12 more)
+Nodes (17): androidResetScreenShadowStateOnOrientationChangeEnabled(), createSerializableError(), debugLogging(), dispatchEvent(), [E.INTERNAL_SET](), extname(), flush(), get() (+9 more)
 
 ### Community 303 - "analytics-logic.test.ts"
 Cohesion: 0.17
@@ -1487,20 +1486,24 @@ Cohesion: 0.14
 Nodes (15): SettingsScreen(), styles, mockBack, mockUpdateAvatar, mockUser, getRiderAvatarSource(), RiderAvatarId, sources (+7 more)
 
 ### Community 307 - "@bugsnag/js"
-Cohesion: 0.27
-Nodes (7): RiderLiveFallback, FleetJob, FleetLocation, FleetPulseMap(), FleetPulseMapProps, FleetRider, styles
+Cohesion: 0.17
+Nodes (13): RiderLiveFallback, PremiumJobCardProps, FleetJob, FleetLocation, FleetPulseMap(), FleetPulseMapProps, FleetRider, styles (+5 more)
 
 ### Community 308 - "extra"
 Cohesion: 0.33
 Nodes (6): apiKey, projectId, extra, bugsnag, eas, router
+
+### Community 309 - "bcryptjs"
+Cohesion: 0.67
+Nodes (4): eu(), lu(), nu(), tu()
 
 ### Community 312 - ".registerFrameCallback"
 Cohesion: 0.33
 Nodes (10): assetServerURL(), defaultAsset(), drawableFolderInBundle(), fromSource(), getAssetUsingResolver(), isLoadedFromFileSystem(), isLoadedFromServer(), resourceIdentifierWithoutScale() (+2 more)
 
 ### Community 317 - "Page-Specific Rules"
-Cohesion: 0.08
-Nodes (27): Config, AuthContext, AuthContextType, AuthProvider(), Harness(), mockFetchQuery, mockGetTasks, mockPatch (+19 more)
+Cohesion: 0.15
+Nodes (14): AuthContext, AuthContextType, AuthProvider(), Harness(), mockFetchQuery, mockGetTasks, mockPatch, mockPost (+6 more)
 
 ### Community 329 - "expo-device"
 Cohesion: 0.20
@@ -1511,8 +1514,8 @@ Cohesion: 0.23
 Nodes (10): FormControl(), FormDescription(), FormFieldContext, FormFieldContextValue, FormItem(), FormItemContext, FormItemContextValue, FormLabel() (+2 more)
 
 ### Community 336 - "._updateViewableItems"
-Cohesion: 0.21
-Nodes (10): { height: SCREEN_HEIGHT }, JobTrackingScreen(), parseSafeDate(), TrackingData, LatLng, RiderMapLocation, styles, TrackingMap() (+2 more)
+Cohesion: 0.14
+Nodes (13): { height: SCREEN_HEIGHT }, parseSafeDate(), TrackingData, PersonnelScreen(), User, LatLng, RiderMapLocation, styles (+5 more)
 
 ### Community 348 - "Rider FCM notification deployment"
 Cohesion: 0.29
@@ -1527,8 +1530,8 @@ Cohesion: 0.50
 Nodes (5): styles, TodayRoadBackdrop(), getTodayEmptyStateTopPadding(), getTodayRoadArtworkBottomOffset(), getTodayRoadArtworkHeight()
 
 ### Community 352 - ".response"
-Cohesion: 0.33
-Nodes (3): addWebSocketHandler(), close(), removeWebSocketHandler()
+Cohesion: 0.20
+Nodes (5): addWebSocketHandler(), close(), release(), removeWebSocketHandler(), unregister()
 
 ### Community 353 - ".componentWillUnmount"
 Cohesion: 0.18
@@ -1551,8 +1554,8 @@ Cohesion: 0.33
 Nodes (6): web, projectId, extra, eas, router, asyncRoutes
 
 ### Community 368 - "ImageWithFallback.tsx"
-Cohesion: 0.18
-Nodes (9): BadgeTone, FloatingTabBar(), FloatingTabBarProps, FloatingTabItem(), FloatingTabItemProps, styles, useTabMotion(), routeLabels (+1 more)
+Cohesion: 0.07
+Nodes (27): value(), ConversationScreen(), styles, errandsWordmark, loginHero, loginRoadFooter, LoginScreen(), statusConfig (+19 more)
 
 ### Community 369 - "expo-battery"
 Cohesion: 0.50
@@ -1562,13 +1565,9 @@ Nodes (4): 2. Database Changes, `notification_campaign_deliveries`, `notificatio
 Cohesion: 0.22
 Nodes (8): Agreed behavior, Failure handling and safety, Out of scope, Purpose, Scope and components, State flow, Verification expectations, Weekday Automatic Absence and Late Check-In Approval
 
-### Community 371 - "Assistant"
-Cohesion: 0.40
-Nodes (5): backgroundColor, foregroundImage, adaptiveIcon, package, android
-
 ### Community 380 - "ShiftHours.tsx"
 Cohesion: 0.40
-Nodes (3): AutomaticShiftClose, ReviewRider, Revision
+Nodes (5): AutomaticShiftClose, getPhilippineTime(), ReviewRider, Revision, ShiftHours()
 
 ### Community 386 - "package.json"
 Cohesion: 0.50
@@ -1591,8 +1590,8 @@ Cohesion: 0.67
 Nodes (3): Company-owned phones, Suggested behavior, User
 
 ### Community 413 - "db.ts"
-Cohesion: 0.12
-Nodes (13): envPaths, pool, formatDateLabel(), getDateFilter(), getDateKey(), getEventTimeFilter(), parsePhilippineDate(), router (+5 more)
+Cohesion: 0.09
+Nodes (17): envPaths, pool, idempotency(), formatDateLabel(), getDateFilter(), getDateKey(), getEventTimeFilter(), parsePhilippineDate() (+9 more)
 
 ### Community 419 - "manageStateFrameCallback"
 Cohesion: 0.40
@@ -1603,18 +1602,18 @@ Cohesion: 0.25
 Nodes (9): ChartConfig, ChartContainer(), ChartContext, ChartContextProps, ChartLegendContent(), ChartTooltipContent(), getPayloadConfigFromPayload(), THEMES (+1 more)
 
 ## Knowledge Gaps
-- **3998 isolated node(s):** `ConflictResolutionModalProps`, `DeviationApprovalModalProps`, `originIcon`, `destinationIcon`, `riderIcon` (+3993 more)
+- **4004 isolated node(s):** `ConflictResolutionModalProps`, `DeviationApprovalModalProps`, `originIcon`, `destinationIcon`, `riderIcon` (+3999 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **172 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **166 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `e()` connect `dependencies` to `index.tsx`, `expo-constants`, `sidebar.tsx`, `CalendarView.tsx`, `devDependencies`, `useThemeColor`, `.constructor`, `LiveTrackingMap.tsx`, `.__detach`, `web-mobile-workflow.spec.ts`, `dispatch.tsx`, `index.ts`, `recharts`, `db.ts`, `connectivityLogger.ts`, `next-gen-audit.spec.ts`, `auth.ts`, `devDependencies`, `include`, `PasswordResetOverlay.tsx`, `pagination.tsx`, `expo`, `RequestCard.tsx`, `MainApplication`, `package.json`, `api.ts`, `setup.ts`, `carousel.tsx`, `locationTracking.test.ts`, `@bugsnag/browser-performance`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `e()` connect `dependencies` to `index.tsx`, `argon2`, `expo-constants`, `sidebar.tsx`, `CalendarView.tsx`, `devDependencies`, `useThemeColor`, `.constructor`, `LiveTrackingMap.tsx`, `.__detach`, `dispatch.tsx`, `index.ts`, `recharts`, `bcryptjs`, `db.ts`, `connectivityLogger.ts`, `next-gen-audit.spec.ts`, `carousel.tsx`, `include`, `PasswordResetOverlay.tsx`, `pagination.tsx`, `expo`, `.recordInteraction`, `MainApplication`, `package.json`, `api.ts`, `personnel-to-admin-lifecycle.spec.ts`, `setup.ts`, `carousel.tsx`, `locationTracking.test.ts`, `@bugsnag/browser-performance`, `.constructor`?**
+  _High betweenness centrality (0.065) - this node is a cross-community bridge._
 - **Why does `plugins` connect `expo-device` to `defaultAsset`, `package.json`, `.constructor`?**
-  _High betweenness centrality (0.041) - this node is a cross-community bridge._
-- **Why does `cn()` connect `RequestDetailsPanel.tsx` to `argon2`, `auth.ts`, `api.ts`, `include`, `web`, `chart.tsx`, `plugins`, `DispatchConsole.tsx`, `expo-image`, `splash`, `compilerOptions`, `_layout.tsx`, `locationTracking.ts`?**
+  _High betweenness centrality (0.042) - this node is a cross-community bridge._
+- **Why does `AnalyticsHub()` connect `hybrid-e2e-lifecycle.spec.ts` to `xlsx`, `api.ts`, `expo`, `gradlew`, `locationTracking.test.ts`?**
   _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **Are the 101 inferred relationships involving `s()` (e.g. with `a()` and `.constructor()`) actually correct?**
   _`s()` has 101 INFERRED edges - model-reasoned connections that need verification._

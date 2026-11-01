@@ -220,6 +220,7 @@ router.post('/register-token', async (req, res) => {
       ? 'UPDATE users SET fcm_token = ?, expo_push_token = NULL WHERE id = ?'
       : 'UPDATE users SET expo_push_token = ? WHERE id = ?';
     await pool.query(update, [parsed.data.token, user.id]);
+    console.info(`[PUSH] Token stored for rider ${user.id} (${provider}${parsed.data.platform ? `, ${parsed.data.platform}` : ''})`);
     console.log(`📲 Registered ${provider} push token for rider`);
     res.json({ success: true });
   } catch (error) {

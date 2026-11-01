@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import * as Device from 'expo-device';
 import type { Notification } from 'expo-notifications';
@@ -11,7 +11,18 @@ import { listenForFcmTokenRefresh, registerFcmToken } from '@/services/pushToken
 import { createFirebaseMessagingClient, type FirebaseMessagingApi } from '@/services/firebaseMessagingClient';
 
 const DISABLE_PUSH = false;
-let permissionDeniedThisSession = false;
+function getPushErrorDetails(error: unknown) {
+  const value = error as {
+    code?: string;
+    message?: string;
+    response?: { status?: number; data?: { code?: string; error?: string } };
+  } | null;
+  return {
+    code: value?.response?.data?.code || value?.code,
+    status: value?.response?.status,
+    message: value?.response?.data?.error || value?.message || 'Unknown push registration error',
+  };
+}
 
 const Notifications = Platform.OS === 'web' || isRunningInExpoGo()
   ? undefined
@@ -22,8 +33,8 @@ function loadFirebaseMessaging() {
   try {
     const messagingModule = require('@react-native-firebase/messaging') as FirebaseMessagingApi;
     return createFirebaseMessagingClient(messagingModule);
-  } catch {
-    console.warn('[PUSH] Firebase Messaging is unavailable in this native build.');
+  } catch (error) {
+    console.warn('[PUSH] Firebase Messaging is unavailable in this native build.', getPushErrorDetails(error));
     return null;
   }
 }
@@ -81,16 +92,35 @@ export function usePushNotifications(userId?: string) {
       routeNotificationResponse(response as never, router as never);
     };
 
-    let unsubscribeTokenRefresh: () => void = () => {};
-    void registerForPushNotificationsAsync(messaging)
-      .then((token) => {
-        if (!isMounted || !token) return;
-        setFcmToken(token);
-        unsubscribeTokenRefresh = listenForFcmTokenRefresh(messaging, Platform.OS as 'android' | 'ios', () => {
-          console.warn('[PUSH] Unable to register a refreshed FCM token.');
-        });
-      })
-      .catch(() => console.warn('[PUSH] FCM registration failed.'));
+    let unsubscribeTokenRefresh: (() => void) | null = null;
+    let registrationInFlight: Promise<void> | null = null;
+    const registerCurrentToken = () => {
+      if (!isMounted || registrationInFlight) return registrationInFlight;
+      registrationInFlight = (async () => {
+        try {
+          const token = await registerForPushNotificationsAsync(messaging);
+          if (!isMounted || !token) return;
+          setFcmToken(token);
+          if (!unsubscribeTokenRefresh) {
+            unsubscribeTokenRefresh = listenForFcmTokenRefresh(messaging, Platform.OS as 'android' | 'ios', (error) => {
+              console.warn('[PUSH] Unable to register a refreshed FCM token.', getPushErrorDetails(error));
+            });
+          }
+        } catch (error) {
+          console.warn('[PUSH] FCM registration failed.', getPushErrorDetails(error));
+        } finally {
+          registrationInFlight = null;
+        }
+      })();
+      return registrationInFlight;
+    };
+
+    void registerCurrentToken();
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      // Riders may grant notification permission in Android Settings while the app
+      // is backgrounded. Recheck permission and register the current token on return.
+      if (state === 'active') void registerCurrentToken();
+    });
 
     const messageSubscription = messaging.onMessage((message) => {
       if (!isMounted) return;
@@ -117,7 +147,8 @@ export function usePushNotifications(userId?: string) {
 
     return () => {
       isMounted = false;
-      unsubscribeTokenRefresh();
+      appStateSubscription.remove();
+      unsubscribeTokenRefresh?.();
       messageSubscription();
       openedSubscription();
       notificationListener.remove();
@@ -129,7 +160,7 @@ export function usePushNotifications(userId?: string) {
 }
 
 async function registerForPushNotificationsAsync(messaging: NonNullable<ReturnType<typeof loadFirebaseMessaging>>): Promise<string | null> {
-  if (!Notifications || DISABLE_PUSH || isRunningInExpoGo() || !Device.isDevice || permissionDeniedThisSession) return null;
+  if (!Notifications || DISABLE_PUSH || isRunningInExpoGo() || !Device.isDevice) return null;
 
   await initializeDeliveryNotificationChannels();
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -138,7 +169,6 @@ async function registerForPushNotificationsAsync(messaging: NonNullable<ReturnTy
     if (existingStatus === 'denied' && Platform.OS === 'android' && Number(Platform.Version) >= 33) {
       const current = await Notifications.getPermissionsAsync();
       if (current.canAskAgain === false) {
-        permissionDeniedThisSession = true;
         return null;
       }
     }
@@ -146,7 +176,6 @@ async function registerForPushNotificationsAsync(messaging: NonNullable<ReturnTy
     finalStatus = status;
   }
   if (finalStatus !== 'granted') {
-    permissionDeniedThisSession = true;
     return null;
   }
 
