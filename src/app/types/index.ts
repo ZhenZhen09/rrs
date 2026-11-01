@@ -184,6 +184,11 @@ export interface DeliveryRequest {
   assigned_rider_id?: string;
   delivery_status?: DeliveryStatus;
   rider_remark?: string;
+  personnel_feedback?: {
+    outcome: 'yes' | 'no';
+    comment: string;
+    submitted_at: string;
+  } | null;
   queue_order?: number;
   
   // Metadata

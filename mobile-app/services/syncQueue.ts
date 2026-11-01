@@ -44,15 +44,13 @@ export async function getRiderStatusActions(riderId: string, requestId?: string)
 
 export async function getGenericLocationQueueSummary(riderId: string) {
   const database = await getDb();
-  const rows = await database.getAllAsync(`SELECT payload, status, last_error FROM sync_queue
-    WHERE endpoint='/api/users/location' AND status IN ('pending', 'failed') ORDER BY created_at ASC`);
+  const rows = await database.getAllAsync(`SELECT payload, status FROM sync_queue
+    WHERE endpoint='/api/users/location' AND status = 'pending' ORDER BY created_at ASC`);
   const riderRows = rows.filter((row: any) => {
     try { return JSON.parse(row.payload)?.riderId === riderId; } catch { return false; }
-  }) as Array<{ status: string; last_error: string | null }>;
+  }) as Array<{ status: string; payload: string }>;
   return {
     pending: riderRows.filter((row) => row.status === 'pending').length,
-    rejected: riderRows.filter((row) => row.status === 'failed').length,
-    lastError: riderRows.find((row) => row.last_error)?.last_error || null,
   };
 }
 
@@ -173,13 +171,16 @@ export const processQueue = async () => {
 
       // Don't retry client errors (4xx) except for transient ones
       if (!isNetworkError && status >= 400 && status < 500 && status !== 429) {
-         // SPECIAL CASE: Location updates that are rejected by server hardening (stale, low accuracy)
-         // should be discarded immediately to prevent queue bloat.
          console.error(`[SyncQueue] Fatal error for ${item.endpoint}:`, err.message);
-         await db.runAsync(
-           "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
-           [err.response?.data?.error || err.message, item.id]
-         );
+         if (item.endpoint === '/api/users/location') {
+           // A rejected location cannot become valid on retry; discard the stale sample.
+           await db.runAsync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
+         } else {
+           await db.runAsync(
+             "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
+             [err.response?.data?.error || err.message, item.id]
+           );
+         }
       } else {
         // Network error or 5xx: Revert to pending for next retry
         console.warn(`[SyncQueue] Transient error for ${item.endpoint}, will retry:`, err.message);

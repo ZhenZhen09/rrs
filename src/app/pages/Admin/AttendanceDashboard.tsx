@@ -69,6 +69,7 @@ interface AttendanceRecord {
   integrity_score: number;
   sessions?: Array<{ id: string; start_time: string; end_time: string | null; session_state: 'open' | 'closed' | 'legacy_unknown'; end_source?: 'manual' | 'scheduled' | 'legacy'; duration_minutes: number | null; handover_reason: string | null; active_task_count_at_end: number | null }>;
   total_worked_minutes?: number;
+  shift_reopen_request?: null | { request_id: string; status: 'pending' | 'approved' | 'rejected' | 'used'; reason: string; review_note?: string | null; requested_at: string; reviewed_at?: string | null; reviewed_by_name?: string | null };
 }
 
 export const AttendanceDashboard: React.FC = () => {
@@ -217,6 +218,43 @@ export const AttendanceDashboard: React.FC = () => {
     }
   };
 
+  const approveLateCheckIn = async (riderId: string) => {
+    if (!window.confirm('Approve a late check-in for this rider today? They will still need to check in from the rider app.')) return;
+
+    try {
+      const res = await fetch(`/api/users/attendance/${riderId}/late-check-in-approval`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to approve late check-in');
+
+      toast.success('Late check-in approved. The rider can now check in from their app.');
+      await fetchAttendance(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to approve late check-in');
+    }
+  };
+
+  const reviewShiftReopenRequest = async (requestId: string, decision: 'approved' | 'rejected') => {
+    const verb = decision === 'approved' ? 'approve' : 'reject';
+    if (!window.confirm(`Are you sure you want to ${verb} this shift reopen request?`)) return;
+    try {
+      const res = await fetch(`/api/users/attendance/shift-reopen-requests/${encodeURIComponent(requestId)}`, {
+        method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error || `Failed to ${verb} request`);
+      toast.success(decision === 'approved' ? 'Shift reopen approved. The rider can now go On Duty.' : 'Shift reopen request rejected.');
+      await fetchAttendance(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Failed to ${verb} request`);
+    }
+  };
+
   const openConflictModal = (riderId: string, riderName: string) => {
     setSelectedRider({ id: riderId, name: riderName });
     setIsConflictModalOpen(true);
@@ -227,7 +265,7 @@ export const AttendanceDashboard: React.FC = () => {
       case 'present':
         return (
           <div className="flex flex-col gap-2 items-start">
-            <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[9px] px-2 py-0.5">{record.absence_source === 'automatic_no_show' ? 'PRESENT · LATE' : 'PRESENT'}</Badge>
+            <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[10px] px-2 py-0.5">{record.absence_source === 'automatic_no_show' ? 'PRESENT · LATE' : 'PRESENT'}</Badge>
             {record.absence_source === 'automatic_no_show' && record.late_checkin_approved_at && (
               <span className="text-[9px] font-semibold text-sky-700">
                 Approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
@@ -238,13 +276,23 @@ export const AttendanceDashboard: React.FC = () => {
       case 'absent':
         return (
           <div className="flex flex-col gap-2 items-start">
-            <Badge className="bg-rose-50 text-rose-600 border-rose-100 font-black text-[9px] px-2 py-0.5">
+            <Badge className="bg-rose-50 text-rose-600 border-rose-100 font-black text-[10px] px-2 py-0.5">
               {record.absence_source === 'automatic_no_show' ? 'ABSENT · AUTO NO-SHOW' : 'ABSENT'}
             </Badge>
             {record.absence_source === 'automatic_no_show' && record.late_checkin_approved_at && (
               <span className="text-[9px] font-semibold text-sky-700">
                 Late check-in approved by {record.late_checkin_approved_by_name || record.late_checkin_approved_by || 'Admin'} at {formatPhilippineTime(record.late_checkin_approved_at)}
               </span>
+            )}
+            {record.absence_source === 'automatic_no_show' && !record.late_checkin_approved_at && selectedDate === getPhilippineDateString() && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void approveLateCheckIn(record.rider_id)}
+                className="h-6 rounded-md bg-sky-700 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-sky-800"
+              >
+                Approve late check-in
+              </Button>
             )}
             {record.absence_source !== 'automatic_no_show' || selectedDate === getPhilippineDateString() ? (
               <Button
@@ -277,6 +325,33 @@ export const AttendanceDashboard: React.FC = () => {
     }
   };
 
+  const getShiftReopenRequest = (record: AttendanceRecord) => {
+    const request = record.shift_reopen_request;
+    if (!request) return null;
+    const isToday = selectedDate === getPhilippineDateString();
+    return (
+        <div className="flex min-w-0 max-w-full flex-col items-start gap-2">
+        <div className="flex items-center gap-1.5">
+          {request.status === 'pending' && <span aria-label="Pending shift reopen approval" className="h-2 w-2 rounded-full bg-blue-600" />}
+          <Badge className={cn('max-w-full whitespace-normal border text-[9px] font-black uppercase leading-tight',
+            request.status === 'pending' ? 'border-blue-200 bg-blue-50 text-blue-700' :
+            request.status === 'approved' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+            request.status === 'used' ? 'border-slate-200 bg-slate-100 text-slate-600' : 'border-rose-200 bg-rose-50 text-rose-700')}>
+            {request.status === 'used' ? 'REOPENED' : `SHIFT REOPEN ${request.status}`}
+          </Badge>
+        </div>
+        <span className="max-w-full break-words text-[11px] font-medium leading-snug text-slate-600">Reason: {request.reason}</span>
+        {request.review_note && <span className="max-w-full break-words text-[11px] font-medium leading-snug text-slate-600">Admin note: {request.review_note}</span>}
+        {request.status === 'pending' && isToday && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={() => void reviewShiftReopenRequest(request.request_id, 'approved')} className="min-h-9 rounded-lg bg-blue-700 px-3 text-[9px] font-black uppercase tracking-wide text-white hover:bg-blue-800">Approve reopen</Button>
+            <Button variant="ghost" size="sm" onClick={() => void reviewShiftReopenRequest(request.request_id, 'rejected')} className="min-h-9 rounded-lg bg-slate-200 px-3 text-[9px] font-black uppercase tracking-wide text-slate-700 hover:bg-slate-300">Reject</Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const getDutyBadge = (isOnDuty: boolean) => (
     <Badge className={cn(
       'border font-black text-[9px] px-2 py-0.5',
@@ -287,9 +362,9 @@ export const AttendanceDashboard: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-slate-50/50">
+      <div className="flex h-full min-h-0 min-w-0 flex-col bg-slate-50/50">
       {/* Premium Header */}
-      <div className="bg-white border-b border-slate-100 px-4 py-3 sm:px-8 sm:py-6">
+      <div className="shrink-0 border-b border-slate-100 bg-white px-3 py-2.5 sm:px-8 sm:py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-lg md:text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2 md:gap-3">
@@ -336,7 +411,7 @@ export const AttendanceDashboard: React.FC = () => {
         )}
 
         {/* Stats Grid */}
-        <div aria-label="Attendance summary" role="group" className="grid grid-cols-5 gap-1 mt-3 sm:mt-8 sm:gap-4">
+        <div aria-label="Attendance summary" role="group" className="mt-2 grid grid-cols-5 gap-1 sm:mt-8 sm:gap-4">
           {[
             { label: 'TOTAL RIDERS', mobileLabel: 'Riders', value: stats.total, icon: User, color: 'text-slate-600', bg: 'bg-slate-50' },
             { label: 'PRESENT', mobileLabel: 'Present', value: stats.present, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -352,7 +427,7 @@ export const AttendanceDashboard: React.FC = () => {
                 stat.bg,
               )}
             >
-              <div className="flex min-h-[5rem] flex-col items-center justify-center gap-1 p-1 md:block md:min-h-0 md:p-4">
+              <div className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1 p-1 md:block md:min-h-0 md:p-4">
                 <div className="flex min-w-0 flex-col items-center gap-0.5 md:mb-2 md:flex-row md:justify-between">
                   <stat.icon className={cn("h-4 w-4 shrink-0", stat.color)} aria-hidden="true" />
                   <span className={cn("max-w-full truncate text-[10px] font-black md:hidden", stat.color)}>{stat.mobileLabel}</span>
@@ -366,10 +441,10 @@ export const AttendanceDashboard: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-0 p-3 sm:p-8 overflow-hidden flex flex-col">
-        <Card role="region" aria-label="Attendance records" className="flex-1 rounded-2xl md:rounded-[2rem] border border-slate-200 shadow-lg shadow-slate-300/50 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2.5 sm:p-8">
+        <Card role="region" aria-label="Attendance records" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 shadow-lg shadow-slate-300/50 md:rounded-[2rem]">
           {/* Table Toolbar */}
-          <div className="p-3 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="shrink-0 border-b border-slate-100 p-2.5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm sm:text-base font-black text-slate-900">Attendance records</h2>
               <div className="flex items-center gap-2">
@@ -422,7 +497,7 @@ export const AttendanceDashboard: React.FC = () => {
           </div>
 
           {/* Mobile record cards: one page-level vertical scroll, no nested wide table. */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 md:hidden">
+          <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-2.5 space-y-3 md:hidden">
             {loading ? (
               [1, 2, 3].map((item) => (
                 <div key={item} className="h-36 rounded-2xl bg-slate-50 animate-pulse" />
@@ -448,50 +523,53 @@ export const AttendanceDashboard: React.FC = () => {
                   <Card
                     key={record.rider_id}
                     className={cn(
-                      "rounded-2xl border-slate-100 p-3 shadow-sm",
+                      "min-w-0 overflow-hidden rounded-2xl border-slate-100 p-3.5 shadow-sm",
                       hasConflict && "border-rose-200 bg-rose-50/40"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-sm",
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black shadow-sm",
                           hasConflict ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
                         )}>
                           {record.rider_name.substring(0, 1).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 truncate text-xs font-black text-slate-900">
+                          <p className="flex items-center gap-1.5 truncate text-sm font-black text-slate-900">
                             {record.rider_name}
                             {hasConflict && <ShieldAlert size={12} className="shrink-0 text-rose-500 animate-pulse" />}
                           </p>
-                          <p className="truncate text-[9px] font-bold text-slate-400">{record.rider_email}</p>
+                          <p className="truncate text-[11px] font-medium text-slate-500">{record.rider_email}</p>
                         </div>
                       </div>
-                      <div className="shrink-0">{getStatusBadge(record)}</div>
+                      <div className="mt-3 flex min-w-0 flex-wrap items-start gap-x-4 gap-y-3 border-t border-slate-100 pt-3">
+                        <div className="min-w-0">{getStatusBadge(record)}</div>
+                        {record.shift_reopen_request && <div className="min-w-0 flex-1">{getShiftReopenRequest(record)}</div>}
+                      </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5">
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 rounded-xl bg-slate-50/80 p-3">
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Duty status</p>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Duty status</p>
                         <div className="mt-1">{getDutyBadge(record.is_on_duty)}</div>
                       </div>
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Shift start</p>
-                        <p className="mt-1 text-[10px] font-bold text-slate-700">{formatShiftStart(record)}</p>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Shift start</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-800">{formatShiftStart(record)}</p>
                       </div>
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Shift end</p>
-                        <p className="mt-1 text-[10px] font-bold text-slate-700">{formatShiftEnd(record)}</p>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Shift end</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-800">{formatShiftEnd(record)}</p>
                       </div>
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Duration</p>
-                        <p className="mt-1 text-[10px] font-black tabular-nums text-slate-700">{record.sessions?.length ? `${Math.floor((record.total_worked_minutes || 0) / 60)}h ${(record.total_worked_minutes || 0) % 60}m` : (calculateDuration(record.check_in_time, record.off_duty_time) || '--')}</p>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Duration</p>
+                        <p className="mt-1 text-xs font-black tabular-nums text-slate-800">{record.sessions?.length ? `${Math.floor((record.total_worked_minutes || 0) / 60)}h ${(record.total_worked_minutes || 0) % 60}m` : (calculateDuration(record.check_in_time, record.off_duty_time) || '--')}</p>
                       </div>
                       <div>
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Integrity</p>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Integrity</p>
                         <p className={cn(
-                          "mt-1 text-[10px] font-black",
+                          "mt-1 text-xs font-black",
                           record.integrity_score > 80 ? "text-emerald-600" : record.integrity_score > 50 ? "text-amber-600" : "text-rose-600"
                         )}>{record.integrity_score}%</p>
                       </div>
@@ -504,8 +582,8 @@ export const AttendanceDashboard: React.FC = () => {
                           <span>Total {Math.floor((record.total_worked_minutes || 0) / 60)}h {(record.total_worked_minutes || 0) % 60}m</span>
                         </div>
                         {record.sessions.map((session) => (
-                          <div key={session.id} className="rounded-lg bg-slate-50 px-2 py-1 text-[9px] text-slate-600">
-                            {formatPhilippineTime(session.start_time)} – {session.end_time ? formatPhilippineTime(session.end_time) : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}
+                          <div key={session.id} className="rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-snug text-slate-700">
+                            <span className="font-semibold">{formatPhilippineTime(session.start_time)} – {session.end_time ? formatPhilippineTime(session.end_time) : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}</span>
                             <span className="ml-2 font-bold">{session.session_state === 'closed' && session.end_time ? `${Math.floor((session.duration_minutes || 0) / 60)}h ${(session.duration_minutes || 0) % 60}m` : session.session_state === 'legacy_unknown' ? 'End time unknown' : 'In progress'}</span>
                             {session.end_source === 'scheduled' ? <p className="text-amber-700">Automatically ended · {session.active_task_count_at_end || 0} tasks need review</p> : session.handover_reason && <p className="text-rose-600">Handover: {session.handover_reason} ({session.active_task_count_at_end} tasks)</p>}
                           </div>
@@ -513,11 +591,11 @@ export const AttendanceDashboard: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Active tasks</span>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Active tasks</span>
                         <span className={cn(
-                          "inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black",
+                          "inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-black",
                           record.active_task_count > 0
                             ? (hasConflict ? "bg-rose-500 text-white" : "bg-amber-100 text-amber-700")
                             : "bg-slate-100 text-slate-400"
@@ -527,7 +605,7 @@ export const AttendanceDashboard: React.FC = () => {
                         <Button
                           size="sm"
                           onClick={() => openConflictModal(record.rider_id, record.rider_name)}
-                          className="h-7 rounded-lg bg-rose-500 px-2 text-[7px] font-black uppercase tracking-widest text-white hover:bg-rose-600"
+                          className="min-h-9 rounded-lg bg-rose-500 px-3 text-[9px] font-black uppercase tracking-wide text-white hover:bg-rose-600"
                         >
                           Resolve conflict
                         </Button>
@@ -536,8 +614,8 @@ export const AttendanceDashboard: React.FC = () => {
 
                     {(record.reason || record.handover_reason || (record.off_duty_time && record.active_task_count > 0)) && (
                       <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                        {record.reason && <p className="text-[9px] font-medium italic text-slate-500"><span className="font-black not-italic text-slate-400">MORNING:</span> {record.reason}</p>}
-                        {(record.handover_reason || (record.off_duty_time && record.active_task_count > 0)) && <p className="rounded border border-rose-100 bg-rose-50 px-1.5 py-0.5 text-[9px] font-medium italic text-rose-600"><span className="font-black not-italic">HANDOVER:</span> {record.handover_reason || 'No reason recorded'}: {record.active_task_count} tasks remain assigned</p>}
+                        {record.reason && <p className="break-words text-[11px] leading-snug text-slate-600"><span className="font-bold not-italic text-slate-500">Note: </span>{record.reason}</p>}
+                        {(record.handover_reason || (record.off_duty_time && record.active_task_count > 0)) && <p className="break-words rounded-lg border border-rose-100 bg-rose-50 px-2 py-1.5 text-[11px] leading-snug text-rose-700"><span className="font-bold">Handover: </span>{record.handover_reason || 'No reason recorded'}: {record.active_task_count} tasks remain assigned</p>}
                       </div>
                     )}
                   </Card>
@@ -614,7 +692,7 @@ export const AttendanceDashboard: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          {getStatusBadge(record)}
+                          {getStatusBadge(record)}{getShiftReopenRequest(record)}
                         </td>
                         <td className="px-6 py-4">
                           {getDutyBadge(record.is_on_duty)}

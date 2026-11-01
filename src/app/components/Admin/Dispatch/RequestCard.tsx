@@ -326,6 +326,9 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               {request.assigned_rider_name.split(" ")[0]}
             </Badge>
           )}
+          {request.personnel_feedback && <Badge variant="outline" className={`h-4 px-1 text-[6px] font-black uppercase tracking-tighter ${request.personnel_feedback.outcome === 'no' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+            {request.personnel_feedback.outcome === 'no' ? 'FEEDBACK · REVIEW' : 'FEEDBACK'}
+          </Badge>}
         </div>
       </Card>
     </motion.div>

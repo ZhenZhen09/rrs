@@ -81,7 +81,7 @@ const generateTokens = async (user: any, rememberMe: boolean, existingRefreshExp
 router.post('/login', validate(loginSchema), async (req: Request, res: Response) => {
   try {
     const { email, password, rememberMe: requestedRememberMe = false } = req.body || {};
-    const rememberMe = getRememberMe(req, requestedRememberMe);
+    const rememberMe = getRememberMe(requestedRememberMe);
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -279,7 +279,7 @@ router.post('/mfa/setup-init', async (req: Request, res: Response) => {
 router.post('/mfa/setup-verify', async (req: Request, res: Response) => {
   try {
     const { challenge: setupChallenge, token, rememberMe: requestedRememberMe = false } = req.body || {};
-    const rememberMe = getRememberMe(req, requestedRememberMe);
+    const rememberMe = getRememberMe(requestedRememberMe);
     if (!setupChallenge || !token) return res.status(401).json({ error: 'Authentication challenge required' });
 
     const pendingSetup = await findAuthChallenge(setupChallenge, 'mfa_setup_verify');
@@ -333,7 +333,7 @@ router.post('/mfa/setup-verify', async (req: Request, res: Response) => {
 router.post('/mfa/verify-login', async (req: Request, res: Response) => {
   try {
     const { challenge: loginChallenge, token, rememberMe: requestedRememberMe = false } = req.body || {};
-    const rememberMe = getRememberMe(req, requestedRememberMe);
+    const rememberMe = getRememberMe(requestedRememberMe);
     if (!loginChallenge || !token) return res.status(401).json({ error: 'Authentication challenge required' });
 
     const pendingLogin = await findAuthChallenge(loginChallenge, 'mfa_login');

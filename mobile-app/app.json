@@ -78,11 +78,15 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
       "eas": {
-        "projectId": "4d83c756-c551-4da9-aca2-1ead526e5361"
+        "projectId": "d2326631-ec0b-4283-82dd-2a480dba9c08"
       }
     },
-    "owner": "palomado09s-organization"
+    "owner": "honangel01"
   }
 }

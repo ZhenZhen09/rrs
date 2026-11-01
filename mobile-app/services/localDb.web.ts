@@ -33,6 +33,11 @@ class WebDatabase {
           migrated = true;
         }
       }
+      const priorLocationOutboxCount = this.locationOutbox.length;
+      const priorLocationQueueCount = this.syncQueue.length;
+      this.locationOutbox = this.locationOutbox.filter((row) => row.status !== 'rejected');
+      this.syncQueue = this.syncQueue.filter((row) => !(row.endpoint === '/api/users/location' && row.status === 'failed'));
+      if (this.locationOutbox.length !== priorLocationOutboxCount || this.syncQueue.length !== priorLocationQueueCount) migrated = true;
       if (migrated) this.persist();
     } catch {
       this.persist();
@@ -60,16 +65,20 @@ class WebDatabase {
         this.locationOutbox.push({ event_id, session_id, request_id, rider_id, sequence, payload, status: 'pending', created_at, expires_at });
       }
     } else if (sql.includes('DELETE FROM location_outbox')) {
-      const ids = params.filter((value) => typeof value === 'string');
-      this.locationOutbox = this.locationOutbox.filter((row) => !ids.includes(row.event_id));
-    } else if (sql.includes("status = 'rejected'") || sql.includes("status = 'pending', retry_count")) {
+      if (sql.includes("status = 'rejected'")) {
+        this.locationOutbox = this.locationOutbox.filter((row) => row.status !== 'rejected');
+      } else {
+        const ids = params.filter((value) => typeof value === 'string');
+        this.locationOutbox = this.locationOutbox.filter((row) => !ids.includes(row.event_id));
+      }
+    } else if (sql.includes("status = 'pending', retry_count")) {
       const error = params[0];
       const ids = params.slice(1);
       this.locationOutbox.forEach((row) => {
         if (ids.includes(row.event_id)) {
-          row.status = sql.includes("status = 'rejected'") ? 'rejected' : 'pending';
+          row.status = 'pending';
           row.last_error = error;
-          row.retry_count = (row.retry_count || 0) + (row.status === 'pending' ? 1 : 0);
+          row.retry_count = (row.retry_count || 0) + 1;
         }
       });
     } else if (sql.includes('INSERT INTO sync_queue')) {
@@ -84,7 +93,11 @@ class WebDatabase {
         row.retry_count = (row.retry_count || 0) + (sql.includes('retry_count = retry_count + 1') ? 1 : 0);
       }
     } else if (sql.includes('DELETE FROM sync_queue')) {
-      this.syncQueue = this.syncQueue.filter((row) => row.id !== params[0]);
+      if (sql.includes("endpoint = '/api/users/location'")) {
+        this.syncQueue = this.syncQueue.filter((row) => !(row.endpoint === '/api/users/location' && row.status === 'failed'));
+      } else {
+        this.syncQueue = this.syncQueue.filter((row) => row.id !== params[0]);
+      }
     } else if (sql.includes('INSERT OR REPLACE INTO tasks_cache')) {
       const [id, data, updated_at] = params;
       this.tasksCache.set(id, { id, data, updated_at });
@@ -106,6 +119,9 @@ class WebDatabase {
 
   async getAllAsync(sql: string, params: any[] = []) {
     if (sql.includes('FROM location_outbox')) {
+      if (sql.includes('SELECT status FROM location_outbox')) return this.locationOutbox
+        .filter((row) => row.rider_id === params[0] && row.status === 'pending')
+        .map((row) => ({ status: row.status }));
       if (sql.includes('last_error')) return this.locationOutbox
         .filter((row) => row.rider_id === params[0] && ['pending', 'rejected'].includes(row.status))
         .map((row) => ({ status: row.status, last_error: row.last_error, created_at: row.created_at }));
@@ -117,7 +133,7 @@ class WebDatabase {
         .map((row) => ({ payload: row.payload }));
     }
     if (sql.includes('FROM sync_queue')) {
-      if (sql.includes('last_error')) return this.syncQueue.filter((row) => row.endpoint === '/api/users/location' && ['pending', 'failed'].includes(row.status));
+      if (sql.includes("endpoint='/api/users/location'")) return this.syncQueue.filter((row) => row.endpoint === '/api/users/location' && row.status === 'pending');
       return this.syncQueue.filter((row) => row.status === 'pending');
     }
     if (sql.includes('FROM rider_status_actions')) {

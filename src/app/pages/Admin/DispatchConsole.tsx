@@ -16,6 +16,7 @@ import {
   X,
   Ban,
   Bike as BikeIcon,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RequestList } from "../../components/Admin/Dispatch/RequestList";
@@ -90,6 +91,7 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
     "pending" | "active" | "overdue" | "completed" | "all"
   >("pending");
   const [searchQuery, setSearchQuery] = useState("");
+  const [feedbackOnly, setFeedbackOnly] = useState(false);
   const [riders, setRiders] = useState<UserType[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -117,6 +119,13 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
     setIsMobileDetailsOpen(true);
     onRequestOpened?.(openRequestId);
   }, [onRequestOpened, openRequestId, requests]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const refreshFeedback = () => { void refreshData(); };
+    socket.on('request-feedback-submitted', refreshFeedback);
+    return () => { socket.off('request-feedback-submitted', refreshFeedback); };
+  }, [socket, refreshData]);
 
   // Batch State
   const [showBatchApprove, setShowBatchApprove] = useState(false);
@@ -415,7 +424,10 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
       if (filterTab === "pending") return bucket === 'pending';
       if (filterTab === "overdue") return bucket === 'active' && Boolean(r.is_overdue);
       if (filterTab === "active") return bucket === 'active';
-      if (filterTab === "completed") return ['completed', 'failed', 'cancelled', 'declined'].includes(bucket);
+      if (filterTab === "completed") {
+        return ['completed', 'failed', 'cancelled', 'declined'].includes(bucket)
+          && (!feedbackOnly || Boolean(r.personnel_feedback));
+      }
       return true;
     });
 
@@ -492,7 +504,7 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
         return new Date(dateA).getTime() - new Date(dateB).getTime();
       return 0;
     });
-  }, [requests, filterTab, searchQuery, sortBy]);
+  }, [requests, filterTab, searchQuery, sortBy, feedbackOnly]);
 
   const selectAll = () => {
     if (selectedRequestIds.length === filteredRequests.length) {
@@ -504,6 +516,7 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
 
   const handleFilterChange = (newTab: "pending" | "active" | "overdue" | "completed" | "all") => {
     setFilterTab(newTab);
+    setFeedbackOnly(false);
     setSelectedRequestId(null);
     if (newTab === 'completed') {
       setSortBy('newest');
@@ -717,6 +730,9 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
                 onSortChange={setSortBy}
                 filter={filterTab}
                 onFilterChange={handleFilterChange} counts={displayStats}
+                feedbackOnly={feedbackOnly}
+                feedbackCount={(requests || []).filter((request) => Boolean(request.personnel_feedback)).length}
+                onToggleFeedbackOnly={() => setFeedbackOnly((current) => !current)}
               />
             </div>
           </ResizablePanel>
@@ -758,6 +774,14 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
                       }}
                       onChange={handleFilterChange}
                     />
+                    {filterTab === 'completed' && <Button
+                      type="button"
+                      size="sm"
+                      variant={feedbackOnly ? 'default' : 'outline'}
+                      aria-pressed={feedbackOnly}
+                      onClick={() => setFeedbackOnly((current) => !current)}
+                      className={cn('mt-2 min-h-10 rounded-xl text-xs font-bold', feedbackOnly && 'bg-emerald-700 text-white hover:bg-emerald-800')}
+                    ><MessageSquare className="h-4 w-4" />Feedback received ({(requests || []).filter((request) => Boolean(request.personnel_feedback)).length})</Button>}
                     <div className="mt-2 flex items-center justify-between px-1">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                         Scroll to browse requests

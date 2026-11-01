@@ -20,7 +20,8 @@ import { sendPushNotification } from './notifications';
 import { persistAdminDispatchNotifications, persistDeliveryNotification, publishDeliveryNotification } from '../services/deliveryNotifications';
 import { appendRequestsToRiderQueue, lockRiderQueues, normalizeRiderQueueOrder, replaceRiderQueueOrder } from '../services/riderTaskQueue';
 import { RiderQueueValidationError } from '../utils/riderQueue';
-import { findRiderOperation, hashRiderStatusPayload, recordRiderOperation } from '../services/riderStatusOperations';
+import { ensureRiderStatusOperationsTable, findRiderOperation, hashRiderStatusPayload, recordRiderOperation } from '../services/riderStatusOperations';
+import { ensureRequestCompletionFeedbackTable } from '../services/requestCompletionFeedback';
 
 const router = Router();
 
@@ -84,8 +85,11 @@ const canViewRequest = (user: AuthRequest['user'], request: any) => {
   return isAuthorized;
 };
 
-const formatRequestRow = (row: any) => ({
+const formatRequestRow = (row: any, includePersonnelFeedback = false) => ({
   ...row,
+  personnel_feedback_outcome: includePersonnelFeedback ? row.personnel_feedback_outcome : undefined,
+  personnel_feedback_comment: includePersonnelFeedback ? row.personnel_feedback_comment : undefined,
+  personnel_feedback_submitted_at: includePersonnelFeedback ? row.personnel_feedback_submitted_at : undefined,
   delivery_date: row.delivery_date instanceof Date
     ? row.delivery_date.toISOString().split('T')[0]
     : (typeof row.delivery_date === 'string' ? row.delivery_date.split('T')[0] : row.delivery_date),
@@ -102,6 +106,13 @@ const formatRequestRow = (row: any) => ({
     exceptions: row.exceptions ? (typeof row.exceptions === 'string' ? JSON.parse(row.exceptions) : row.exceptions) : [],
   }),
   ...getProactiveOverdueMetadata(row),
+  ...(includePersonnelFeedback && row.personnel_feedback_outcome ? {
+    personnel_feedback: {
+      outcome: row.personnel_feedback_outcome,
+      comment: row.personnel_feedback_comment || '',
+      submitted_at: row.personnel_feedback_submitted_at,
+    },
+  } : {}),
 });
 
 // Get availability/occupancy (Personnel and Admin)
@@ -189,7 +200,15 @@ router.get('/', async (req, res) => {
     // Admin reconciliation needs all records from one SELECT, not a truncated first page.
     const allRecords = req.query.all === 'true' && user.role === 'admin';
 
-    let query = 'SELECT * FROM delivery_requests';
+    const includePersonnelFeedback = user.role === 'admin' || user.role === 'personnel';
+    if (includePersonnelFeedback) await ensureRequestCompletionFeedbackTable();
+    let query = includePersonnelFeedback
+      ? `SELECT delivery_requests.*,
+          (SELECT f.outcome FROM request_completion_feedback f WHERE f.request_id COLLATE utf8mb4_unicode_ci = delivery_requests.request_id COLLATE utf8mb4_unicode_ci LIMIT 1) AS personnel_feedback_outcome,
+          (SELECT f.comment FROM request_completion_feedback f WHERE f.request_id COLLATE utf8mb4_unicode_ci = delivery_requests.request_id COLLATE utf8mb4_unicode_ci LIMIT 1) AS personnel_feedback_comment,
+          (SELECT f.submitted_at FROM request_completion_feedback f WHERE f.request_id COLLATE utf8mb4_unicode_ci = delivery_requests.request_id COLLATE utf8mb4_unicode_ci LIMIT 1) AS personnel_feedback_submitted_at
+        FROM delivery_requests`
+      : 'SELECT * FROM delivery_requests';
     let countQuery = 'SELECT COUNT(*) as total FROM delivery_requests';
     const params: any[] = [];
     const conditions: string[] = [];
@@ -255,7 +274,10 @@ router.get('/', async (req, res) => {
     const [countRows] = allRecords ? [[{ total: (rows as any[]).length }]] : await pool.query(countQuery, countParams);
     
     const total = (countRows as any[])[0]?.total || 0;
-    const requests = (rows as any[]).map(formatRequestRow);
+    const requests = (rows as any[]).map((row) => formatRequestRow(
+      row,
+      includePersonnelFeedback && (user.role === 'admin' || row.requester_id === user.id),
+    ));
 
     res.json({
       data: requests,
@@ -264,6 +286,54 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Fetch requests error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Personnel can leave one short review after their request is completed.
+router.post('/:id/feedback', authorize(['personnel']), async (req: AuthRequest, res: Response) => {
+  try {
+    await ensureRequestCompletionFeedbackTable();
+    const requestId = String(req.params.id || '');
+    const outcome = req.body?.outcome;
+    const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
+    const user = req.user!;
+
+    if (outcome !== 'yes' && outcome !== 'no') {
+      return res.status(400).json({ error: 'Choose whether the errand was completed as expected.' });
+    }
+    if (comment.length > 1000) {
+      return res.status(400).json({ error: 'Feedback must be 1000 characters or fewer.' });
+    }
+
+    const [requestRows]: any = await pool.query(
+      'SELECT requester_id, delivery_status FROM delivery_requests WHERE request_id = ?',
+      [requestId],
+    );
+    const request = requestRows?.[0];
+    if (!request) return res.status(404).json({ error: 'Request not found.' });
+    if (request.requester_id !== user.id) return res.status(403).json({ error: 'Only the requester can leave feedback.' });
+    if (!['completed', 'delivered'].includes(String(request.delivery_status || '').toLowerCase())) {
+      return res.status(409).json({ error: 'Feedback is available after the errand is completed.' });
+    }
+
+    await pool.query(
+      `INSERT INTO request_completion_feedback (request_id, requester_id, outcome, comment)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE request_id = request_id`,
+      [requestId, user.id, outcome, comment || null],
+    );
+    const [feedbackRows]: any = await pool.query(
+      `SELECT outcome, comment, submitted_at FROM request_completion_feedback
+       WHERE request_id COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci LIMIT 1`,
+      [requestId],
+    );
+    const feedback = feedbackRows?.[0];
+
+    req.app.get('io')?.to('admin-room').emit('request-feedback-submitted', { request_id: requestId });
+    return res.json({ success: true, feedback });
+  } catch (error) {
+    console.error('[REQUEST FEEDBACK] Submission failed:', error);
+    return res.status(500).json({ error: 'Unable to save feedback right now.' });
   }
 });
 
@@ -1154,6 +1224,14 @@ router.put('/:id/resubmit', authorize(['admin', 'personnel']), validate(createRe
 
 // Update delivery status (Riders only for their own tasks)
 router.put('/:id/status', validate(updateStatusSchema), async (req, res) => {
+  if ((req as AuthRequest).user?.role === 'rider') {
+    try {
+      await ensureRiderStatusOperationsTable();
+    } catch (error) {
+      console.error('[RIDER STATUS] Idempotency table initialization failed:', error);
+      return res.status(503).json({ error: 'Rider status updates are temporarily unavailable. Please retry shortly.' });
+    }
+  }
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;

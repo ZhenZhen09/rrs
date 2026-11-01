@@ -15,6 +15,7 @@ import { ShiftControlDrawer } from '@/components/ShiftControlDrawer';
 import { TaskTabEmptyState } from '@/components/TaskTabEmptyState';
 import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
 import { TaskDetailIcon } from '@/components/jobs/TaskDetailIcon';
+import { StopNumberWatermark } from '@/components/jobs/StopNumberWatermark';
 import { useLocation } from '@/context/LocationContext';
 import { ShiftTaskAccessNotice } from '@/components/jobs/ShiftTaskAccessNotice';
 
@@ -84,10 +85,12 @@ export default function TomorrowScreen() {
           <>
           {tasks.map((task, index) => {
             const isLocked = isTaskLocked(task, allTasks);
+            const sequenceLabel = getRiderTaskSequenceLabel(task, allTasks);
             const buildingName = task.dropoff_location?.businessName || task.pickup_location?.businessName || 'Building not provided';
 
             return (
               <Card key={task.request_id} style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isOnDuty ? styles.offDutyTaskCard : {}) }}>
+                <StopNumberWatermark sequenceLabel={sequenceLabel} />
                 <TouchableOpacity
                   testID={`tomorrow_task_card_${index}`}
                   activeOpacity={0.7}
@@ -97,7 +100,7 @@ export default function TomorrowScreen() {
                   <View style={styles.cardHeader}>
                     <View style={styles.titleBlock}>
                       <View style={styles.sequenceRow}>
-                        <Text style={styles.sequenceLabel}>{getRiderTaskSequenceLabel(task, allTasks)}</Text>
+                        <Text style={styles.sequenceLabel}>{sequenceLabel}</Text>
                         {isLocked && <MaterialIcons name="lock" size={14} color="#B45309" />}
                       </View>
                       <View style={styles.buildingRow}>
@@ -151,7 +154,7 @@ export default function TomorrowScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: { padding: scale(16), paddingBottom: verticalScale(40), flexGrow: 1 },
-  card: { marginBottom: verticalScale(10), padding: moderateScale(14) },
+  card: { marginBottom: verticalScale(10), padding: moderateScale(14), position: 'relative' },
   lockedCard: { backgroundColor: '#FAFAFA', opacity: 0.85, borderColor: '#F1F5F9' },
   offDutyTaskCard: { backgroundColor: '#F8FAFC', opacity: 0.62, borderColor: '#CBD5E1' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: verticalScale(10) },

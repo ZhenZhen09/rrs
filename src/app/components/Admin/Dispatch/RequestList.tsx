@@ -3,7 +3,7 @@ import { RequestCard } from './RequestCard';
 import { DeliveryRequest } from '../../../types';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { Package, Calendar, AlertCircle } from 'lucide-react';
+import { Package, Calendar, AlertCircle, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   isTerminalRequest, 
@@ -28,6 +28,9 @@ interface RequestListProps {
   onToggleSelect?: (id: string) => void;
   activeSelectionEnabled?: boolean;
   onSelectAll?: () => void; counts?: { pending: number; active: number; done: number; overdue?: number; total?: number };
+  feedbackOnly?: boolean;
+  feedbackCount?: number;
+  onToggleFeedbackOnly?: () => void;
 }
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -44,7 +47,10 @@ export const RequestList: React.FC<RequestListProps> = ({
   selectedIds = [],
   onToggleSelect = () => {},
   activeSelectionEnabled = false,
-  counts
+  counts,
+  feedbackOnly = false,
+  feedbackCount = 0,
+  onToggleFeedbackOnly = () => {},
 }) => {
   const displayRequests = filteredRequests || requests;
   const visibleOverdueCount = requests.filter(req => req.is_overdue).length;
@@ -131,6 +137,13 @@ export const RequestList: React.FC<RequestListProps> = ({
             onChange={onFilterChange}
           />
         </div>
+
+        {filter === 'completed' && <button
+          type="button"
+          aria-pressed={feedbackOnly}
+          onClick={onToggleFeedbackOnly}
+          className={`mb-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${feedbackOnly ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-emerald-100 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
+        ><MessageSquare className="h-4 w-4" />Feedback received ({feedbackCount})</button>}
 
         <div className="flex items-center justify-between px-1">
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sort by:</span>

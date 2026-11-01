@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string, keepSignedIn: boolean) => {
     setIsAuthenticating(true);
     try {
-      const res = await api.post('/api/auth/login', { email, password });
+      const res = await api.post('/api/auth/login', { email, password, rememberMe: keepSignedIn });
       const data = res.data;
 
       // Handle password reset requirement

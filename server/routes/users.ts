@@ -12,6 +12,7 @@ import { approveLateCheckIn, endShiftSession, getCurrentShiftSession, getShiftSe
 import { getDefaultRiderAvatarId, isRiderAvatarId } from '../services/riderAvatarCatalog';
 import { ensureRiderAvatarPreferencesTable, saveRiderAvatarPreference } from '../services/riderAvatarPreferences';
 import { getRiderShiftAccess } from '../middleware/riderShiftAccess';
+import { createShiftReopenRequest, getCurrentShiftReopenRequest, reviewShiftReopenRequest, ShiftReopenRequestError } from '../services/shiftReopenRequests';
 
 const router = Router();
 const PH_TODAY_SQL = "DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))";
@@ -150,9 +151,17 @@ router.get('/attendance/daily', authorize(['admin']), async (req: AuthRequest, r
       WHERE u.role = 'rider'
       ORDER BY u.name ASC
     `, [date, date, date, date]);
+    const [reopenRows]: any = await pool.query(`SELECT r.request_id, r.rider_id, r.status, r.reason, r.review_note,
+        r.requested_at, r.reviewed_at, r.reviewed_by, reviewer.name AS reviewed_by_name
+      FROM shift_reopen_requests r LEFT JOIN users reviewer
+        ON reviewer.id COLLATE utf8mb4_general_ci = r.reviewed_by COLLATE utf8mb4_general_ci
+      WHERE r.work_date=? ORDER BY r.requested_at DESC`, [date]);
+    const latestReopenByRider = new Map<string, any>();
+    for (const request of reopenRows) if (!latestReopenByRider.has(String(request.rider_id))) latestReopenByRider.set(String(request.rider_id), request);
     const riders = await Promise.all(rows.map(async (row: any) => {
       const summary = await getShiftSessionsForDate(pool, row.rider_id, date);
-      return { ...row, is_on_duty: Boolean(row.is_on_duty), sessions: summary.sessions, total_worked_minutes: summary.total_worked_minutes };
+      return { ...row, is_on_duty: Boolean(row.is_on_duty), sessions: summary.sessions, total_worked_minutes: summary.total_worked_minutes,
+        shift_reopen_request: latestReopenByRider.get(String(row.rider_id)) || null };
     }));
     res.json(riders);
   } catch (error) {
@@ -167,13 +176,65 @@ router.get('/me/shift-session', authorize(['rider']), async (req: AuthRequest, r
     const access = await getRiderShiftAccess(req.user!.id);
     const session = await getCurrentShiftSession(pool, req.user!.id);
     const [users]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [req.user!.id]);
-    const [ended]: any = await pool.query("SELECT end_source, end_time FROM shift_sessions WHERE rider_id=? AND session_state='closed' ORDER BY end_time DESC LIMIT 1", [req.user!.id]);
+    const [ended]: any = await pool.query(`SELECT end_source, end_time FROM shift_sessions
+      WHERE rider_id=? AND session_state='closed' AND DATE(start_time)=${PH_TODAY_SQL}
+      ORDER BY end_time DESC LIMIT 1`, [req.user!.id]);
+    const reopenRequest = await getCurrentShiftReopenRequest(pool, req.user!.id);
     res.json({ session, is_on_duty: Boolean(users[0]?.is_on_duty) && !access.locked,
       schedule: access.policy.active ? { date: access.policy.date, start_time: access.policy.startTime, end_time: access.policy.endTime, time_zone: 'Asia/Manila' } : null,
       server_time: new Date().toISOString(), locked: access.locked, next_start_at: access.policy.nextStartAt,
-      last_end_source: ended[0]?.end_source || null, last_end_time: ended[0]?.end_time || null });
+      last_end_source: ended[0]?.end_source || null, last_end_time: ended[0]?.end_time || null,
+      can_request_reopen: access.manuallyEndedShift && !access.policy.canStart && !access.locked && !access.hasOpenShift,
+      shift_reopen_request: reopenRequest });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch current shift' });
+  }
+});
+
+router.post('/:id/shift-reopen-requests', authorize(['rider']), async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
+  if (req.user!.id !== id) return res.status(403).json({ error: 'Forbidden' });
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (reason.length < 5 || reason.length > 500) return res.status(400).json({ error: 'Enter a short reason between 5 and 500 characters.' });
+  try {
+    const access = await getRiderShiftAccess(id);
+    if (!access.manuallyEndedShift || access.policy.canStart || access.locked || access.hasOpenShift) {
+      return res.status(409).json({ code: 'SHIFT_REOPEN_NOT_ELIGIBLE', error: 'A reopen request is available only after the shift-start grace period, while today’s shift hours are still open.' });
+    }
+    const request = await createShiftReopenRequest(pool, { riderId: id, reason });
+    if (request.created) {
+      const io = req.app.get('io');
+      io?.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'shift_reopen_request', status: request.request.status });
+      io?.to('admin-room').emit('notification-added', {
+        id: `notif_shift_reopen_${request.request.request_id}`, message: 'A rider requested approval to reopen today’s shift.', type: 'info',
+      });
+    }
+    return res.json({ success: true, request: request.request, created: request.created });
+  } catch (error: any) {
+    if (error instanceof ShiftReopenRequestError) return res.status(error.code === 'NOT_FOUND' ? 404 : 409).json({ code: error.code, error: error.message });
+    console.error('Shift reopen request failed:', error);
+    return res.status(500).json({ error: 'Shift reopen request failed.' });
+  }
+});
+
+router.patch('/attendance/shift-reopen-requests/:requestId', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+  const requestId = String(req.params.requestId);
+  const decision = req.body?.decision;
+  const reviewNote = typeof req.body?.review_note === 'string' ? req.body.review_note.trim().slice(0, 500) : undefined;
+  if (decision !== 'approved' && decision !== 'rejected') return res.status(400).json({ error: 'Decision must be approved or rejected.' });
+  try {
+    const request = await reviewShiftReopenRequest(pool, { requestId, adminId: String(req.user!.id), decision, reviewNote });
+    const io = req.app.get('io');
+    io?.to('admin-room').emit('rider-status-updated', { riderId: request.rider_id, type: 'shift_reopen_request', status: request.status });
+    io?.to(request.rider_id).emit('shift-reopen-request-updated', { request });
+    io?.to(request.rider_id).emit('rider-status-updated', { type: 'shift_reopen_request', status: request.status });
+    return res.json({ success: true, request });
+  } catch (error: any) {
+    if (error instanceof ShiftReopenRequestError) {
+      return res.status(error.code === 'NOT_FOUND' ? 404 : 409).json({ code: error.code, error: error.message });
+    }
+    console.error('Shift reopen review failed:', error);
+    return res.status(500).json({ error: 'Shift reopen review failed.' });
   }
 });
 
@@ -231,7 +292,7 @@ router.post('/:id/attendance', authorize(['rider']), async (req: AuthRequest, re
 
     if (status === 'present') {
       const access = await getRiderShiftAccess(id);
-      if (access.locked || !access.policy.canStart) return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
+      if (access.locked || (!access.policy.canStart && !access.adminClearedAbsence && !access.lateCheckInApproved)) return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
       if (typeof operation_id !== 'string' || !operation_id.trim()) return res.status(400).json({ error: 'operation_id is required' });
       const session = await startShiftSession(pool, { riderId: id, operationId: operation_id.trim() });
       const [riders]: any = await pool.query('SELECT is_on_duty FROM users WHERE id = ?', [id]);
@@ -276,12 +337,22 @@ router.post('/:id/duty', authorize(['rider']), async (req: AuthRequest, res: Res
   if (user.id !== id) return res.status(403).json({ error: 'Forbidden' });
   if (typeof is_on_duty !== 'boolean') return res.status(400).json({ error: 'Duty status must be true or false' });
   try {
+    let consumeReopenApproval = false;
     if (is_on_duty) {
       const access = await getRiderShiftAccess(id);
+      consumeReopenApproval = Boolean(access.reopenApproved && access.manuallyEndedShift);
+      if (access.manuallyEndedShift && !access.policy.canStart && !access.hasOpenShift && !access.reopenApproved) {
+        return res.status(403).json({ code: 'SHIFT_ALREADY_ENDED', error: 'Your shift has ended. Ask an admin to reopen it.', next_start_at: access.policy.nextStartAt });
+      }
       if (access.locked) return res.status(403).json({ code: 'SHIFT_HOURS_LOCKED', error: 'Outside rider shift hours.', next_start_at: access.policy.nextStartAt });
-      if (!access.policy.canStart && !access.hasOpenShift) return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
+      if (!access.policy.canStart && !access.hasOpenShift && !access.adminClearedAbsence && !access.reopenApproved) {
+        if (access.lateCheckInApproved) {
+          return res.status(409).json({ code: 'LATE_CHECKIN_REQUIRED', error: 'Your late check-in is approved. Complete “Check in late” to open your shift before going On Duty.' });
+        }
+        return res.status(403).json({ code: 'SHIFT_START_CLOSED', error: 'The shift start grace period has ended.', next_start_at: access.policy.nextStartAt });
+      }
     }
-    const result = await setRiderAvailability(pool, { riderId: id, isOnDuty: is_on_duty });
+    const result = await setRiderAvailability(pool, { riderId: id, isOnDuty: is_on_duty, consumeReopenApproval });
     io.to('admin-room').emit('rider-status-updated', { riderId: id, riderName: user.name, type: 'duty', is_on_duty });
     if (is_on_duty) {
       io.to('admin-room').emit('rider-status-updated', { riderId: id, type: 'attendance', status: 'present' });

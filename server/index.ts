@@ -33,6 +33,8 @@ import { ensureWebPushTable, startWebPushWorker } from './services/webPush';
 import { publishSavedWebPushNotification } from './services/deliveryNotifications';
 import { ensureLocationEventReceiptsTable } from './services/locationEventReceipts';
 import { ensureMessagingTables } from './services/messaging';
+import { ensureRequestCompletionFeedbackTable } from './services/requestCompletionFeedback';
+import { ensureRiderStatusOperationsTable } from './services/riderStatusOperations';
 import { canAccessConversation } from './services/messaging';
 import { ensureAuthChallengesTable } from './services/authChallenges';
 import { startProactiveOverdueWorker } from './services/proactiveOverdue';
@@ -562,6 +564,12 @@ ensureLocationEventReceiptsTable()
 
 ensureMessagingTables()
   .catch((error) => console.error('[MESSAGING] Startup initialization failed:', error));
+
+ensureRequestCompletionFeedbackTable()
+  .catch((error) => console.error('[REQUEST FEEDBACK] Startup initialization failed:', error));
+
+ensureRiderStatusOperationsTable()
+  .catch((error) => console.error('[RIDER STATUS] Idempotency table initialization failed:', error));
 
 ensureAuthChallengesTable()
   .catch((error) => console.error('[AUTH CHALLENGES] Startup initialization failed:', error));

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { WebPushSettings } from "../components/WebPushSettings";
@@ -26,6 +26,7 @@ import {
   LocateFixed,
   MapPin,
   Menu,
+  MessageSquare,
   Navigation,
   X,
   PackageCheck,
@@ -277,12 +278,34 @@ export function PersonnelV2Page() {
   const [draft, setDraft] = useState(savedDraft.draft);
   const [mapTarget, setMapTarget] = useState<"pickup" | "dropoff" | null>(null);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [revisionRequest, setRevisionRequest] = useState<DeliveryRequest | null>(null);
+  const previousDeliveryStatuses = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    for (const request of Array.isArray(requests) ? requests : []) {
+      const status = String(request.delivery_status || '');
+      const previousStatus = previousDeliveryStatuses.current.get(request.request_id);
+      if (previousStatus && previousStatus !== 'completed' && status === 'completed') {
+        toast.info("Errand completed", {
+          description: "Was it completed as expected? Share quick feedback.",
+          action: {
+            label: "Give feedback",
+            onClick: () => {
+              setNotificationRequestId(request.request_id);
+              setActiveView("requests");
+            },
+          },
+        });
+      }
+      previousDeliveryStatuses.current.set(request.request_id, status);
+    }
+  }, [requests]);
 
   useEffect(() => {
     const nextSavedDraft = readSavedDraft(user?.id);
@@ -568,16 +591,21 @@ export function PersonnelV2Page() {
                 {step === 3 && <div className="grid gap-5 md:grid-cols-2"><Field label="Recipient name"><Input value={draft.recipient} onChange={(e) => updateDraft({ recipient: e.target.value })} placeholder="Full name" className="h-12 rounded-xl" /></Field><Field label="Recipient contact (required)"><Input type="tel" required aria-required="true" value={draft.recipientContact} onChange={(e) => updateDraft({ recipientContact: e.target.value })} placeholder="+63 9xx xxx xxxx" className="h-12 rounded-xl" /></Field><Field label="Pickup contact"><Input value={draft.pickupContact} onChange={(e) => updateDraft({ pickupContact: e.target.value })} placeholder="Name and number at pickup point" className="h-12 rounded-xl" /></Field><Field label="Instructions" hint="Optional · include entrance, floor, or landmark"><Textarea value={draft.instructions} onChange={(e) => updateDraft({ instructions: e.target.value })} placeholder="e.g. Receive at the main lobby..." className="min-h-24 rounded-xl" /></Field></div>}
 
                 {step === 4 && <Review draft={draft} onEdit={(target) => setStep(target)} />}
-                <div className="mt-8 flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-5 sm:flex-row"><Button variant="ghost" disabled={step === 1} onClick={() => setStep((current) => Math.max(1, current - 1) as Step)} className="rounded-xl text-slate-500"><ChevronLeft className="mr-2 h-4 w-4" />Back</Button>{step < 4 ? <Button onClick={next} className="rounded-xl bg-emerald-600 px-6 hover:bg-emerald-700">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={() => setShowSubmitConfirm(true)} disabled={isSubmitting || !isOnline} className="rounded-xl bg-slate-900 px-6 hover:bg-slate-800"><Send className="mr-2 h-4 w-4" />{revisionRequest ? "Submit revision" : "Submit request"}</Button>}</div>
+                <div className="mt-8 flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-5 sm:flex-row"><Button variant="ghost" disabled={step === 1} onClick={() => setStep((current) => Math.max(1, current - 1) as Step)} className="rounded-xl text-slate-500"><ChevronLeft className="mr-2 h-4 w-4" />Back</Button>{step < 4 ? <Button onClick={next} className="rounded-xl bg-emerald-600 px-6 hover:bg-emerald-700">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={() => setShowSubmitConfirm(true)} disabled={isSubmitting || !isOnline} className="rounded-xl bg-slate-900 px-6 text-white hover:bg-slate-800"><Send className="mr-2 h-4 w-4" />{revisionRequest ? "Submit revision" : "Submit request"}</Button>}</div>
               </section>
               </div>
 
-              <section className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-slate-400">Needs attention</p><h2 className="mt-1 text-lg font-black">Active requests</h2></div><Button variant="ghost" onClick={() => setActiveView("requests")} className="rounded-xl text-xs font-bold text-emerald-700">View all <ArrowRight className="ml-1 h-3 w-3" /></Button></div>{activeRequests.length ? activeRequests.slice(0, 3).map((r) => <RequestRow request={r} key={r.request_id} onCancel={() => cancelRequest(r.request_id)} onSelect={() => setActiveView("requests")} />) : <div className="rounded-2xl bg-slate-50 p-7 text-center"><Sparkles className="mx-auto mb-2 h-6 w-6 text-emerald-600" /><p className="font-bold">You are all caught up</p><p className="mt-1 text-xs text-slate-500">Your new requests will appear here.</p></div>}</div><div className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/10"><div className="mb-8 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500"><HelpCircle className="h-5 w-5" /></div><h2 className="text-xl font-black">Need a hand?</h2><p className="mt-2 text-sm leading-6 text-slate-300">Learn how to choose an exact pin, write clear landmarks, and follow your request.</p><Button onClick={() => setActiveView("help")} className="mt-6 rounded-xl bg-white text-slate-900 hover:bg-slate-100">Open help center <ArrowRight className="ml-2 h-4 w-4" /></Button></div></section>
+              {doneRequests.some((request) => !request.personnel_feedback) && <section className="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5 sm:p-6">
+                <div className="mb-3 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><MessageSquare className="h-5 w-5" /></div><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-emerald-700">Quick feedback</p><h2 className="text-lg font-black text-slate-900">How did your errand go?</h2></div></div>
+                <p className="mb-3 text-sm text-slate-600">Share feedback on a completed errand so the admin can follow up if needed.</p>
+                {doneRequests.filter((request) => !request.personnel_feedback).slice(0, 3).map((request) => <button key={request.request_id} type="button" onClick={() => { setNotificationRequestId(request.request_id); setActiveView('requests'); }} className="mb-2 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3 text-left transition hover:border-emerald-300"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{request.recipient_name || 'Delivery request'}</span><span className="block truncate text-xs text-slate-500">{request.dropoff_location?.address || 'Completed errand'}</span></span><span className="shrink-0 text-xs font-black text-emerald-700">Review <ArrowRight className="ml-1 inline h-3 w-3" /></span></button>)}
+              </section>}
+              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-slate-400">Needs attention</p><h2 className="mt-1 text-lg font-black">Active requests</h2></div><Button variant="ghost" onClick={() => setActiveView("requests")} className="rounded-xl text-xs font-bold text-emerald-700">View all <ArrowRight className="ml-1 h-3 w-3" /></Button></div>{activeRequests.length ? activeRequests.slice(0, 3).map((r) => <RequestRow request={r} key={r.request_id} onCancel={() => cancelRequest(r.request_id)} onSelect={() => setActiveView("requests")} />) : <div className="rounded-2xl bg-slate-50 p-7 text-center"><Sparkles className="mx-auto mb-2 h-6 w-6 text-emerald-600" /><p className="font-bold">You are all caught up</p><p className="mt-1 text-xs text-slate-500">Your new requests will appear here.</p></div>}</section>
             </>}
           </div>
         </main>
       </div>
-      <Dialog open={mapTarget !== null} onOpenChange={(open) => { if (!open) { setMapTarget(null); setMobileDetailsOpen(false); } }}>
+      <Dialog open={mapTarget !== null} onOpenChange={(open) => { if (!open) { setMapTarget(null); setMobileDetailsOpen(false); setMobileSearchOpen(false); } }}>
         <DialogContent
           className="personnel-v2-map-dialog !left-1/2 !top-1/2 !max-w-none !-translate-x-1/2 !-translate-y-1/2 overflow-hidden rounded-2xl border-0 p-0 shadow-2xl sm:rounded-[2rem]"
           style={{
@@ -588,21 +616,31 @@ export function PersonnelV2Page() {
           }}
         >
           <DialogTitle className="sr-only">{mapTarget === "pickup" ? "Confirm pickup point" : "Confirm destination point"}</DialogTitle>
-          <div className={`personnel-v2-map-shell ${mobileDetailsOpen ? "mobile-details-open" : ""}`}>
+          <div className={`personnel-v2-map-shell ${mobileDetailsOpen || mobileSearchOpen ? "mobile-details-open" : ""} ${mobileSearchOpen ? "mobile-search-open" : ""}`}>
             <MapPickerContent
               title={mapTarget === "pickup" ? "Confirm pickup point" : "Confirm destination point"}
               initialLocation={mapTarget === "pickup" ? draft.pickup || undefined : draft.dropoff || undefined}
               onLocationSelect={(location) => selectLocation(mapTarget === "pickup" ? "pickup" : "dropoff", location)}
-              onClose={() => setMapTarget(null)}
+              locationPurpose={mapTarget === "pickup" ? "pickup" : "destination"}
+              onSuggestionsVisibilityChange={setMobileSearchOpen}
+              onClose={() => { setMapTarget(null); setMobileDetailsOpen(false); setMobileSearchOpen(false); }}
               isStandalone
             />
             <button
               type="button"
               className="personnel-v2-mobile-details-toggle"
-              onClick={() => setMobileDetailsOpen((open) => !open)}
+              aria-controls="mobile-location-picker-drawer"
+              aria-expanded={mobileDetailsOpen || mobileSearchOpen}
+              onClick={() => {
+                if (mobileSearchOpen) {
+                  setMobileSearchOpen(false);
+                  return;
+                }
+                setMobileDetailsOpen((open) => !open);
+              }}
             >
-              {mobileDetailsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              {mobileDetailsOpen ? "Hide details" : "More location details"}
+              {mobileDetailsOpen || mobileSearchOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              {mobileDetailsOpen || mobileSearchOpen ? "Collapse details" : "More details"}
             </button>
           </div>
         </DialogContent>
@@ -710,6 +748,11 @@ function RequestsPanel({ requests, openRequestId, onOpenedRequest, onCancel, onR
 
   const [pageInputs, setPageInputs] = useState({ filter, count: requests.length });
   useEffect(() => {
+    if (!selectedRequest) return;
+    const latest = requests.find((item) => item.request_id === selectedRequest.request_id);
+    if (latest && latest !== selectedRequest) setSelectedRequest(latest);
+  }, [requests, selectedRequest]);
+  useEffect(() => {
     if (!openRequestId) return;
     const request = requests.find((item) => item.request_id === openRequestId);
     if (request) {
@@ -724,7 +767,7 @@ function RequestsPanel({ requests, openRequestId, onOpenedRequest, onCancel, onR
     setPage(1);
   }
 
-  return <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+  return <section className="personnel-v2-requests-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
     <div className="mb-6 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-slate-400">History and tracking</p><h1 className="mt-1 text-2xl font-black">My requests</h1></div><Search className="h-5 w-5 text-slate-400" /></div>
     <div className="personnel-v2-request-filters mb-5 flex gap-2 overflow-x-auto pb-1"><RequestFilterButton label="All" count={requests.length} active={filter === "all"} onClick={() => setFilter("all")} /><RequestFilterButton label="Pending" count={requests.filter((request) => String(request.status) === "pending" || String(request.status) === "submitted_waiting").length} active={filter === "pending"} onClick={() => setFilter("pending")} /><RequestFilterButton label="Revisions" count={requests.filter((request) => request.status === "returned_for_revision").length} active={filter === "revision"} onClick={() => setFilter("revision")} /><RequestFilterButton label="Done" count={requests.filter((request) => request.delivery_status === "completed").length} active={filter === "done"} onClick={() => setFilter("done")} /></div>
     {filteredRequests.length ? <>
@@ -831,6 +874,7 @@ function RequestDetails({ request, onRevise, onRebook }: { request: DeliveryRequ
           </div>
         </div>
       )}
+      {isDone && <CompletionFeedback request={request} />}
       {isRevision && onRevise && (
         <div className="personnel-v2-revision-action mt-7 border-t border-amber-100 pt-5">
           <Button type="button" onClick={onRevise} className="w-full rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400">
@@ -851,6 +895,58 @@ function RequestDetails({ request, onRevise, onRebook }: { request: DeliveryRequ
       )}
     </div>
   );
+}
+
+function CompletionFeedback({ request }: { request: DeliveryRequest }) {
+  const { fetchWithAuth, refreshData } = useData();
+  const [outcome, setOutcome] = useState<'yes' | 'no' | null>(null);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedFeedback, setSubmittedFeedback] = useState(request.personnel_feedback || null);
+
+  useEffect(() => {
+    if (request.personnel_feedback) setSubmittedFeedback(request.personnel_feedback);
+  }, [request.personnel_feedback]);
+
+  const submit = async () => {
+    if (!outcome || submitting) return;
+    setSubmitting(true);
+    try {
+      const response = await fetchWithAuth(`/api/requests/${encodeURIComponent(request.request_id)}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ outcome, comment }),
+      });
+      const result = await response?.json().catch(() => ({}));
+      if (!response?.ok) throw new Error(result?.error || 'Feedback could not be saved.');
+      if (result?.feedback) setSubmittedFeedback(result.feedback);
+      await refreshData();
+      toast.success('Thanks for sharing your feedback.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Feedback could not be saved.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <section className="mt-7 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+    <p className="text-xs font-black uppercase tracking-[0.17em] text-emerald-800">Errand feedback</p>
+    {submittedFeedback ? <div className="mt-2">
+      <p className="text-sm font-bold text-slate-800">{submittedFeedback.outcome === 'yes' ? 'Completed as expected' : 'Needs attention'}</p>
+      {submittedFeedback.comment && <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-slate-600">{submittedFeedback.comment}</p>}
+      <p className="mt-2 text-[11px] font-semibold text-slate-400">Feedback submitted</p>
+    </div> : <>
+      <p className="mt-1 text-sm text-slate-600">Was this completed as expected?</p>
+      <div className="mt-3 flex gap-2">
+        <Button type="button" variant={outcome === 'yes' ? 'default' : 'outline'} onClick={() => setOutcome('yes')} className={outcome === 'yes' ? 'rounded-xl bg-emerald-700 text-white hover:bg-emerald-800' : 'rounded-xl'}>Yes</Button>
+        <Button type="button" variant={outcome === 'no' ? 'default' : 'outline'} onClick={() => setOutcome('no')} className={outcome === 'no' ? 'rounded-xl bg-amber-600 text-white hover:bg-amber-700' : 'rounded-xl'}>No</Button>
+      </div>
+      <Textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} placeholder="Optional note for the admin" className="mt-3 min-h-20 rounded-xl border-emerald-100 bg-white" />
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="text-[11px] text-slate-400">{comment.length}/1000</span>
+        <Button type="button" onClick={() => void submit()} disabled={!outcome || submitting} className="rounded-xl bg-emerald-700 text-white hover:bg-emerald-800">{submitting ? 'Sending…' : 'Send feedback'}</Button>
+      </div>
+    </>}
+  </section>;
 }
 
 

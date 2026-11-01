@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInUp,
+  FadeOutUp,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Job } from '@/types';
 import { useLocation } from '@/context/LocationContext';
@@ -15,8 +24,7 @@ export const ShiftControlDrawer: React.FC<ShiftControlDrawerProps> = ({ tasks })
   const { hasOpenShift, isOnDuty, attendanceStatus, isShiftStatusReady } = useLocation();
   const reduceMotion = useReducedMotionPreference();
   const [isOpen, setIsOpen] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  const [progress] = useState(() => new Animated.Value(0));
+  const progress = useSharedValue(0);
 
   const showDirectCard = isShiftStatusReady && !isOnDuty;
 
@@ -34,34 +42,20 @@ export const ShiftControlDrawer: React.FC<ShiftControlDrawerProps> = ({ tasks })
 
   const setExpanded = (expanded: boolean) => {
     setIsOpen(expanded);
-    progress.stopAnimation();
-
-    if (!expanded) {
-      progress.setValue(0);
-      setIsMounted(false);
-      return;
-    }
-
     if (reduceMotion) {
-      progress.setValue(1);
-      setIsMounted(true);
+      progress.value = expanded ? 1 : 0;
       return;
     }
 
-    setIsMounted(true);
-    requestAnimationFrame(() => {
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+    progress.value = withTiming(expanded ? 1 : 0, {
+      duration: expanded ? 260 : 220,
+      easing: expanded ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
     });
   };
 
-  const panelStyle = {
-    transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
-  };
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${progress.value * 180}deg` }],
+  }));
 
   return (
     <View testID="shift-drawer-anchor" style={styles.anchor}>
@@ -75,16 +69,20 @@ export const ShiftControlDrawer: React.FC<ShiftControlDrawerProps> = ({ tasks })
         style={({ pressed }) => [styles.handle, pressed && styles.handlePressed]}
       >
         <View testID="shift-drawer-handle-visual" style={styles.handleVisual}>
-          <MaterialIcons name={isOpen ? 'expand-less' : 'expand-more'} size={18} color="#FFFFFF" />
+          <Animated.View style={chevronStyle}>
+            <MaterialIcons name="expand-more" size={18} color="#FFFFFF" />
+          </Animated.View>
           <Text style={styles.handleText}>{isOpen ? 'Shift controls' : !isShiftStatusReady ? 'Checking shift' : isOnDuty ? 'On Duty' : 'Off Duty'}</Text>
         </View>
       </Pressable>}
 
-      {!showDirectCard && isMounted && (
+      {!showDirectCard && isOpen && (
         <Animated.View
           testID="shift-drawer-panel"
-          pointerEvents={isOpen ? 'auto' : 'none'}
-          style={[styles.panel, panelStyle]}
+          entering={reduceMotion ? undefined : FadeInUp.duration(260).easing(Easing.out(Easing.cubic))}
+          exiting={reduceMotion ? undefined : FadeOutUp.duration(220).easing(Easing.in(Easing.cubic))}
+          layout={reduceMotion ? undefined : LinearTransition.duration(260).easing(Easing.inOut(Easing.cubic))}
+          style={styles.panel}
         >
           <ShiftControlCard tasks={tasks} />
         </Animated.View>

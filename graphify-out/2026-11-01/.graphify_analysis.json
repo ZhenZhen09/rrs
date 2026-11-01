@@ -1,0 +1,2873 @@
+{
+  "communities": {
+    "0": [
+      "mobile_app_app_login",
+      "mobile_app_app_login_loginscreen",
+      "mobile_app_app_login_statusconfig",
+      "mobile_app_app_login_styles",
+      "mobile_app_app_login_width",
+      "mobile_app_app_tabs_history",
+      "mobile_app_app_tabs_history_styles",
+      "mobile_app_app_tabs_index",
+      "mobile_app_app_tabs_index_styles",
+      "mobile_app_app_tabs_overdue",
+      "mobile_app_app_tabs_overdue_styles",
+      "mobile_app_app_tabs_tomorrow",
+      "mobile_app_app_tabs_tomorrow_styles",
+      "mobile_app_components_attendancegate",
+      "mobile_app_components_attendancegate_absence_reasons",
+      "mobile_app_components_attendancegate_attendancegate",
+      "mobile_app_components_attendancegate_styles",
+      "mobile_app_components_handovermodal",
+      "mobile_app_components_handovermodal_common_handover_reasons",
+      "mobile_app_components_handovermodal_handovermodal",
+      "mobile_app_components_handovermodal_handovermodalprops",
+      "mobile_app_components_handovermodal_styles",
+      "mobile_app_components_notificationmodal",
+      "mobile_app_components_notificationmodal_notificationmodal",
+      "mobile_app_components_notificationmodal_notificationmodalprops",
+      "mobile_app_components_notificationmodal_styles",
+      "mobile_app_components_routeoptimizedmodal",
+      "mobile_app_components_routeoptimizedmodal_routeoptimizedmodal",
+      "mobile_app_components_routeoptimizedmodal_routeoptimizedmodalprops",
+      "mobile_app_components_routeoptimizedmodal_styles",
+      "mobile_app_components_screenheader",
+      "mobile_app_components_screenheader_screenheader",
+      "mobile_app_components_screenheader_screenheaderprops",
+      "mobile_app_components_screenheader_styles",
+      "mobile_app_components_shiftendmodal",
+      "mobile_app_components_shiftendmodal_shiftendmodal",
+      "mobile_app_components_shiftendmodal_shiftendmodalprops",
+      "mobile_app_components_shiftendmodal_styles",
+      "mobile_app_components_ui_badge",
+      "mobile_app_components_ui_badge_badge",
+      "mobile_app_components_ui_badge_badgeprops",
+      "mobile_app_components_ui_badge_styles",
+      "mobile_app_components_ui_bugsnagfallback",
+      "mobile_app_components_ui_bugsnagfallback_bugsnagfallback",
+      "mobile_app_components_ui_bugsnagfallback_fallbackprops",
+      "mobile_app_components_ui_bugsnagfallback_styles",
+      "mobile_app_components_ui_card",
+      "mobile_app_components_ui_card_card",
+      "mobile_app_components_ui_card_cardprops",
+      "mobile_app_components_ui_card_styles",
+      "mobile_app_components_ui_skeletoncard",
+      "mobile_app_components_ui_skeletoncard_skeletoncard",
+      "mobile_app_components_ui_skeletoncard_styles",
+      "mobile_app_utils_responsive",
+      "mobile_app_utils_responsive_moderatescale",
+      "mobile_app_utils_responsive_normalizefontsize",
+      "mobile_app_utils_responsive_scale",
+      "mobile_app_utils_responsive_verticalscale",
+      "mobile_app_utils_responsive_width_screen_width_height_screen_height"
+    ],
+    "1": [
+      "src_app_components_admin_devsimulator",
+      "src_app_components_admin_operationalintegrityview",
+      "src_app_components_admin_operationalintegrityview_operationalintegrityview",
+      "src_app_components_admin_operationalintegrityview_operationalintegrityviewprops",
+      "src_app_components_lighttrails",
+      "src_app_components_lighttrails_lighttrails",
+      "src_app_components_passwordresetoverlay",
+      "src_app_components_passwordresetoverlay_checkitem",
+      "src_app_components_passwordresetoverlay_passwordresetoverlay",
+      "src_app_components_passwordresetoverlay_props",
+      "src_app_components_passwordstrengthmeter",
+      "src_app_components_passwordstrengthmeter_passwordstrengthmeter",
+      "src_app_components_passwordstrengthmeter_props",
+      "src_app_components_ui_button",
+      "src_app_components_ui_button_button",
+      "src_app_components_ui_button_buttonprops",
+      "src_app_components_ui_card",
+      "src_app_components_ui_card_card",
+      "src_app_components_ui_card_cardaction",
+      "src_app_components_ui_card_cardcontent",
+      "src_app_components_ui_card_carddescription",
+      "src_app_components_ui_card_cardfooter",
+      "src_app_components_ui_card_cardheader",
+      "src_app_components_ui_card_cardtitle",
+      "src_app_components_ui_label",
+      "src_app_components_ui_label_label",
+      "src_app_components_ui_switch",
+      "src_app_components_ui_switch_switch",
+      "src_app_components_ui_utils",
+      "src_app_context_themecontext_usetheme",
+      "src_app_pages_admin_adminpendingtab",
+      "src_app_pages_admin_analyticshub",
+      "src_app_pages_admin_analyticshub_colors",
+      "src_app_pages_admin_analyticshub_connectivitycard",
+      "src_app_pages_admin_analyticshub_connectivityselect",
+      "src_app_pages_admin_analyticshub_detailbox",
+      "src_app_pages_admin_analyticshub_eventbadgeclass",
+      "src_app_pages_admin_analyticshub_formatconnectivityevent",
+      "src_app_pages_admin_analyticshub_formatsafedate",
+      "src_app_pages_admin_analyticshub_metricbox",
+      "src_app_pages_admin_analyticshub_reliabilityclass",
+      "src_app_pages_admin_analyticshub_riderconnectivityview",
+      "src_app_pages_admin_analyticshub_riskclass",
+      "src_app_pages_admin_analyticshub_smallstat",
+      "src_app_pages_admin_analyticshub_sparkline",
+      "src_app_pages_admin_analyticshub_summarykpi",
+      "src_app_pages_admin_themeselection",
+      "src_app_pages_admin_themeselection_themeselection",
+      "src_app_pages_admin_usermanagement",
+      "src_app_pages_login"
+    ],
+    "2": [
+      "src_app_components_admin_devsimulator_devsimulator",
+      "src_app_components_ui_avatar",
+      "src_app_components_ui_avatar_avatar",
+      "src_app_components_ui_avatar_avatarfallback",
+      "src_app_components_ui_avatar_avatarimage",
+      "src_app_components_ui_breadcrumb",
+      "src_app_components_ui_breadcrumb_breadcrumb",
+      "src_app_components_ui_breadcrumb_breadcrumbellipsis",
+      "src_app_components_ui_breadcrumb_breadcrumbitem",
+      "src_app_components_ui_breadcrumb_breadcrumblink",
+      "src_app_components_ui_breadcrumb_breadcrumblist",
+      "src_app_components_ui_breadcrumb_breadcrumbpage",
+      "src_app_components_ui_breadcrumb_breadcrumbseparator",
+      "src_app_components_ui_context_menu",
+      "src_app_components_ui_context_menu_contextmenu",
+      "src_app_components_ui_context_menu_contextmenucheckboxitem",
+      "src_app_components_ui_context_menu_contextmenucontent",
+      "src_app_components_ui_context_menu_contextmenugroup",
+      "src_app_components_ui_context_menu_contextmenuitem",
+      "src_app_components_ui_context_menu_contextmenulabel",
+      "src_app_components_ui_context_menu_contextmenuportal",
+      "src_app_components_ui_context_menu_contextmenuradiogroup",
+      "src_app_components_ui_context_menu_contextmenuradioitem",
+      "src_app_components_ui_context_menu_contextmenuseparator",
+      "src_app_components_ui_context_menu_contextmenushortcut",
+      "src_app_components_ui_context_menu_contextmenusub",
+      "src_app_components_ui_context_menu_contextmenusubcontent",
+      "src_app_components_ui_context_menu_contextmenusubtrigger",
+      "src_app_components_ui_context_menu_contextmenutrigger",
+      "src_app_components_ui_progress",
+      "src_app_components_ui_progress_progress",
+      "src_app_components_ui_radio_group",
+      "src_app_components_ui_radio_group_radiogroup",
+      "src_app_components_ui_radio_group_radiogroupitem",
+      "src_app_components_ui_resizable",
+      "src_app_components_ui_resizable_resizablehandle",
+      "src_app_components_ui_resizable_resizablepanel",
+      "src_app_components_ui_resizable_resizablepanelgroup",
+      "src_app_components_ui_slider",
+      "src_app_components_ui_slider_slider",
+      "src_app_components_ui_table",
+      "src_app_components_ui_table_table",
+      "src_app_components_ui_table_tablebody",
+      "src_app_components_ui_table_tablecaption",
+      "src_app_components_ui_table_tablecell",
+      "src_app_components_ui_table_tablefooter",
+      "src_app_components_ui_table_tablehead",
+      "src_app_components_ui_table_tableheader",
+      "src_app_components_ui_table_tablerow",
+      "src_app_components_ui_utils_cn"
+    ],
+    "3": [
+      "src_app_components_admin_dispatch_requestcard_requestcardprops",
+      "src_app_components_admin_dispatch_requestdetailspanel_requestdetailspanelprops",
+      "src_app_components_admin_dispatch_requestlist_requestlistprops",
+      "src_app_components_admin_dispatch_riderselectionlist_riderselectionlistprops",
+      "src_app_components_admin_dispatch_riderselectionlist_ridertype",
+      "src_app_components_mappicker",
+      "src_app_components_mappicker_changeview",
+      "src_app_components_mappicker_defaulticon",
+      "src_app_components_mappicker_fixmapsize",
+      "src_app_components_mappicker_mapinteractions",
+      "src_app_components_mappicker_mappicker",
+      "src_app_components_mappicker_mappickercontent",
+      "src_app_components_mappicker_searchresult",
+      "src_app_components_protectedroute",
+      "src_app_components_protectedroute_protectedroute",
+      "src_app_components_protectedroute_protectedrouteprops",
+      "src_app_context_authcontext_authcontexttype",
+      "src_app_context_datacontext",
+      "src_app_context_datacontext_datacontext",
+      "src_app_context_datacontext_datacontexttype",
+      "src_app_data_mockdata",
+      "src_app_data_mockdata_mocknotifications",
+      "src_app_data_mockdata_mockrequests",
+      "src_app_data_mockdata_mockusers",
+      "src_app_pages_admin_adminpendingtab_adminpendingtabprops",
+      "src_app_pages_livetrackingdashboard",
+      "src_app_pages_livetrackingdashboard_livetrackingdashboard",
+      "src_app_pages_livetrackingdashboard_syncphase",
+      "src_app_pages_livetrackingdashboard_trackinglocation",
+      "src_app_pages_livetrackingdashboard_trackingpayload",
+      "src_app_pages_livetrackingdashboard_trackingstatus",
+      "src_app_pages_login_login",
+      "src_app_pages_mappickerpage",
+      "src_app_pages_mappickerpage_mappickerpage",
+      "src_app_routes",
+      "src_app_routes_router",
+      "src_app_types_index",
+      "src_app_types_index_categorystyle",
+      "src_app_types_index_deliveryrequest",
+      "src_app_types_index_deliverystatus",
+      "src_app_types_index_departments",
+      "src_app_types_index_notification",
+      "src_app_types_index_requeststatus",
+      "src_app_types_index_time_slots",
+      "src_app_types_index_urgencylevel",
+      "src_app_types_index_user",
+      "src_app_types_index_userrole"
+    ],
+    "4": [
+      "src_app_components_ui_input",
+      "src_app_components_ui_input_input",
+      "src_app_components_ui_separator",
+      "src_app_components_ui_separator_separator",
+      "src_app_components_ui_sheet_sheetdescription",
+      "src_app_components_ui_sidebar",
+      "src_app_components_ui_sidebar_sidebar",
+      "src_app_components_ui_sidebar_sidebarcontent",
+      "src_app_components_ui_sidebar_sidebarcontext",
+      "src_app_components_ui_sidebar_sidebarcontextprops",
+      "src_app_components_ui_sidebar_sidebarfooter",
+      "src_app_components_ui_sidebar_sidebargroup",
+      "src_app_components_ui_sidebar_sidebargroupaction",
+      "src_app_components_ui_sidebar_sidebargroupcontent",
+      "src_app_components_ui_sidebar_sidebargrouplabel",
+      "src_app_components_ui_sidebar_sidebarheader",
+      "src_app_components_ui_sidebar_sidebarinput",
+      "src_app_components_ui_sidebar_sidebarinset",
+      "src_app_components_ui_sidebar_sidebarmenu",
+      "src_app_components_ui_sidebar_sidebarmenuaction",
+      "src_app_components_ui_sidebar_sidebarmenubadge",
+      "src_app_components_ui_sidebar_sidebarmenubutton",
+      "src_app_components_ui_sidebar_sidebarmenubuttonvariants",
+      "src_app_components_ui_sidebar_sidebarmenuitem",
+      "src_app_components_ui_sidebar_sidebarmenuskeleton",
+      "src_app_components_ui_sidebar_sidebarmenusub",
+      "src_app_components_ui_sidebar_sidebarmenusubbutton",
+      "src_app_components_ui_sidebar_sidebarmenusubitem",
+      "src_app_components_ui_sidebar_sidebarprovider",
+      "src_app_components_ui_sidebar_sidebarrail",
+      "src_app_components_ui_sidebar_sidebarseparator",
+      "src_app_components_ui_sidebar_sidebartrigger",
+      "src_app_components_ui_sidebar_usesidebar",
+      "src_app_components_ui_skeleton",
+      "src_app_components_ui_skeleton_skeleton",
+      "src_app_components_ui_tooltip",
+      "src_app_components_ui_tooltip_tooltip",
+      "src_app_components_ui_tooltip_tooltipcontent",
+      "src_app_components_ui_tooltip_tooltipprovider",
+      "src_app_components_ui_tooltip_tooltiptrigger",
+      "src_app_components_ui_use_mobile",
+      "src_app_components_ui_use_mobile_useismobile"
+    ],
+    "5": [
+      "src_app_components_admin_dispatch_requestlist",
+      "src_app_components_admin_dispatch_requestlist_badge",
+      "src_app_components_admin_dispatch_requestlist_badgeprops",
+      "src_app_components_admin_dispatch_requestlist_day_order",
+      "src_app_components_admin_dispatch_requestlist_requestlist",
+      "src_app_components_admin_dispatch_riderselectionlist",
+      "src_app_components_ui_select",
+      "src_app_components_ui_select_select",
+      "src_app_components_ui_select_selectcontent",
+      "src_app_components_ui_select_selectgroup",
+      "src_app_components_ui_select_selectitem",
+      "src_app_components_ui_select_selectlabel",
+      "src_app_components_ui_select_selectscrolldownbutton",
+      "src_app_components_ui_select_selectscrollupbutton",
+      "src_app_components_ui_select_selectseparator",
+      "src_app_components_ui_select_selecttrigger",
+      "src_app_components_ui_select_selectvalue",
+      "src_app_pages_admin_calendarview",
+      "src_app_pages_admin_calendarview_calendarfilters",
+      "src_app_pages_admin_calendarview_calendartaskrow",
+      "src_app_pages_admin_calendarview_calendarview",
+      "src_app_pages_admin_calendarview_filtercheckbox",
+      "src_app_pages_admin_calendarview_getcalendarexportactionby",
+      "src_app_pages_admin_calendarview_industriallistview",
+      "src_app_pages_admin_calendarview_statusindicator",
+      "src_app_pages_admin_calendarview_viewmode",
+      "src_app_pages_admin_dispatchconsole_dispatchconsole",
+      "src_app_utils_statusmapping",
+      "src_app_utils_statusmapping_getgroupedstatus",
+      "src_app_utils_statusmapping_getstatuscolor",
+      "src_app_utils_statusmapping_isactiverequest",
+      "src_app_utils_statusmapping_ispendingrequest",
+      "src_app_utils_statusmapping_isterminalrequest",
+      "src_app_utils_statusmapping_terminal_statuses",
+      "src_app_utils_statusmapping_uigroupstatus",
+      "src_app_utils_tests_statusmapping_test",
+      "tests_unit_global_counts_test"
+    ],
+    "6": [
+      "babel_preset_expo",
+      "jest",
+      "jest_expo",
+      "mobile_app_package",
+      "mobile_app_package_devdependencies",
+      "mobile_app_package_devdependencies_babel_preset_expo",
+      "mobile_app_package_devdependencies_eslint",
+      "mobile_app_package_devdependencies_eslint_config_expo",
+      "mobile_app_package_devdependencies_jest",
+      "mobile_app_package_devdependencies_jest_expo",
+      "mobile_app_package_devdependencies_react_test_renderer",
+      "mobile_app_package_devdependencies_testing_library_jest_native",
+      "mobile_app_package_devdependencies_testing_library_react_native",
+      "mobile_app_package_devdependencies_types_react",
+      "mobile_app_package_devdependencies_typescript",
+      "mobile_app_package_json_eslint",
+      "mobile_app_package_json_eslint_config_expo",
+      "mobile_app_package_json_types_react",
+      "mobile_app_package_json_typescript",
+      "mobile_app_package_main",
+      "mobile_app_package_name",
+      "mobile_app_package_private",
+      "mobile_app_package_scripts",
+      "mobile_app_package_scripts_android",
+      "mobile_app_package_scripts_ios",
+      "mobile_app_package_scripts_lint",
+      "mobile_app_package_scripts_reset_project",
+      "mobile_app_package_scripts_start",
+      "mobile_app_package_scripts_test",
+      "mobile_app_package_scripts_test_coverage",
+      "mobile_app_package_scripts_test_watch",
+      "mobile_app_package_scripts_web",
+      "mobile_app_package_version",
+      "react_test_renderer",
+      "testing_library_jest_native"
+    ],
+    "7": [
+      "src_app_app",
+      "src_app_app_app",
+      "src_app_components_admin_conflictresolutionmodal_conflictresolutionmodal",
+      "src_app_components_ui_sonner",
+      "src_app_components_ui_sonner_toaster",
+      "src_app_context_authcontext",
+      "src_app_context_authcontext_authcontext",
+      "src_app_context_authcontext_authprovider",
+      "src_app_context_datacontext_dataprovider",
+      "src_app_context_realtimecontext",
+      "src_app_context_realtimecontext_realtimecontext",
+      "src_app_context_realtimecontext_realtimecontexttype",
+      "src_app_context_realtimecontext_realtimeprovider",
+      "src_app_context_realtimecontext_userealtime",
+      "src_app_context_themecontext",
+      "src_app_context_themecontext_themeconfig",
+      "src_app_context_themecontext_themecontext",
+      "src_app_context_themecontext_themecontexttype",
+      "src_app_context_themecontext_themename",
+      "src_app_context_themecontext_themeprovider",
+      "src_app_context_themecontext_themes",
+      "src_app_pages_admin_attendancedashboard",
+      "src_app_pages_admin_attendancedashboard_attendancedashboard",
+      "src_app_pages_admin_attendancedashboard_attendancerecord",
+      "src_app_pages_admin_attendancedashboard_formatphilippinetime",
+      "src_app_pages_admin_attendancedashboard_getphilippinedatestring",
+      "src_app_pages_admin_attendancedashboard_parsephilippinedatetime",
+      "src_app_pages_admin_ridermap",
+      "src_app_pages_admin_ridermap_defaulticon",
+      "src_app_pages_admin_ridermap_mapcontroller",
+      "src_app_pages_admin_ridermap_riderlive",
+      "src_app_pages_admin_ridermap_ridermap",
+      "src_app_pages_admin_tests_rider_map_transparency_test",
+      "src_app_pages_admin_tests_rider_map_transparency_test_mockrider",
+      "src_main"
+    ],
+    "8": [
+      "mobile_admin_app",
+      "mobile_admin_app_adaptiveicon_backgroundcolor",
+      "mobile_admin_app_adaptiveicon_foregroundimage",
+      "mobile_admin_app_android_adaptiveicon",
+      "mobile_admin_app_android_package",
+      "mobile_admin_app_bugsnag_apikey",
+      "mobile_admin_app_experiments_typedroutes",
+      "mobile_admin_app_expo",
+      "mobile_admin_app_expo_android",
+      "mobile_admin_app_expo_experiments",
+      "mobile_admin_app_expo_extra",
+      "mobile_admin_app_expo_icon",
+      "mobile_admin_app_expo_ios",
+      "mobile_admin_app_expo_name",
+      "mobile_admin_app_expo_newarchenabled",
+      "mobile_admin_app_expo_orientation",
+      "mobile_admin_app_expo_plugins",
+      "mobile_admin_app_expo_scheme",
+      "mobile_admin_app_expo_slug",
+      "mobile_admin_app_expo_splash",
+      "mobile_admin_app_expo_userinterfacestyle",
+      "mobile_admin_app_expo_version",
+      "mobile_admin_app_expo_web",
+      "mobile_admin_app_extra_bugsnag",
+      "mobile_admin_app_ios_supportstablet",
+      "mobile_admin_app_json_ref_expo_router",
+      "mobile_admin_app_json_ref_expo_web_browser",
+      "mobile_admin_app_splash_backgroundcolor",
+      "mobile_admin_app_splash_image",
+      "mobile_admin_app_splash_resizemode",
+      "mobile_admin_app_web_bundler",
+      "mobile_admin_app_web_favicon",
+      "mobile_admin_app_web_output"
+    ],
+    "9": [
+      "mobile_app_context_locationcontext_stopbackgroundtracking",
+      "src_app_components_admin_dispatch_dispatchmapview",
+      "src_app_components_admin_dispatch_dispatchmapview_destinationicon",
+      "src_app_components_admin_dispatch_dispatchmapview_dispatchmapview",
+      "src_app_components_admin_dispatch_dispatchmapview_dispatchmapviewprops",
+      "src_app_components_admin_dispatch_dispatchmapview_mapcameracontroller",
+      "src_app_components_admin_dispatch_dispatchmapview_originicon",
+      "src_app_components_admin_dispatch_dispatchmapview_ridericon",
+      "src_app_components_admin_dispatch_requestdetailspanel",
+      "src_app_components_admin_dispatch_riderselectionlist_riderselectionlist",
+      "src_app_components_admin_dispatch_timelinecomponent",
+      "src_app_components_admin_dispatch_timelinecomponent_movementevent",
+      "src_app_components_admin_dispatch_timelinecomponent_timelinecomponent",
+      "src_app_components_admin_dispatch_timelinecomponent_timelinecomponentprops",
+      "src_app_components_mappicker_mappickerprops",
+      "src_app_components_ui_accordion",
+      "src_app_components_ui_accordion_accordion",
+      "src_app_components_ui_accordion_accordioncontent",
+      "src_app_components_ui_accordion_accordionitem",
+      "src_app_components_ui_accordion_accordiontrigger",
+      "src_app_components_ui_alert_dialog",
+      "src_app_components_ui_alert_dialog_alertdialog",
+      "src_app_components_ui_alert_dialog_alertdialogaction",
+      "src_app_components_ui_alert_dialog_alertdialogcancel",
+      "src_app_components_ui_alert_dialog_alertdialogcontent",
+      "src_app_components_ui_alert_dialog_alertdialogdescription",
+      "src_app_components_ui_alert_dialog_alertdialogfooter",
+      "src_app_components_ui_alert_dialog_alertdialogheader",
+      "src_app_components_ui_alert_dialog_alertdialogoverlay",
+      "src_app_components_ui_alert_dialog_alertdialogportal",
+      "src_app_components_ui_alert_dialog_alertdialogtitle",
+      "src_app_components_ui_alert_dialog_alertdialogtrigger",
+      "src_app_types_index_location"
+    ],
+    "10": [
+      "mobile_app_app_job_id",
+      "mobile_app_app_job_id_jobdetailsscreen",
+      "mobile_app_app_job_id_styles",
+      "mobile_app_app_job_id_width_height",
+      "mobile_app_app_tabs_layout",
+      "mobile_app_app_tabs_layout_tablayout",
+      "mobile_app_components_attendancelockout",
+      "mobile_app_components_attendancelockout_attendancelockout",
+      "mobile_app_components_attendancelockout_attendancelockoutprops",
+      "mobile_app_components_attendancelockout_styles",
+      "mobile_app_components_haptic_tab",
+      "mobile_app_components_haptic_tab_haptictab",
+      "mobile_app_constants_leafletassets",
+      "mobile_app_context_authcontext_useauth",
+      "mobile_app_context_locationcontext_uselocation",
+      "mobile_app_hooks_data_usejobdetails",
+      "mobile_app_hooks_data_usejobdetails_jobsyncstatus",
+      "mobile_app_hooks_data_usejobdetails_usejobdetails",
+      "mobile_app_services_apiservice_getjobdetails",
+      "mobile_app_services_apiservice_gettasks"
+    ],
+    "11": [
+      "mobile_app_app_modal",
+      "mobile_app_app_modal_modalscreen",
+      "mobile_app_app_modal_styles",
+      "mobile_app_components_parallax_scroll_view",
+      "mobile_app_components_parallax_scroll_view_parallaxscrollview",
+      "mobile_app_components_parallax_scroll_view_props",
+      "mobile_app_components_parallax_scroll_view_styles",
+      "mobile_app_components_themed_text",
+      "mobile_app_components_themed_text_styles",
+      "mobile_app_components_themed_text_themedtext",
+      "mobile_app_components_themed_text_themedtextprops",
+      "mobile_app_components_themed_view",
+      "mobile_app_components_themed_view_themedview",
+      "mobile_app_components_themed_view_themedviewprops",
+      "mobile_app_components_ui_button",
+      "mobile_app_components_ui_button_button",
+      "mobile_app_components_ui_button_buttonprops",
+      "mobile_app_components_ui_button_styles",
+      "mobile_app_components_ui_collapsible",
+      "mobile_app_components_ui_collapsible_collapsible",
+      "mobile_app_components_ui_collapsible_styles",
+      "mobile_app_components_ui_icon_symbol",
+      "mobile_app_components_ui_icon_symbol_iconmapping",
+      "mobile_app_components_ui_icon_symbol_iconsymbol",
+      "mobile_app_components_ui_icon_symbol_iconsymbolname",
+      "mobile_app_components_ui_icon_symbol_mapping",
+      "mobile_app_constants_theme",
+      "mobile_app_constants_theme_colors",
+      "mobile_app_constants_theme_fonts",
+      "mobile_app_hooks_use_color_scheme",
+      "mobile_app_hooks_use_theme_color",
+      "mobile_app_hooks_use_theme_color_usethemecolor"
+    ],
+    "12": [
+      "src_app_components_admin_notificationbell",
+      "src_app_components_admin_notificationbell_notificationbell",
+      "src_app_components_quickstartguide_quickstartguide",
+      "src_app_components_ui_badge",
+      "src_app_components_ui_badge_badge",
+      "src_app_components_ui_badge_badgevariants",
+      "src_app_components_ui_dropdown_menu_dropdownmenu",
+      "src_app_components_ui_dropdown_menu_dropdownmenucontent",
+      "src_app_components_ui_dropdown_menu_dropdownmenuitem",
+      "src_app_components_ui_dropdown_menu_dropdownmenulabel",
+      "src_app_components_ui_dropdown_menu_dropdownmenuseparator",
+      "src_app_components_ui_dropdown_menu_dropdownmenutrigger",
+      "src_app_components_ui_sheet",
+      "src_app_components_ui_sheet_sheet",
+      "src_app_components_ui_sheet_sheetclose",
+      "src_app_components_ui_sheet_sheetcontent",
+      "src_app_components_ui_sheet_sheetfooter",
+      "src_app_components_ui_sheet_sheetheader",
+      "src_app_components_ui_sheet_sheetoverlay",
+      "src_app_components_ui_sheet_sheetportal",
+      "src_app_components_ui_sheet_sheettitle",
+      "src_app_components_ui_sheet_sheettrigger",
+      "src_app_context_authcontext_useauth",
+      "src_app_context_datacontext_usedata",
+      "src_app_pages_admin_adminlayout",
+      "src_app_pages_admin_adminlayout_adminlayout",
+      "src_app_pages_admin_adminlayout_adminview",
+      "src_app_pages_admin_analyticshub_analyticshub",
+      "src_app_pages_admin_usermanagement_usermanagement",
+      "src_app_pages_dashboard",
+      "src_app_pages_dashboard_dashboard",
+      "src_app_pages_riderdashboard_riderdashboard"
+    ],
+    "13": [
+      "src_app_components_ui_categorypicker",
+      "src_app_components_ui_categorypicker_categorypicker",
+      "src_app_components_ui_categorypicker_categorypickerprops",
+      "src_app_components_ui_categorypicker_icon_map",
+      "src_app_components_ui_command",
+      "src_app_components_ui_command_command",
+      "src_app_components_ui_command_commanddialog",
+      "src_app_components_ui_command_commandempty",
+      "src_app_components_ui_command_commandgroup",
+      "src_app_components_ui_command_commandinput",
+      "src_app_components_ui_command_commanditem",
+      "src_app_components_ui_command_commandlist",
+      "src_app_components_ui_command_commandseparator",
+      "src_app_components_ui_command_commandshortcut",
+      "src_app_components_ui_popover",
+      "src_app_components_ui_popover_popover",
+      "src_app_components_ui_popover_popoveranchor",
+      "src_app_components_ui_popover_popovercontent",
+      "src_app_components_ui_popover_popovertrigger",
+      "src_app_pages_personneldashboard",
+      "src_app_pages_personneldashboard_countdowntimer",
+      "src_app_pages_personneldashboard_deliverystepper",
+      "src_app_pages_personneldashboard_metricbox",
+      "src_app_pages_personneldashboard_personneldashboard",
+      "src_app_types_index_category_config",
+      "src_app_types_index_request_categories",
+      "src_app_types_index_requesttype",
+      "src_app_utils_categoryutils",
+      "src_app_utils_categoryutils_gettypecolor",
+      "src_app_utils_categoryutils_gettypeicon",
+      "src_app_utils_categoryutils_icon_map"
+    ],
+    "14": [
+      "mobile_app_constants_config",
+      "mobile_app_constants_config_config",
+      "mobile_app_context_authcontext",
+      "mobile_app_context_authcontext_authcontext",
+      "mobile_app_context_authcontext_authcontexttype",
+      "mobile_app_context_authcontext_authprovider",
+      "mobile_app_context_locationcontext",
+      "mobile_app_context_locationcontext_attendancestatus",
+      "mobile_app_context_locationcontext_isvalidcoordinate",
+      "mobile_app_context_locationcontext_isvalidlocation",
+      "mobile_app_context_locationcontext_locationcontext",
+      "mobile_app_context_locationcontext_locationprovider",
+      "mobile_app_context_locationcontext_locationstate",
+      "mobile_app_context_locationcontext_normalizelocation",
+      "mobile_app_context_locationcontext_resetbackgroundtaskstopstate",
+      "mobile_app_services_apiservice_getmyattendance",
+      "mobile_app_services_apiservice_submitattendance",
+      "mobile_app_services_apiservice_updatedutystatus",
+      "mobile_app_services_apiservice_updatelocationbackground",
+      "mobile_app_utils_api",
+      "mobile_app_utils_api_failedqueue",
+      "mobile_app_utils_api_handleauthfailure",
+      "mobile_app_utils_api_processqueue",
+      "mobile_app_utils_api_resetauthstatus",
+      "mobile_app_utils_api_setauthfailurelistener",
+      "mobile_app_utils_authmanager",
+      "mobile_app_utils_authmanager_authmanager",
+      "mobile_app_utils_authmanager_decodejwtpayload",
+      "mobile_app_utils_tests_auth_lifecycle_test"
+    ],
+    "15": [
+      "src_app_components_admin_conflictresolutionmodal",
+      "src_app_components_admin_conflictresolutionmodal_conflictresolutionmodalprops",
+      "src_app_components_admin_deviationapprovalmodal",
+      "src_app_components_admin_deviationapprovalmodal_deviationapprovalmodal",
+      "src_app_components_admin_deviationapprovalmodal_deviationapprovalmodalprops",
+      "src_app_components_admin_enhancedbatchapprovemodal",
+      "src_app_components_admin_enhancedbatchapprovemodal_enhancedbatchapprovemodal",
+      "src_app_components_admin_enhancedbatchapprovemodal_enhancedbatchapprovemodalprops",
+      "src_app_components_quickstartguide",
+      "src_app_components_systeminfo",
+      "src_app_components_systeminfo_systeminfo",
+      "src_app_components_ui_checkbox",
+      "src_app_components_ui_checkbox_checkbox",
+      "src_app_components_ui_dialog",
+      "src_app_components_ui_dialog_dialogcontent",
+      "src_app_components_ui_dialog_dialogdescription",
+      "src_app_components_ui_dialog_dialogfooter",
+      "src_app_components_ui_dialog_dialogheader",
+      "src_app_components_ui_dialog_dialogoverlay",
+      "src_app_components_ui_dialog_dialogtitle",
+      "src_app_components_ui_tabs",
+      "src_app_components_ui_tabs_tabs",
+      "src_app_components_ui_tabs_tabscontent",
+      "src_app_components_ui_tabs_tabslist",
+      "src_app_components_ui_tabs_tabstrigger",
+      "src_app_components_ui_textarea",
+      "src_app_components_ui_textarea_textarea",
+      "src_app_pages_admin_dispatchconsole",
+      "src_app_pages_riderdashboard"
+    ],
+    "16": [
+      "mobile_app_app_tabs_history_historyscreen",
+      "mobile_app_app_tabs_index_todayscreen",
+      "mobile_app_app_tabs_overdue_overduescreen",
+      "mobile_app_app_tabs_tomorrow_tomorrowscreen",
+      "mobile_app_types_index",
+      "mobile_app_types_index_job",
+      "mobile_app_utils_dateutils",
+      "mobile_app_utils_dateutils_formatdisplaydate",
+      "mobile_app_utils_dateutils_getlocaldatestr",
+      "mobile_app_utils_dateutils_parselocaldate",
+      "mobile_app_utils_taskfilters",
+      "mobile_app_utils_taskfilters_getridertaskcounts",
+      "mobile_app_utils_taskfilters_getridertasktab",
+      "mobile_app_utils_taskfilters_isactiveapprovedtask",
+      "mobile_app_utils_taskfilters_istasklocked",
+      "mobile_app_utils_taskfilters_ridertasktab",
+      "mobile_app_utils_taskfilters_terminal_delivery_statuses",
+      "mobile_app_utils_tests_data_boundaries_test",
+      "mobile_app_utils_tests_dateutils_test",
+      "mobile_app_utils_tests_deep_date_logic_test",
+      "mobile_app_utils_tests_enterprise_business_rules_test",
+      "mobile_app_utils_tests_rider_job_audit_test",
+      "mobile_app_utils_tests_rider_midnight_logic_test",
+      "mobile_app_utils_tests_tab_matrix_test",
+      "mobile_app_utils_tests_taskfilters_test",
+      "mobile_app_utils_tests_taskfilters_test_makejob"
+    ],
+    "17": [
+      "src_app_components_livetrackingmap",
+      "src_app_components_livetrackingmap_calculatebearing",
+      "src_app_components_livetrackingmap_changeview",
+      "src_app_components_livetrackingmap_createridericon",
+      "src_app_components_livetrackingmap_createstaticicon",
+      "src_app_components_livetrackingmap_dropofficon",
+      "src_app_components_livetrackingmap_fetchchunkeddrivingroute",
+      "src_app_components_livetrackingmap_fetchdrivingroute",
+      "src_app_components_livetrackingmap_flattenlnglatcoordinates",
+      "src_app_components_livetrackingmap_followmodecontroller",
+      "src_app_components_livetrackingmap_isvalidlatlng",
+      "src_app_components_livetrackingmap_latlng",
+      "src_app_components_livetrackingmap_livetrackingmap",
+      "src_app_components_livetrackingmap_livetrackingmapprops",
+      "src_app_components_livetrackingmap_lnglat",
+      "src_app_components_livetrackingmap_nearestpointonsegment",
+      "src_app_components_livetrackingmap_pickupicon",
+      "src_app_components_livetrackingmap_routebearingatpoint",
+      "src_app_components_livetrackingmap_searchicon",
+      "src_app_components_livetrackingmap_searchresult",
+      "src_app_components_livetrackingmap_snaptoroute",
+      "src_app_components_livetrackingmap_tometers",
+      "src_app_components_livetrackingmap_trackingstatus",
+      "src_app_components_ui_scroll_area",
+      "src_app_components_ui_scroll_area_scrollarea",
+      "src_app_components_ui_scroll_area_scrollbar"
+    ],
+    "18": [
+      "mobile_app_app_layout",
+      "mobile_app_app_layout_rootlayout",
+      "mobile_app_app_layout_rootlayoutnav",
+      "mobile_app_app_layout_unstable_settings",
+      "mobile_app_components_tacticalbriefing_radarbriefing",
+      "mobile_app_components_tacticalbriefing_radarbriefing_props",
+      "mobile_app_components_tacticalbriefing_radarbriefing_radarbriefing",
+      "mobile_app_components_tacticalbriefing_radarbriefing_styles",
+      "mobile_app_components_tacticalbriefing_radarbriefing_width",
+      "mobile_app_components_tacticalbriefing_radarcircle",
+      "mobile_app_components_tacticalbriefing_radarcircle_props",
+      "mobile_app_components_tacticalbriefing_radarcircle_radarcircle",
+      "mobile_app_components_ui_offlinebanner",
+      "mobile_app_components_ui_offlinebanner_offlinebanner",
+      "mobile_app_components_ui_offlinebanner_styles",
+      "mobile_app_services_syncmanager",
+      "mobile_app_services_syncmanager_initsyncmanager",
+      "mobile_app_services_syncmanager_stopsyncmanager",
+      "mobile_app_services_syncmanager_triggersync",
+      "mobile_app_utils_api_wakeupserver",
+      "mobile_app_utils_bugsnag",
+      "mobile_app_utils_bugsnag_bugsnagglobals",
+      "mobile_app_utils_queryclient",
+      "mobile_app_utils_queryclient_asyncstoragepersister",
+      "mobile_app_utils_queryclient_queryclient"
+    ],
+    "19": [
+      "ref_dom",
+      "ref_dom_iterable",
+      "ref_src",
+      "tsconfig",
+      "tsconfig_compileroptions",
+      "tsconfig_compileroptions_allowimportingtsextensions",
+      "tsconfig_compileroptions_isolatedmodules",
+      "tsconfig_compileroptions_jsx",
+      "tsconfig_compileroptions_lib",
+      "tsconfig_compileroptions_module",
+      "tsconfig_compileroptions_moduleresolution",
+      "tsconfig_compileroptions_noemit",
+      "tsconfig_compileroptions_nofallthroughcasesinswitch",
+      "tsconfig_compileroptions_nounusedlocals",
+      "tsconfig_compileroptions_nounusedparameters",
+      "tsconfig_compileroptions_paths",
+      "tsconfig_compileroptions_resolvejsonmodule",
+      "tsconfig_compileroptions_skiplibcheck",
+      "tsconfig_compileroptions_strict",
+      "tsconfig_compileroptions_target",
+      "tsconfig_compileroptions_usedefineforclassfields",
+      "tsconfig_include",
+      "tsconfig_json_ref_es2020",
+      "tsconfig_paths",
+      "tsconfig_references"
+    ],
+    "20": [
+      "mobile_admin_app_layout",
+      "mobile_admin_app_layout_bugsnagglobals",
+      "mobile_admin_app_layout_rootlayout",
+      "mobile_admin_app_login",
+      "mobile_admin_app_login_adminloginscreen",
+      "mobile_admin_app_login_styles",
+      "mobile_admin_constants_config",
+      "mobile_admin_constants_config_config",
+      "mobile_admin_context_authcontext",
+      "mobile_admin_context_authcontext_authcontext",
+      "mobile_admin_context_authcontext_authcontexttype",
+      "mobile_admin_context_authcontext_authprovider",
+      "mobile_admin_context_authcontext_decodejwtpayload",
+      "mobile_admin_context_authcontext_istokenexpired",
+      "mobile_admin_context_authcontext_useauth",
+      "mobile_admin_context_authcontext_user",
+      "mobile_admin_context_realtimecontext",
+      "mobile_admin_context_realtimecontext_presencestatus",
+      "mobile_admin_context_realtimecontext_realtimecontext",
+      "mobile_admin_context_realtimecontext_realtimecontexttype",
+      "mobile_admin_context_realtimecontext_realtimeprovider",
+      "mobile_admin_context_realtimecontext_realtimetoast",
+      "mobile_admin_context_realtimecontext_riderlocation"
+    ],
+    "21": [
+      "tests_web_mobile_workflow_spec",
+      "tests_web_mobile_workflow_spec_admin",
+      "tests_web_mobile_workflow_spec_artifact_dir",
+      "tests_web_mobile_workflow_spec_artifact_path",
+      "tests_web_mobile_workflow_spec_assignselectedrequesttomike",
+      "tests_web_mobile_workflow_spec_choosemaplocation",
+      "tests_web_mobile_workflow_spec_createauthenticatedcontext",
+      "tests_web_mobile_workflow_spec_fetchapitoken",
+      "tests_web_mobile_workflow_spec_fetchapiuser",
+      "tests_web_mobile_workflow_spec_getrequestsbyrecipients",
+      "tests_web_mobile_workflow_spec_login",
+      "tests_web_mobile_workflow_spec_personnel",
+      "tests_web_mobile_workflow_spec_resubmitrevision",
+      "tests_web_mobile_workflow_spec_returnselectedrequestforrevision",
+      "tests_web_mobile_workflow_spec_rider",
+      "tests_web_mobile_workflow_spec_scenarioartifact",
+      "tests_web_mobile_workflow_spec_scenariorequest",
+      "tests_web_mobile_workflow_spec_scenariorequests",
+      "tests_web_mobile_workflow_spec_searchandopenadminrequest",
+      "tests_web_mobile_workflow_spec_setselectvalue",
+      "tests_web_mobile_workflow_spec_submitpersonnelrequest",
+      "tests_web_mobile_workflow_spec_waitforrequests",
+      "tests_web_mobile_workflow_spec_writeartifact"
+    ],
+    "22": [
+      "mobile_admin_app_tabs_calendar",
+      "mobile_admin_app_tabs_calendar_calendarscreen",
+      "mobile_admin_app_tabs_calendar_styles",
+      "mobile_admin_app_tabs_dispatch",
+      "mobile_admin_app_tabs_dispatch_dispatchcenter",
+      "mobile_admin_app_tabs_dispatch_parsesafedate",
+      "mobile_admin_app_tabs_dispatch_previous_examples",
+      "mobile_admin_app_tabs_dispatch_styles",
+      "mobile_admin_app_tabs_dispatch_tabs",
+      "mobile_admin_components_dispatch_premiumjobcard",
+      "mobile_admin_components_dispatch_premiumjobcard_premiumjobcard",
+      "mobile_admin_components_dispatch_premiumjobcard_premiumjobcardprops",
+      "mobile_admin_components_dispatch_premiumjobcard_styles",
+      "mobile_admin_constants_theme",
+      "mobile_admin_constants_theme_colors",
+      "mobile_admin_constants_theme_radius",
+      "mobile_admin_constants_theme_typography",
+      "mobile_admin_utils_statusmapping",
+      "mobile_admin_utils_statusmapping_getgroupedstatus",
+      "mobile_admin_utils_statusmapping_getstatuscolor",
+      "mobile_admin_utils_statusmapping_uigroupstatus"
+    ],
+    "23": [
+      "server_index",
+      "server_index_allowedorigins",
+      "server_index_app",
+      "server_index_authratelimiter",
+      "server_index_bugsnagmiddleware",
+      "server_index_clientdistpath",
+      "server_index_clientindexpath",
+      "server_index_globalapilimiter",
+      "server_index_httpserver",
+      "server_index_io",
+      "server_index_requestpingstate",
+      "server_index_watchdog",
+      "server_presence",
+      "server_presence_cleanupofflineriders",
+      "server_presence_onlineriders",
+      "server_presence_removeriderpresence",
+      "server_presence_touchriderpresence",
+      "server_presence_updateriderpresence",
+      "server_routes_users",
+      "server_routes_users_getphilippinedatestring",
+      "server_routes_users_router"
+    ],
+    "24": [
+      "ref_dist",
+      "ref_node_modules",
+      "server_tsconfig",
+      "server_tsconfig_compileroptions",
+      "server_tsconfig_compileroptions_esmoduleinterop",
+      "server_tsconfig_compileroptions_forceconsistentcasinginfilenames",
+      "server_tsconfig_compileroptions_lib",
+      "server_tsconfig_compileroptions_module",
+      "server_tsconfig_compileroptions_moduleresolution",
+      "server_tsconfig_compileroptions_outdir",
+      "server_tsconfig_compileroptions_resolvejsonmodule",
+      "server_tsconfig_compileroptions_rootdir",
+      "server_tsconfig_compileroptions_skiplibcheck",
+      "server_tsconfig_compileroptions_strict",
+      "server_tsconfig_compileroptions_target",
+      "server_tsconfig_exclude",
+      "server_tsconfig_include",
+      "server_tsconfig_json_ref_es2020",
+      "server_tsconfig_json_ref_ts"
+    ],
+    "25": [
+      "mobile_admin_package_dependencies",
+      "mobile_admin_package_dependencies_expo_haptics",
+      "mobile_admin_package_dependencies_expo_router",
+      "mobile_admin_package_dependencies_expo_web_browser",
+      "mobile_admin_package_dependencies_react_native",
+      "mobile_admin_package_dependencies_react_native_async_storage_async_storage",
+      "mobile_admin_package_dependencies_react_native_gesture_handler",
+      "mobile_admin_package_dependencies_react_navigation_bottom_tabs",
+      "mobile_admin_package_dependencies_react_navigation_elements",
+      "mobile_admin_package_dependencies_react_navigation_native",
+      "mobile_admin_package_json_expo_haptics",
+      "mobile_admin_package_json_expo_router",
+      "mobile_admin_package_json_expo_web_browser",
+      "mobile_admin_package_json_react_native",
+      "mobile_admin_package_json_react_native_async_storage_async_storage",
+      "mobile_admin_package_json_react_native_gesture_handler",
+      "mobile_admin_package_json_react_navigation_bottom_tabs",
+      "mobile_admin_package_json_react_navigation_native"
+    ],
+    "26": [
+      "server_db",
+      "server_db_envpaths",
+      "server_db_pool",
+      "server_routes_analytics",
+      "server_routes_analytics_formatdatelabel",
+      "server_routes_analytics_formatdurationseconds",
+      "server_routes_analytics_getconnectivityrecommendation",
+      "server_routes_analytics_getdatefilter",
+      "server_routes_analytics_getdatekey",
+      "server_routes_analytics_geteventtimefilter",
+      "server_routes_analytics_getreliability",
+      "server_routes_analytics_router",
+      "server_services_auditlogger",
+      "server_services_auditlogger_auditlogentry",
+      "server_services_auditlogger_logaction",
+      "tests_unit_analytics_test",
+      "tests_unit_analytics_test_app"
+    ],
+    "27": [
+      "src_app_components_ui_menubar",
+      "src_app_components_ui_menubar_menubar",
+      "src_app_components_ui_menubar_menubarcheckboxitem",
+      "src_app_components_ui_menubar_menubarcontent",
+      "src_app_components_ui_menubar_menubargroup",
+      "src_app_components_ui_menubar_menubaritem",
+      "src_app_components_ui_menubar_menubarlabel",
+      "src_app_components_ui_menubar_menubarmenu",
+      "src_app_components_ui_menubar_menubarportal",
+      "src_app_components_ui_menubar_menubarradiogroup",
+      "src_app_components_ui_menubar_menubarradioitem",
+      "src_app_components_ui_menubar_menubarseparator",
+      "src_app_components_ui_menubar_menubarshortcut",
+      "src_app_components_ui_menubar_menubarsub",
+      "src_app_components_ui_menubar_menubarsubcontent",
+      "src_app_components_ui_menubar_menubarsubtrigger",
+      "src_app_components_ui_menubar_menubartrigger"
+    ],
+    "28": [
+      "mobile_admin_app_job_id",
+      "mobile_admin_app_job_id_height_screen_height",
+      "mobile_admin_app_job_id_jobtrackingscreen",
+      "mobile_admin_app_job_id_parsesafedate",
+      "mobile_admin_app_job_id_styles",
+      "mobile_admin_app_job_id_trackingdata",
+      "mobile_admin_components_dispatch_trackingmap",
+      "mobile_admin_components_dispatch_trackingmap_latlng",
+      "mobile_admin_components_dispatch_trackingmap_ridermaplocation",
+      "mobile_admin_components_dispatch_trackingmap_styles",
+      "mobile_admin_components_dispatch_trackingmap_trackingmap",
+      "mobile_admin_components_dispatch_trackingmap_trackingmapprops",
+      "mobile_admin_components_ui_badge",
+      "mobile_admin_components_ui_badge_badge",
+      "mobile_admin_components_ui_badge_badgeprops",
+      "mobile_admin_components_ui_badge_styles"
+    ],
+    "29": [
+      "server_locationtracking",
+      "server_locationtracking_getdistance",
+      "server_locationtracking_handleriderlocationupdate",
+      "server_locationtracking_isphysicallypossible",
+      "server_locationtracking_isvalidcoordinate",
+      "server_locationtracking_locationcheckpoint",
+      "server_locationtracking_locationstate",
+      "server_locationtracking_locationupdateinput",
+      "server_locationtracking_requestgeofencestate",
+      "server_locationtracking_requestlateststate",
+      "server_locationtracking_requestpingstate",
+      "server_locationtracking_riderlateststate",
+      "server_locationtracking_shouldwritehistory",
+      "server_locationtracking_shouldwritelatest",
+      "server_locationtracking_suspectriderpoints",
+      "tests_unit_memoryleak_test"
+    ],
+    "30": [
+      "express_rate_limit",
+      "qrcode",
+      "server_package_dependencies",
+      "server_package_dependencies_argon2",
+      "server_package_dependencies_express_rate_limit",
+      "server_package_dependencies_qrcode",
+      "server_package_dependencies_types_cors",
+      "server_package_dependencies_types_express",
+      "server_package_dependencies_typescript",
+      "server_package_dependencies_zod",
+      "server_package_json_argon2",
+      "server_package_json_types_express",
+      "server_package_json_typescript",
+      "types_cors",
+      "zod"
+    ],
+    "31": [
+      "lucide_react",
+      "package_dependencies",
+      "package_dependencies_argon2",
+      "package_dependencies_lucide_react",
+      "package_dependencies_radix_ui_react_aspect_ratio",
+      "package_dependencies_radix_ui_react_hover_card",
+      "package_dependencies_radix_ui_react_menubar",
+      "package_dependencies_radix_ui_react_navigation_menu",
+      "package_dependencies_radix_ui_react_slot",
+      "package_json_argon2",
+      "radix_ui_react_aspect_ratio",
+      "radix_ui_react_hover_card",
+      "radix_ui_react_menubar",
+      "radix_ui_react_navigation_menu",
+      "radix_ui_react_slot"
+    ],
+    "32": [
+      "server_index_requestwatchdog",
+      "server_index_requestwatchdog_check",
+      "server_index_requestwatchdog_constructor",
+      "server_index_requestwatchdog_start",
+      "server_locationtracking_prunetrackingstate",
+      "server_services_connectivitylogger",
+      "server_services_connectivitylogger_classifylikelyreason",
+      "server_services_connectivitylogger_classifyrisklevel",
+      "server_services_connectivitylogger_connectivityeventtype",
+      "server_services_connectivitylogger_connectivityloginput",
+      "server_services_connectivitylogger_getlatestofflineincident",
+      "server_services_connectivitylogger_getlocationageseconds",
+      "server_services_connectivitylogger_recordconnectivitylog",
+      "server_services_connectivitylogger_risklevel",
+      "server_services_connectivitylogger_tosqldate"
+    ],
+    "33": [
+      "server_middleware_auth",
+      "server_middleware_auth_authenticate",
+      "server_middleware_auth_authorize",
+      "server_middleware_auth_authrequest",
+      "server_middleware_auth_getjwtsecret",
+      "server_middleware_idempotency",
+      "server_middleware_idempotency_idempotency",
+      "server_routes_notifications",
+      "server_routes_notifications_expo",
+      "server_routes_notifications_router",
+      "server_routes_notifications_sendpushnotification",
+      "server_routes_ridertasks",
+      "server_routes_ridertasks_formatrequestrow",
+      "server_routes_ridertasks_router",
+      "server_routes_ridertasks_terminal_statuses"
+    ],
+    "34": [
+      "src_app_components_ui_carousel",
+      "src_app_components_ui_carousel_carousel",
+      "src_app_components_ui_carousel_carouselapi",
+      "src_app_components_ui_carousel_carouselcontent",
+      "src_app_components_ui_carousel_carouselcontext",
+      "src_app_components_ui_carousel_carouselcontextprops",
+      "src_app_components_ui_carousel_carouselitem",
+      "src_app_components_ui_carousel_carouselnext",
+      "src_app_components_ui_carousel_carouseloptions",
+      "src_app_components_ui_carousel_carouselplugin",
+      "src_app_components_ui_carousel_carouselprevious",
+      "src_app_components_ui_carousel_carouselprops",
+      "src_app_components_ui_carousel_usecarousel",
+      "src_app_components_ui_carousel_usecarouselparameters"
+    ],
+    "35": [
+      "tests_hybrid_e2e_lifecycle_spec",
+      "tests_hybrid_e2e_lifecycle_spec_admin",
+      "tests_hybrid_e2e_lifecycle_spec_choosemaplocation",
+      "tests_hybrid_e2e_lifecycle_spec_fetchapitoken",
+      "tests_hybrid_e2e_lifecycle_spec_login",
+      "tests_hybrid_e2e_lifecycle_spec_personnel",
+      "tests_hybrid_e2e_lifecycle_spec_rider",
+      "tests_hybrid_e2e_lifecycle_spec_setselectvalue",
+      "tests_location_tracking_validation_spec",
+      "tests_utils_session_manager",
+      "tests_utils_session_manager_loadsession",
+      "tests_utils_session_manager_savesession",
+      "tests_utils_session_manager_session_file",
+      "tests_utils_session_manager_test"
+    ],
+    "36": [
+      "concurrently",
+      "package_devdependencies",
+      "package_devdependencies_concurrently",
+      "package_devdependencies_playwright_test",
+      "package_devdependencies_types_leaflet",
+      "package_devdependencies_types_node",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_vitest",
+      "package_json_types_node",
+      "playwright_test",
+      "types_leaflet",
+      "types_react_dom",
+      "vitest"
+    ],
+    "37": [
+      "expo_battery",
+      "jwt_decode",
+      "mobile_app_package_dependencies",
+      "mobile_app_package_dependencies_expo_battery",
+      "mobile_app_package_dependencies_expo_image",
+      "mobile_app_package_dependencies_expo_status_bar",
+      "mobile_app_package_dependencies_expo_web_browser",
+      "mobile_app_package_dependencies_jwt_decode",
+      "mobile_app_package_dependencies_types_polyline",
+      "mobile_app_package_json_expo_image",
+      "mobile_app_package_json_expo_status_bar",
+      "mobile_app_package_json_expo_web_browser",
+      "types_polyline"
+    ],
+    "38": [
+      "mobile_admin_tsconfig",
+      "mobile_admin_tsconfig_compileroptions",
+      "mobile_admin_tsconfig_compileroptions_paths",
+      "mobile_admin_tsconfig_compileroptions_strict",
+      "mobile_admin_tsconfig_extends",
+      "mobile_admin_tsconfig_include",
+      "mobile_admin_tsconfig_json_ref",
+      "mobile_admin_tsconfig_json_ref_expo_env_d_ts",
+      "mobile_admin_tsconfig_json_ref_expo_tsconfig_base",
+      "mobile_admin_tsconfig_json_ref_expo_types_ts",
+      "mobile_admin_tsconfig_json_ref_ts",
+      "mobile_admin_tsconfig_json_ref_tsx",
+      "mobile_admin_tsconfig_paths"
+    ],
+    "39": [
+      "mobile_app_components_ui_passwordresetoverlay",
+      "mobile_app_components_ui_passwordresetoverlay_checkitem",
+      "mobile_app_components_ui_passwordresetoverlay_passwordresetoverlay",
+      "mobile_app_components_ui_passwordresetoverlay_props",
+      "mobile_app_components_ui_passwordresetoverlay_styles",
+      "mobile_app_components_ui_passwordstrengthmeter",
+      "mobile_app_components_ui_passwordstrengthmeter_passwordstrengthmeter",
+      "mobile_app_components_ui_passwordstrengthmeter_props",
+      "mobile_app_components_ui_passwordstrengthmeter_styles",
+      "mobile_app_components_ui_tests_passwordresetoverlay_test",
+      "mobile_app_components_ui_tests_passwordstrengthmeter_test",
+      "mobile_app_constants_colors",
+      "mobile_app_constants_colors_colors"
+    ],
+    "40": [
+      "mobile_app_tsconfig",
+      "mobile_app_tsconfig_compileroptions",
+      "mobile_app_tsconfig_compileroptions_paths",
+      "mobile_app_tsconfig_compileroptions_strict",
+      "mobile_app_tsconfig_extends",
+      "mobile_app_tsconfig_include",
+      "mobile_app_tsconfig_json_ref",
+      "mobile_app_tsconfig_json_ref_expo_env_d_ts",
+      "mobile_app_tsconfig_json_ref_expo_tsconfig_base",
+      "mobile_app_tsconfig_json_ref_expo_types_ts",
+      "mobile_app_tsconfig_json_ref_ts",
+      "mobile_app_tsconfig_json_ref_tsx",
+      "mobile_app_tsconfig_paths"
+    ],
+    "41": [
+      "server_routes_requests",
+      "server_routes_requests_canviewrequest",
+      "server_routes_requests_formatrequestrow",
+      "server_routes_requests_router",
+      "server_schemas_requestschema",
+      "server_schemas_requestschema_approverequestschema",
+      "server_schemas_requestschema_createrequestschema",
+      "server_schemas_requestschema_disapproverequestschema",
+      "server_schemas_requestschema_locationschema",
+      "server_schemas_requestschema_patchlocationsschema",
+      "server_schemas_requestschema_resequenceschema",
+      "server_schemas_requestschema_returnrequestschema",
+      "server_schemas_requestschema_updatestatusschema"
+    ],
+    "42": [
+      "src_app_components_ui_button_buttonvariants",
+      "src_app_components_ui_calendar",
+      "src_app_components_ui_calendar_calendar",
+      "src_app_components_ui_pagination",
+      "src_app_components_ui_pagination_pagination",
+      "src_app_components_ui_pagination_paginationcontent",
+      "src_app_components_ui_pagination_paginationellipsis",
+      "src_app_components_ui_pagination_paginationitem",
+      "src_app_components_ui_pagination_paginationlink",
+      "src_app_components_ui_pagination_paginationlinkprops",
+      "src_app_components_ui_pagination_paginationnext",
+      "src_app_components_ui_pagination_paginationprevious"
+    ],
+    "43": [
+      "src_app_components_ui_form",
+      "src_app_components_ui_form_formcontrol",
+      "src_app_components_ui_form_formdescription",
+      "src_app_components_ui_form_formfield",
+      "src_app_components_ui_form_formfieldcontext",
+      "src_app_components_ui_form_formfieldcontextvalue",
+      "src_app_components_ui_form_formitem",
+      "src_app_components_ui_form_formitemcontext",
+      "src_app_components_ui_form_formitemcontextvalue",
+      "src_app_components_ui_form_formlabel",
+      "src_app_components_ui_form_formmessage",
+      "src_app_components_ui_form_useformfield"
+    ],
+    "44": [
+      "mobile_admin_package",
+      "mobile_admin_package_main",
+      "mobile_admin_package_name",
+      "mobile_admin_package_private",
+      "mobile_admin_package_scripts",
+      "mobile_admin_package_scripts_android",
+      "mobile_admin_package_scripts_ios",
+      "mobile_admin_package_scripts_lint",
+      "mobile_admin_package_scripts_start",
+      "mobile_admin_package_scripts_web",
+      "mobile_admin_package_version"
+    ],
+    "45": [
+      "mobile_app_app",
+      "mobile_app_app_expo",
+      "mobile_app_app_expo_icon",
+      "mobile_app_app_expo_name",
+      "mobile_app_app_expo_newarchenabled",
+      "mobile_app_app_expo_orientation",
+      "mobile_app_app_expo_owner",
+      "mobile_app_app_expo_scheme",
+      "mobile_app_app_expo_slug",
+      "mobile_app_app_expo_userinterfacestyle",
+      "mobile_app_app_expo_version"
+    ],
+    "46": [
+      "mobile_app_hooks_data_usedashboard",
+      "mobile_app_hooks_data_usedashboard_usedashboard",
+      "mobile_app_hooks_use_push_notifications",
+      "mobile_app_hooks_use_push_notifications_registerforpushnotificationsasync",
+      "mobile_app_hooks_use_push_notifications_usepushnotifications",
+      "mobile_app_services_apiservice",
+      "mobile_app_services_apiservice_gethistorytasks",
+      "mobile_app_services_apiservice_getnotifications",
+      "mobile_app_services_apiservice_markallnotificationsasread",
+      "mobile_app_services_apiservice_marknotificationasread",
+      "mobile_app_services_apiservice_updatejobstatus",
+      "mobile_app_services_localdb",
+      "mobile_app_services_localdb_clearcache",
+      "mobile_app_services_localdb_getdb",
+      "mobile_app_services_localdb_setupschema",
+      "mobile_app_services_syncqueue",
+      "mobile_app_services_syncqueue_addtoqueue",
+      "mobile_app_services_syncqueue_processqueue",
+      "mobile_app_services_syncqueue_queueitem",
+      "mobile_app_services_tests_apiservice_test",
+      "mobile_app_services_tests_sync_queue_logic_test",
+      "mobile_app_services_tests_sync_queue_stress_test",
+      "mobile_app_utils_api_api"
+    ],
+    "47": [
+      "server_middleware_validate",
+      "server_middleware_validate_validate",
+      "server_routes_auth",
+      "server_routes_auth_cookie_options",
+      "server_routes_auth_generatetokens",
+      "server_routes_auth_getjwtsecret",
+      "server_routes_auth_getrefreshsecret",
+      "server_routes_auth_router",
+      "server_schemas_authschema",
+      "server_schemas_authschema_loginschema",
+      "server_schemas_authschema_signupschema"
+    ],
+    "48": [
+      "server_package_devdependencies",
+      "server_package_devdependencies_ts_node_dev",
+      "server_package_devdependencies_types_jsonwebtoken",
+      "server_package_devdependencies_types_qrcode",
+      "server_package_devdependencies_types_speakeasy",
+      "server_package_devdependencies_types_uuid",
+      "ts_node_dev",
+      "types_jsonwebtoken",
+      "types_qrcode",
+      "types_speakeasy",
+      "types_uuid"
+    ],
+    "49": [
+      "src_app_components_ui_chart",
+      "src_app_components_ui_chart_chartconfig",
+      "src_app_components_ui_chart_chartcontainer",
+      "src_app_components_ui_chart_chartcontext",
+      "src_app_components_ui_chart_chartcontextprops",
+      "src_app_components_ui_chart_chartlegendcontent",
+      "src_app_components_ui_chart_chartstyle",
+      "src_app_components_ui_chart_charttooltipcontent",
+      "src_app_components_ui_chart_getpayloadconfigfrompayload",
+      "src_app_components_ui_chart_themes",
+      "src_app_components_ui_chart_usechart"
+    ],
+    "50": [
+      "src_app_components_ui_drawer",
+      "src_app_components_ui_drawer_drawer",
+      "src_app_components_ui_drawer_drawerclose",
+      "src_app_components_ui_drawer_drawercontent",
+      "src_app_components_ui_drawer_drawerdescription",
+      "src_app_components_ui_drawer_drawerfooter",
+      "src_app_components_ui_drawer_drawerheader",
+      "src_app_components_ui_drawer_draweroverlay",
+      "src_app_components_ui_drawer_drawerportal",
+      "src_app_components_ui_drawer_drawertitle",
+      "src_app_components_ui_drawer_drawertrigger"
+    ],
+    "51": [
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_kt_bundle",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_kt_reactactivity",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_kt_reactactivitydelegate",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_kt_string",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_mainactivity",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_mainactivity_createreactactivitydelegate",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_mainactivity_getmaincomponentname",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_mainactivity_invokedefaultonbackpressed",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainactivity_mainactivity_oncreate"
+    ],
+    "52": [
+      "mobile_admin_app_tabs_index",
+      "mobile_admin_app_tabs_index_admindashboard",
+      "mobile_admin_app_tabs_index_styles",
+      "mobile_admin_components_ui_fleetpulsemap",
+      "mobile_admin_components_ui_fleetpulsemap_fleetjob",
+      "mobile_admin_components_ui_fleetpulsemap_fleetlocation",
+      "mobile_admin_components_ui_fleetpulsemap_fleetpulsemap",
+      "mobile_admin_components_ui_fleetpulsemap_fleetpulsemapprops",
+      "mobile_admin_components_ui_fleetpulsemap_fleetrider",
+      "mobile_admin_components_ui_fleetpulsemap_styles"
+    ],
+    "53": [
+      "mobile_admin_components_dispatch_liveactivitycard",
+      "mobile_admin_components_dispatch_liveactivitycard_liveactivitycard",
+      "mobile_admin_components_dispatch_liveactivitycard_liveactivitycardprops",
+      "mobile_admin_components_dispatch_liveactivitycard_styles",
+      "mobile_admin_utils_responsive",
+      "mobile_admin_utils_responsive_moderatescale",
+      "mobile_admin_utils_responsive_normalizefontsize",
+      "mobile_admin_utils_responsive_scale",
+      "mobile_admin_utils_responsive_verticalscale",
+      "mobile_admin_utils_responsive_width_screen_width_height_screen_height"
+    ],
+    "54": [
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_kt_bundle",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_kt_reactactivity",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_kt_reactactivitydelegate",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_kt_string",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_mainactivity",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_mainactivity_createreactactivitydelegate",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_mainactivity_getmaincomponentname",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_mainactivity_invokedefaultonbackpressed",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainactivity_mainactivity_oncreate"
+    ],
+    "55": [
+      "ref_vite_config_ts",
+      "tsconfig_node",
+      "tsconfig_node_compileroptions",
+      "tsconfig_node_compileroptions_allowsyntheticdefaultimports",
+      "tsconfig_node_compileroptions_composite",
+      "tsconfig_node_compileroptions_module",
+      "tsconfig_node_compileroptions_moduleresolution",
+      "tsconfig_node_compileroptions_skiplibcheck",
+      "tsconfig_node_compileroptions_strict",
+      "tsconfig_node_include"
+    ],
+    "56": [
+      "src_app_components_admin_dispatch_requestcard",
+      "src_app_components_admin_dispatch_requestcard_requestcard",
+      "src_app_components_admin_dispatch_requestdetailspanel_requestdetailspanel",
+      "src_app_pages_admin_adminpendingtab_adminpendingtab",
+      "src_app_utils_dateutils",
+      "src_app_utils_dateutils_formatdatetime",
+      "src_app_utils_dateutils_formatlocaldate",
+      "src_app_utils_dateutils_getlocaldatestr",
+      "src_app_utils_dateutils_parselocaldate",
+      "src_app_utils_tests_date_drift_test"
+    ],
+    "57": [
+      "src_app_components_ui_dropdown_menu",
+      "src_app_components_ui_dropdown_menu_dropdownmenucheckboxitem",
+      "src_app_components_ui_dropdown_menu_dropdownmenugroup",
+      "src_app_components_ui_dropdown_menu_dropdownmenuportal",
+      "src_app_components_ui_dropdown_menu_dropdownmenuradiogroup",
+      "src_app_components_ui_dropdown_menu_dropdownmenuradioitem",
+      "src_app_components_ui_dropdown_menu_dropdownmenushortcut",
+      "src_app_components_ui_dropdown_menu_dropdownmenusub",
+      "src_app_components_ui_dropdown_menu_dropdownmenusubcontent",
+      "src_app_components_ui_dropdown_menu_dropdownmenusubtrigger"
+    ],
+    "58": [
+      "src_app_components_ui_navigation_menu",
+      "src_app_components_ui_navigation_menu_navigationmenu",
+      "src_app_components_ui_navigation_menu_navigationmenucontent",
+      "src_app_components_ui_navigation_menu_navigationmenuindicator",
+      "src_app_components_ui_navigation_menu_navigationmenuitem",
+      "src_app_components_ui_navigation_menu_navigationmenulink",
+      "src_app_components_ui_navigation_menu_navigationmenulist",
+      "src_app_components_ui_navigation_menu_navigationmenutrigger",
+      "src_app_components_ui_navigation_menu_navigationmenutriggerstyle",
+      "src_app_components_ui_navigation_menu_navigationmenuviewport"
+    ],
+    "59": [
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_kt_application",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_kt_configuration",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_kt_reactapplication",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_kt_reacthost",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_kt_reactnativehost",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_mainapplication",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_mainapplication_onconfigurationchanged",
+      "mobile_admin_android_app_src_main_java_com_angelvie_mobileadmin_mainapplication_mainapplication_oncreate"
+    ],
+    "60": [
+      "mobile_admin_package_devdependencies",
+      "mobile_admin_package_devdependencies_eslint",
+      "mobile_admin_package_devdependencies_eslint_config_expo",
+      "mobile_admin_package_devdependencies_types_react",
+      "mobile_admin_package_devdependencies_typescript",
+      "mobile_admin_package_json_eslint",
+      "mobile_admin_package_json_eslint_config_expo",
+      "mobile_admin_package_json_types_react",
+      "mobile_admin_package_json_typescript"
+    ],
+    "61": [
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_kt_application",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_kt_configuration",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_kt_reactapplication",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_kt_reacthost",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_kt_reactnativehost",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_mainapplication",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_mainapplication_onconfigurationchanged",
+      "mobile_app_android_app_src_main_java_com_hon01_cfarss_mainapplication_mainapplication_oncreate"
+    ],
+    "62": [
+      "mobile_app_scripts_reset_project",
+      "mobile_app_scripts_reset_project_exampledirpath",
+      "mobile_app_scripts_reset_project_fs",
+      "mobile_app_scripts_reset_project_movedirectories",
+      "mobile_app_scripts_reset_project_olddirs",
+      "mobile_app_scripts_reset_project_path",
+      "mobile_app_scripts_reset_project_readline",
+      "mobile_app_scripts_reset_project_rl",
+      "mobile_app_scripts_reset_project_root"
+    ],
+    "63": [
+      "server_package",
+      "server_package_name",
+      "server_package_private",
+      "server_package_scripts",
+      "server_package_scripts_build",
+      "server_package_scripts_dev",
+      "server_package_scripts_start",
+      "server_package_type",
+      "server_package_version"
+    ],
+    "64": [
+      "mobile_admin_app_tabs_logs",
+      "mobile_admin_app_tabs_logs_buildchathistory",
+      "mobile_admin_app_tabs_logs_formattime",
+      "mobile_admin_app_tabs_logs_logitem",
+      "mobile_admin_app_tabs_logs_logreply",
+      "mobile_admin_app_tabs_logs_styles",
+      "mobile_admin_app_tabs_logs_systemlogs",
+      "mobile_admin_context_realtimecontext_userealtime"
+    ],
+    "65": [
+      "package",
+      "package_name",
+      "package_overrides_vite",
+      "package_pnpm",
+      "package_pnpm_overrides",
+      "package_private",
+      "package_type",
+      "package_version"
+    ],
+    "66": [
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_build_backend",
+      "package_scripts_build_frontend",
+      "package_scripts_dev",
+      "package_scripts_dev_backend",
+      "package_scripts_dev_frontend",
+      "package_scripts_start"
+    ],
+    "67": [
+      "mobile_app_app_adaptiveicon_backgroundcolor",
+      "mobile_app_app_adaptiveicon_foregroundimage",
+      "mobile_app_app_android_adaptiveicon",
+      "mobile_app_app_android_edgetoedgeenabled",
+      "mobile_app_app_android_package",
+      "mobile_app_app_android_predictivebackgestureenabled",
+      "mobile_app_app_expo_android"
+    ],
+    "68": [
+      "src_app_components_ui_toggle",
+      "src_app_components_ui_toggle_group",
+      "src_app_components_ui_toggle_group_togglegroup",
+      "src_app_components_ui_toggle_group_togglegroupcontext",
+      "src_app_components_ui_toggle_group_togglegroupitem",
+      "src_app_components_ui_toggle_toggle",
+      "src_app_components_ui_toggle_togglevariants"
+    ],
+    "69": [
+      "mobile_admin_app_tabs_analytics",
+      "mobile_admin_app_tabs_analytics_analyticsdashboard",
+      "mobile_admin_app_tabs_analytics_styles",
+      "mobile_admin_app_tabs_analytics_width",
+      "mobile_admin_services_api",
+      "mobile_admin_services_api_api"
+    ],
+    "70": [
+      "mobile_app_app_android_permissions",
+      "ref_android_permission_access_coarse_location",
+      "ref_android_permission_access_fine_location",
+      "ref_android_permission_foreground_service",
+      "ref_android_permission_foreground_service_location",
+      "ref_android_permission_wake_lock"
+    ],
+    "71": [
+      "mobile_app_app_bugsnag_apikey",
+      "mobile_app_app_eas_projectid",
+      "mobile_app_app_expo_extra",
+      "mobile_app_app_extra_bugsnag",
+      "mobile_app_app_extra_eas",
+      "mobile_app_app_extra_router"
+    ],
+    "72": [
+      "tests_personnel_to_admin_lifecycle_spec",
+      "tests_personnel_to_admin_lifecycle_spec_admin",
+      "tests_personnel_to_admin_lifecycle_spec_login",
+      "tests_personnel_to_admin_lifecycle_spec_personnel",
+      "tests_personnel_to_admin_lifecycle_spec_submitrequest",
+      "tests_personnel_to_admin_lifecycle_spec_test_rider"
+    ],
+    "73": [
+      "tests_unit_tracking_visualization_test",
+      "tests_unit_tracking_visualization_test_calculatebearing",
+      "tests_unit_tracking_visualization_test_nearestpointonsegment",
+      "tests_unit_tracking_visualization_test_routebearingatpoint",
+      "tests_unit_tracking_visualization_test_snaptoroute",
+      "tests_unit_tracking_visualization_test_tometers"
+    ],
+    "74": [
+      "mobile_app_app_expo_ios",
+      "mobile_app_app_infoplist_itsappusesnonexemptencryption",
+      "mobile_app_app_ios_bundleidentifier",
+      "mobile_app_app_ios_infoplist",
+      "mobile_app_app_ios_supportstablet"
+    ],
+    "75": [
+      "mobile_app_app_expo_plugins",
+      "mobile_app_app_json_ref_expo_router",
+      "mobile_app_app_json_ref_expo_web_browser",
+      "ref_expo_font",
+      "ref_expo_sqlite"
+    ],
+    "76": [
+      "mobile_app_tests_setup",
+      "mobile_app_tests_setup_mockmapview",
+      "mobile_app_tests_setup_mockmapview_render",
+      "mobile_app_tests_setup_mockmarker",
+      "mobile_app_tests_setup_mockmarker_render"
+    ],
+    "77": [
+      "src_app_components_ui_alert",
+      "src_app_components_ui_alert_alert",
+      "src_app_components_ui_alert_alertdescription",
+      "src_app_components_ui_alert_alerttitle",
+      "src_app_components_ui_alert_alertvariants"
+    ],
+    "78": [
+      "src_app_components_ui_input_otp",
+      "src_app_components_ui_input_otp_inputotp",
+      "src_app_components_ui_input_otp_inputotpgroup",
+      "src_app_components_ui_input_otp_inputotpseparator",
+      "src_app_components_ui_input_otp_inputotpslot"
+    ],
+    "79": [
+      "mobile_admin_android_gradlew",
+      "mobile_admin_android_gradlew__entry",
+      "mobile_admin_android_gradlew_die",
+      "mobile_admin_android_gradlew_warn"
+    ],
+    "80": [
+      "mobile_admin_expo_types_router_d",
+      "mobile_admin_expo_types_router_d_expo_router",
+      "mobile_admin_expo_types_router_d_exporouter",
+      "mobile_admin_expo_types_router_d_routes"
+    ],
+    "81": [
+      "mobile_app_android_gradlew",
+      "mobile_app_android_gradlew__entry",
+      "mobile_app_android_gradlew_die",
+      "mobile_app_android_gradlew_warn"
+    ],
+    "82": [
+      "mobile_app_app_expo_splash",
+      "mobile_app_app_splash_backgroundcolor",
+      "mobile_app_app_splash_image",
+      "mobile_app_app_splash_resizemode"
+    ],
+    "83": [
+      "mobile_app_expo_types_router_d",
+      "mobile_app_expo_types_router_d_expo_router",
+      "mobile_app_expo_types_router_d_exporouter",
+      "mobile_app_expo_types_router_d_routes"
+    ],
+    "84": [
+      "src_app_components_ui_collapsible",
+      "src_app_components_ui_collapsible_collapsible",
+      "src_app_components_ui_collapsible_collapsiblecontent",
+      "src_app_components_ui_collapsible_collapsibletrigger"
+    ],
+    "85": [
+      "src_app_components_ui_hover_card",
+      "src_app_components_ui_hover_card_hovercard",
+      "src_app_components_ui_hover_card_hovercardcontent",
+      "src_app_components_ui_hover_card_hovercardtrigger"
+    ],
+    "86": [
+      "tests_unit_dashboard_audit_test",
+      "tests_unit_dashboard_audit_test_auditisonline",
+      "tests_unit_dashboard_audit_test_audittrackingstatus",
+      "tests_unit_dashboard_audit_test_trackingstatus"
+    ],
+    "87": [
+      "tests_unit_locationtracking_test",
+      "tests_unit_locationtracking_test_isvalidcoordinate",
+      "tests_unit_locationtracking_test_locationcheckpoint",
+      "tests_unit_locationtracking_test_resolveintegrity"
+    ],
+    "88": [
+      "mobile_admin_eslint_config",
+      "mobile_admin_eslint_config_defineconfig",
+      "mobile_admin_eslint_config_expoconfig"
+    ],
+    "89": [
+      "mobile_admin_metro_config",
+      "mobile_admin_metro_config_config",
+      "mobile_admin_metro_config_getdefaultconfig"
+    ],
+    "90": [
+      "mobile_app_app_experiments_reactcompiler",
+      "mobile_app_app_experiments_typedroutes",
+      "mobile_app_app_expo_experiments"
+    ],
+    "91": [
+      "mobile_app_app_expo_web",
+      "mobile_app_app_web_favicon",
+      "mobile_app_app_web_output"
+    ],
+    "92": [
+      "mobile_app_components_external_link",
+      "mobile_app_components_external_link_externallink",
+      "mobile_app_components_external_link_props"
+    ],
+    "93": [
+      "mobile_app_eslint_config",
+      "mobile_app_eslint_config_defineconfig",
+      "mobile_app_eslint_config_expoconfig"
+    ],
+    "94": [
+      "mobile_app_metro_config",
+      "mobile_app_metro_config_config",
+      "mobile_app_metro_config_getdefaultconfig"
+    ],
+    "95": [
+      "mobile_app_utils_maputils",
+      "mobile_app_utils_maputils_getroadsnappedpath",
+      "mobile_app_utils_maputils_snappointtopath"
+    ],
+    "96": [
+      "src_app_pages_admin_tests_analytics_logic_test",
+      "src_app_pages_admin_tests_analytics_logic_test_calculatecompletionrate",
+      "src_app_pages_admin_tests_analytics_logic_test_transformpeakhours"
+    ],
+    "97": [
+      "src_app_pages_admin_tests_analytics_math_test",
+      "src_app_pages_admin_tests_analytics_math_test_calculatecompletionrate",
+      "src_app_pages_admin_tests_analytics_math_test_calculatefailurerate"
+    ],
+    "98": [
+      "tests_unit_tracking_status_test",
+      "tests_unit_tracking_status_test_resolvetrackingstatus",
+      "tests_unit_tracking_status_test_trackingstatus"
+    ],
+    "99": [
+      "bcryptjs",
+      "server_package_dependencies_bcryptjs"
+    ],
+    "100": [
+      "bugsnag_browser_performance",
+      "package_dependencies_bugsnag_browser_performance"
+    ],
+    "101": [
+      "bugsnag_plugin_express",
+      "server_package_dependencies_bugsnag_plugin_express"
+    ],
+    "102": [
+      "bugsnag_plugin_react",
+      "package_dependencies_bugsnag_plugin_react"
+    ],
+    "103": [
+      "class_variance_authority",
+      "package_dependencies_class_variance_authority"
+    ],
+    "104": [
+      "clsx",
+      "package_dependencies_clsx"
+    ],
+    "105": [
+      "cmdk",
+      "package_dependencies_cmdk"
+    ],
+    "106": [
+      "cookie_parser",
+      "server_package_dependencies_cookie_parser"
+    ],
+    "107": [
+      "cors",
+      "server_package_dependencies_cors"
+    ],
+    "108": [
+      "date_fns",
+      "package_dependencies_date_fns"
+    ],
+    "109": [
+      "embla_carousel_react",
+      "package_dependencies_embla_carousel_react"
+    ],
+    "110": [
+      "expo_crypto",
+      "mobile_app_package_dependencies_expo_crypto"
+    ],
+    "111": [
+      "expo_local_authentication",
+      "mobile_admin_package_dependencies_expo_local_authentication"
+    ],
+    "112": [
+      "expo_network",
+      "mobile_app_package_dependencies_expo_network"
+    ],
+    "113": [
+      "expo_secure_store",
+      "mobile_app_package_dependencies_expo_secure_store"
+    ],
+    "114": [
+      "expo_server_sdk",
+      "server_package_dependencies_expo_server_sdk"
+    ],
+    "115": [
+      "expo_sqlite",
+      "mobile_app_package_dependencies_expo_sqlite"
+    ],
+    "116": [
+      "framer_motion",
+      "package_dependencies_framer_motion"
+    ],
+    "117": [
+      "gorhom_bottom_sheet",
+      "mobile_app_package_dependencies_gorhom_bottom_sheet"
+    ],
+    "118": [
+      "helmet",
+      "server_package_dependencies_helmet"
+    ],
+    "119": [
+      "input_otp",
+      "package_dependencies_input_otp"
+    ],
+    "120": [
+      "leaflet",
+      "package_dependencies_leaflet"
+    ],
+    "121": [
+      "leaflet_markercluster",
+      "package_dependencies_leaflet_markercluster"
+    ],
+    "122": [
+      "mobile_admin_app_index",
+      "mobile_admin_app_index_index"
+    ],
+    "123": [
+      "mobile_admin_app_tabs_layout",
+      "mobile_admin_app_tabs_layout_tabslayout"
+    ],
+    "124": [
+      "mobile_admin_expo_env_d",
+      "mobile_admin_expo_env_d_rationale_3"
+    ],
+    "125": [
+      "mobile_admin_package_dependencies_axios",
+      "mobile_admin_package_json_axios"
+    ],
+    "126": [
+      "mobile_admin_package_dependencies_base_64",
+      "mobile_admin_package_json_base_64"
+    ],
+    "127": [
+      "mobile_admin_package_dependencies_bugsnag_expo",
+      "mobile_admin_package_json_bugsnag_expo"
+    ],
+    "128": [
+      "mobile_admin_package_dependencies_bugsnag_expo_performance",
+      "mobile_admin_package_json_bugsnag_expo_performance"
+    ],
+    "129": [
+      "mobile_admin_package_dependencies_expo",
+      "mobile_admin_package_json_expo"
+    ],
+    "130": [
+      "mobile_admin_package_dependencies_expo_constants",
+      "mobile_admin_package_json_expo_constants"
+    ],
+    "131": [
+      "mobile_admin_package_dependencies_expo_device",
+      "mobile_admin_package_json_expo_device"
+    ],
+    "132": [
+      "mobile_admin_package_dependencies_expo_font",
+      "mobile_admin_package_json_expo_font"
+    ],
+    "133": [
+      "mobile_admin_package_dependencies_expo_image",
+      "mobile_admin_package_json_expo_image"
+    ],
+    "134": [
+      "mobile_admin_package_dependencies_expo_linking",
+      "mobile_admin_package_json_expo_linking"
+    ],
+    "135": [
+      "mobile_admin_package_dependencies_expo_location",
+      "mobile_admin_package_json_expo_location"
+    ],
+    "136": [
+      "mobile_admin_package_dependencies_expo_notifications",
+      "mobile_admin_package_json_expo_notifications"
+    ],
+    "137": [
+      "mobile_admin_package_dependencies_expo_splash_screen",
+      "mobile_admin_package_json_expo_splash_screen"
+    ],
+    "138": [
+      "mobile_admin_package_dependencies_expo_status_bar",
+      "mobile_admin_package_json_expo_status_bar"
+    ],
+    "139": [
+      "mobile_admin_package_dependencies_expo_symbols",
+      "mobile_admin_package_json_expo_symbols"
+    ],
+    "140": [
+      "mobile_admin_package_dependencies_expo_system_ui",
+      "mobile_admin_package_json_expo_system_ui"
+    ],
+    "141": [
+      "mobile_admin_package_dependencies_expo_task_manager",
+      "mobile_admin_package_json_expo_task_manager"
+    ],
+    "142": [
+      "mobile_admin_package_dependencies_expo_vector_icons",
+      "mobile_admin_package_json_expo_vector_icons"
+    ],
+    "143": [
+      "mobile_admin_package_dependencies_moti",
+      "moti"
+    ],
+    "144": [
+      "mobile_admin_package_dependencies_react",
+      "mobile_admin_package_json_react"
+    ],
+    "145": [
+      "mobile_admin_package_dependencies_react_dom",
+      "mobile_admin_package_json_react_dom"
+    ],
+    "146": [
+      "mobile_admin_package_dependencies_react_native_community_netinfo",
+      "mobile_admin_package_json_react_native_community_netinfo"
+    ],
+    "147": [
+      "mobile_admin_package_dependencies_react_native_reanimated",
+      "mobile_admin_package_json_react_native_reanimated"
+    ],
+    "148": [
+      "mobile_admin_package_dependencies_react_native_safe_area_context",
+      "mobile_admin_package_json_react_native_safe_area_context"
+    ],
+    "149": [
+      "mobile_admin_package_dependencies_react_native_screens",
+      "mobile_admin_package_json_react_native_screens"
+    ],
+    "150": [
+      "mobile_admin_package_dependencies_react_native_web",
+      "mobile_admin_package_json_react_native_web"
+    ],
+    "151": [
+      "mobile_admin_package_dependencies_react_native_webview",
+      "mobile_admin_package_json_react_native_webview"
+    ],
+    "152": [
+      "mobile_admin_package_dependencies_react_native_worklets",
+      "mobile_admin_package_json_react_native_worklets"
+    ],
+    "153": [
+      "mobile_admin_package_dependencies_socket_io_client",
+      "mobile_admin_package_json_socket_io_client"
+    ],
+    "154": [
+      "mobile_admin_package_dependencies_tanstack_react_query",
+      "mobile_admin_package_json_tanstack_react_query"
+    ],
+    "155": [
+      "mobile_admin_types_base_64_d",
+      "mobile_admin_types_base_64_d_base_64"
+    ],
+    "156": [
+      "mobile_app_components_hello_wave",
+      "mobile_app_components_hello_wave_hellowave"
+    ],
+    "157": [
+      "mobile_app_components_ui_icon_symbol_ios",
+      "mobile_app_components_ui_icon_symbol_ios_iconsymbol"
+    ],
+    "158": [
+      "mobile_app_expo_env_d",
+      "mobile_app_expo_env_d_rationale_3"
+    ],
+    "159": [
+      "mobile_app_hooks_use_color_scheme_web",
+      "mobile_app_hooks_use_color_scheme_web_usecolorscheme"
+    ],
+    "160": [
+      "mobile_app_package_dependencies_axios",
+      "mobile_app_package_json_axios"
+    ],
+    "161": [
+      "mobile_app_package_dependencies_base_64",
+      "mobile_app_package_json_base_64"
+    ],
+    "162": [
+      "mobile_app_package_dependencies_bugsnag_expo",
+      "mobile_app_package_json_bugsnag_expo"
+    ],
+    "163": [
+      "mobile_app_package_dependencies_bugsnag_expo_performance",
+      "mobile_app_package_json_bugsnag_expo_performance"
+    ],
+    "164": [
+      "mobile_app_package_dependencies_expo",
+      "mobile_app_package_json_expo"
+    ],
+    "165": [
+      "mobile_app_package_dependencies_expo_constants",
+      "mobile_app_package_json_expo_constants"
+    ],
+    "166": [
+      "mobile_app_package_dependencies_expo_device",
+      "mobile_app_package_json_expo_device"
+    ],
+    "167": [
+      "mobile_app_package_dependencies_expo_font",
+      "mobile_app_package_json_expo_font"
+    ],
+    "168": [
+      "mobile_app_package_dependencies_expo_haptics",
+      "mobile_app_package_json_expo_haptics"
+    ],
+    "169": [
+      "mobile_app_package_dependencies_expo_linking",
+      "mobile_app_package_json_expo_linking"
+    ],
+    "170": [
+      "mobile_app_package_dependencies_expo_location",
+      "mobile_app_package_json_expo_location"
+    ],
+    "171": [
+      "mobile_app_package_dependencies_expo_notifications",
+      "mobile_app_package_json_expo_notifications"
+    ],
+    "172": [
+      "mobile_app_package_dependencies_expo_router",
+      "mobile_app_package_json_expo_router"
+    ],
+    "173": [
+      "mobile_app_package_dependencies_expo_splash_screen",
+      "mobile_app_package_json_expo_splash_screen"
+    ],
+    "174": [
+      "mobile_app_package_dependencies_expo_symbols",
+      "mobile_app_package_json_expo_symbols"
+    ],
+    "175": [
+      "mobile_app_package_dependencies_expo_system_ui",
+      "mobile_app_package_json_expo_system_ui"
+    ],
+    "176": [
+      "mobile_app_package_dependencies_expo_task_manager",
+      "mobile_app_package_json_expo_task_manager"
+    ],
+    "177": [
+      "mobile_app_package_dependencies_expo_vector_icons",
+      "mobile_app_package_json_expo_vector_icons"
+    ],
+    "178": [
+      "mobile_app_package_dependencies_polyline",
+      "polyline"
+    ],
+    "179": [
+      "mobile_app_package_dependencies_react",
+      "mobile_app_package_json_react"
+    ],
+    "180": [
+      "mobile_app_package_dependencies_react_dom",
+      "mobile_app_package_json_react_dom"
+    ],
+    "181": [
+      "mobile_app_package_dependencies_react_native",
+      "mobile_app_package_json_react_native"
+    ],
+    "182": [
+      "mobile_app_package_dependencies_react_native_async_storage_async_storage",
+      "mobile_app_package_json_react_native_async_storage_async_storage"
+    ],
+    "183": [
+      "mobile_app_package_dependencies_react_native_community_netinfo",
+      "mobile_app_package_json_react_native_community_netinfo"
+    ],
+    "184": [
+      "mobile_app_package_dependencies_react_native_gesture_handler",
+      "mobile_app_package_json_react_native_gesture_handler"
+    ],
+    "185": [
+      "mobile_app_package_dependencies_react_native_maps",
+      "react_native_maps"
+    ],
+    "186": [
+      "mobile_app_package_dependencies_react_native_reanimated",
+      "mobile_app_package_json_react_native_reanimated"
+    ],
+    "187": [
+      "mobile_app_package_dependencies_react_native_safe_area_context",
+      "mobile_app_package_json_react_native_safe_area_context"
+    ],
+    "188": [
+      "mobile_app_package_dependencies_react_native_screens",
+      "mobile_app_package_json_react_native_screens"
+    ],
+    "189": [
+      "mobile_app_package_dependencies_react_native_web",
+      "mobile_app_package_json_react_native_web"
+    ],
+    "190": [
+      "mobile_app_package_dependencies_react_native_webview",
+      "mobile_app_package_json_react_native_webview"
+    ],
+    "191": [
+      "mobile_app_package_dependencies_react_native_worklets",
+      "mobile_app_package_json_react_native_worklets"
+    ],
+    "192": [
+      "mobile_app_package_dependencies_react_navigation_bottom_tabs",
+      "mobile_app_package_json_react_navigation_bottom_tabs"
+    ],
+    "193": [
+      "mobile_app_package_dependencies_react_navigation_elements",
+      "mobile_app_package_json_react_navigation_elements"
+    ],
+    "194": [
+      "mobile_app_package_dependencies_react_navigation_native",
+      "mobile_app_package_json_react_navigation_native"
+    ],
+    "195": [
+      "mobile_app_package_dependencies_socket_io_client",
+      "mobile_app_package_json_socket_io_client"
+    ],
+    "196": [
+      "mobile_app_package_dependencies_tanstack_query_async_storage_persister",
+      "tanstack_query_async_storage_persister"
+    ],
+    "197": [
+      "mobile_app_package_dependencies_tanstack_react_query",
+      "mobile_app_package_json_tanstack_react_query"
+    ],
+    "198": [
+      "mobile_app_package_dependencies_tanstack_react_query_persist_client",
+      "tanstack_react_query_persist_client"
+    ],
+    "199": [
+      "next_themes",
+      "package_dependencies_next_themes"
+    ],
+    "200": [
+      "package_dependencies_react_leaflet",
+      "react_leaflet"
+    ],
+    "201": [
+      "package_dependencies_bugsnag_js",
+      "package_json_bugsnag_js"
+    ],
+    "202": [
+      "package_dependencies_mysql2",
+      "package_json_mysql2"
+    ],
+    "203": [
+      "package_dependencies_radix_ui_react_accordion",
+      "radix_ui_react_accordion"
+    ],
+    "204": [
+      "package_dependencies_radix_ui_react_alert_dialog",
+      "radix_ui_react_alert_dialog"
+    ],
+    "205": [
+      "package_dependencies_radix_ui_react_avatar",
+      "radix_ui_react_avatar"
+    ],
+    "206": [
+      "package_dependencies_radix_ui_react_checkbox",
+      "radix_ui_react_checkbox"
+    ],
+    "207": [
+      "package_dependencies_radix_ui_react_collapsible",
+      "radix_ui_react_collapsible"
+    ],
+    "208": [
+      "package_dependencies_radix_ui_react_context_menu",
+      "radix_ui_react_context_menu"
+    ],
+    "209": [
+      "package_dependencies_radix_ui_react_dialog",
+      "radix_ui_react_dialog"
+    ],
+    "210": [
+      "package_dependencies_radix_ui_react_dropdown_menu",
+      "radix_ui_react_dropdown_menu"
+    ],
+    "211": [
+      "package_dependencies_radix_ui_react_label",
+      "radix_ui_react_label"
+    ],
+    "212": [
+      "package_dependencies_radix_ui_react_popover",
+      "radix_ui_react_popover"
+    ],
+    "213": [
+      "package_dependencies_radix_ui_react_progress",
+      "radix_ui_react_progress"
+    ],
+    "214": [
+      "package_dependencies_radix_ui_react_radio_group",
+      "radix_ui_react_radio_group"
+    ],
+    "215": [
+      "package_dependencies_radix_ui_react_scroll_area",
+      "radix_ui_react_scroll_area"
+    ],
+    "216": [
+      "package_dependencies_radix_ui_react_select",
+      "radix_ui_react_select"
+    ],
+    "217": [
+      "package_dependencies_radix_ui_react_separator",
+      "radix_ui_react_separator"
+    ],
+    "218": [
+      "package_dependencies_radix_ui_react_slider",
+      "radix_ui_react_slider"
+    ],
+    "219": [
+      "package_dependencies_radix_ui_react_switch",
+      "radix_ui_react_switch"
+    ],
+    "220": [
+      "package_dependencies_radix_ui_react_tabs",
+      "radix_ui_react_tabs"
+    ],
+    "221": [
+      "package_dependencies_radix_ui_react_toggle",
+      "radix_ui_react_toggle"
+    ],
+    "222": [
+      "package_dependencies_radix_ui_react_toggle_group",
+      "radix_ui_react_toggle_group"
+    ],
+    "223": [
+      "package_dependencies_radix_ui_react_tooltip",
+      "radix_ui_react_tooltip"
+    ],
+    "224": [
+      "package_dependencies_react",
+      "package_json_react"
+    ],
+    "225": [
+      "package_dependencies_react_day_picker",
+      "react_day_picker"
+    ],
+    "226": [
+      "package_dependencies_react_dom",
+      "package_json_react_dom"
+    ],
+    "227": [
+      "package_dependencies_react_hook_form",
+      "react_hook_form"
+    ],
+    "228": [
+      "package_dependencies_react_leaflet_cluster",
+      "react_leaflet_cluster"
+    ],
+    "229": [
+      "package_dependencies_react_leaflet_core",
+      "react_leaflet_core"
+    ],
+    "230": [
+      "package_dependencies_react_resizable_panels",
+      "react_resizable_panels"
+    ],
+    "231": [
+      "package_dependencies_react_router",
+      "react_router"
+    ],
+    "232": [
+      "package_dependencies_recharts",
+      "recharts"
+    ],
+    "233": [
+      "package_dependencies_sonner",
+      "sonner"
+    ],
+    "234": [
+      "package_dependencies_tailwind_merge",
+      "tailwind_merge"
+    ],
+    "235": [
+      "package_dependencies_tw_animate_css",
+      "tw_animate_css"
+    ],
+    "236": [
+      "package_dependencies_vaul",
+      "vaul"
+    ],
+    "237": [
+      "package_dependencies_xlsx",
+      "xlsx"
+    ],
+    "238": [
+      "package_devdependencies_dotenv",
+      "package_json_dotenv"
+    ],
+    "239": [
+      "package_devdependencies_express",
+      "package_json_express"
+    ],
+    "240": [
+      "package_devdependencies_jsonwebtoken",
+      "package_json_jsonwebtoken"
+    ],
+    "241": [
+      "package_devdependencies_supertest",
+      "supertest"
+    ],
+    "242": [
+      "package_devdependencies_socket_io_client",
+      "package_json_socket_io_client"
+    ],
+    "243": [
+      "package_devdependencies_tailwindcss",
+      "tailwindcss"
+    ],
+    "244": [
+      "package_devdependencies_tailwindcss_vite",
+      "tailwindcss_vite"
+    ],
+    "245": [
+      "package_devdependencies_tsx",
+      "tsx"
+    ],
+    "246": [
+      "package_devdependencies_types_express",
+      "package_json_types_express"
+    ],
+    "247": [
+      "package_devdependencies_types_react",
+      "package_json_types_react"
+    ],
+    "248": [
+      "package_devdependencies_types_supertest",
+      "types_supertest"
+    ],
+    "249": [
+      "package_devdependencies_vite",
+      "vite"
+    ],
+    "250": [
+      "package_devdependencies_vite_plugin_pwa",
+      "vite_plugin_pwa"
+    ],
+    "251": [
+      "package_devdependencies_vitejs_plugin_react",
+      "vitejs_plugin_react"
+    ],
+    "252": [
+      "server_package_dependencies_bugsnag_js",
+      "server_package_json_bugsnag_js"
+    ],
+    "253": [
+      "server_package_dependencies_dotenv",
+      "server_package_json_dotenv"
+    ],
+    "254": [
+      "server_package_dependencies_express",
+      "server_package_json_express"
+    ],
+    "255": [
+      "server_package_dependencies_jsonwebtoken",
+      "server_package_json_jsonwebtoken"
+    ],
+    "256": [
+      "server_package_dependencies_mysql2",
+      "server_package_json_mysql2"
+    ],
+    "257": [
+      "server_package_dependencies_socket_io",
+      "socket_io"
+    ],
+    "258": [
+      "server_package_dependencies_speakeasy",
+      "speakeasy"
+    ],
+    "259": [
+      "server_package_dependencies_types_argon2",
+      "types_argon2"
+    ],
+    "260": [
+      "server_package_dependencies_types_cookie_parser",
+      "types_cookie_parser"
+    ],
+    "261": [
+      "server_package_dependencies_types_node",
+      "server_package_json_types_node"
+    ],
+    "262": [
+      "server_package_dependencies_uuid",
+      "uuid"
+    ],
+    "263": [
+      "server_package_dependencies_web_push",
+      "web_push"
+    ],
+    "264": [
+      "src_app_components_figma_imagewithfallback",
+      "src_app_components_figma_imagewithfallback_imagewithfallback"
+    ],
+    "265": [
+      "src_app_components_ui_aspect_ratio",
+      "src_app_components_ui_aspect_ratio_aspectratio"
+    ],
+    "266": [
+      "src_app_pages_tests_notification_filtering_test",
+      "src_app_pages_tests_notification_filtering_test_filternotifications"
+    ],
+    "267": [
+      "tests_e2e_tc2_sync_spec",
+      "tests_e2e_tc2_sync_spec_statefile"
+    ],
+    "268": [
+      "tests_interceptor_ui_spec",
+      "tests_interceptor_ui_spec_admin"
+    ],
+    "269": [
+      "vercel",
+      "vercel_rewrites"
+    ],
+    "270": [
+      "app"
+    ],
+    "271": [
+      "mobile_admin_android_app_build"
+    ],
+    "272": [
+      "mobile_admin_android_build"
+    ],
+    "273": [
+      "mobile_admin_android_settings"
+    ],
+    "274": [
+      "mobile_app_android_app_build"
+    ],
+    "275": [
+      "mobile_app_android_build"
+    ],
+    "276": [
+      "mobile_app_android_settings"
+    ],
+    "277": [
+      "mobile_app_babel_config"
+    ],
+    "278": [
+      "mobile_app_jest_config"
+    ],
+    "279": [
+      "playwright_config"
+    ],
+    "280": [
+      "postcss_config"
+    ],
+    "281": [
+      "src_app_hooks_useglobalstats"
+    ],
+    "282": [
+      "tests_admin_self_healing_spec"
+    ],
+    "283": [
+      "tests_bola_expansion_validation_spec"
+    ],
+    "284": [
+      "tests_deep_rapid_check_spec"
+    ],
+    "285": [
+      "tests_e2e_tc1_dispatch_spec"
+    ],
+    "286": [
+      "tests_e2e_tc3_edge_spec"
+    ],
+    "287": [
+      "tests_e2e_tc4_duty_spec"
+    ],
+    "288": [
+      "tests_hardened_security_audit_spec"
+    ],
+    "289": [
+      "tests_next_gen_audit_spec"
+    ],
+    "290": [
+      "tests_pagination_sorting_verification_spec"
+    ],
+    "291": [
+      "tests_personnel_lifecycle_spec"
+    ],
+    "292": [
+      "tests_rider_security_spec"
+    ],
+    "293": [
+      "tests_security_bola_prevention_spec"
+    ],
+    "294": [
+      "tests_tracking_sync_audit_local_spec"
+    ],
+    "295": [
+      "tests_tracking_sync_audit_spec"
+    ],
+    "296": [
+      "tests_web_requests_spec"
+    ],
+    "297": [
+      "vite_config"
+    ],
+    "298": [
+      "vitest_workspace"
+    ]
+  },
+  "cohesion": {
+    "0": 0.09234365867913501,
+    "1": 0.09877551020408164,
+    "2": 0.06612244897959184,
+    "3": 0.06290471785383904,
+    "4": 0.06387921022067364,
+    "5": 0.11711711711711711,
+    "6": 0.058823529411764705,
+    "7": 0.0907563025210084,
+    "8": 0.06060606060606061,
+    "9": 0.08901515151515152,
+    "10": 0.19473684210526315,
+    "11": 0.10685483870967742,
+    "12": 0.1532258064516129,
+    "13": 0.12903225806451613,
+    "14": 0.13793103448275862,
+    "15": 0.2019704433497537,
+    "16": 0.20615384615384616,
+    "17": 0.12615384615384614,
+    "18": 0.11333333333333333,
+    "19": 0.08333333333333333,
+    "20": 0.12648221343873517,
+    "21": 0.10276679841897234,
+    "22": 0.22380952380952382,
+    "23": 0.1380952380952381,
+    "24": 0.10526315789473684,
+    "25": 0.11764705882352941,
+    "26": 0.16176470588235295,
+    "27": 0.11764705882352941,
+    "28": 0.15833333333333333,
+    "29": 0.21666666666666667,
+    "30": 0.13333333333333333,
+    "31": 0.13333333333333333,
+    "32": 0.19047619047619047,
+    "33": 0.18095238095238095,
+    "34": 0.1978021978021978,
+    "35": 0.2087912087912088,
+    "36": 0.15384615384615385,
+    "37": 0.15384615384615385,
+    "38": 0.15384615384615385,
+    "39": 0.21794871794871795,
+    "40": 0.15384615384615385,
+    "41": 0.24358974358974358,
+    "42": 0.19696969696969696,
+    "43": 0.22727272727272727,
+    "44": 0.18181818181818182,
+    "45": 0.18181818181818182,
+    "46": 0.22529644268774704,
+    "47": 0.2727272727272727,
+    "48": 0.18181818181818182,
+    "49": 0.2545454545454545,
+    "50": 0.18181818181818182,
+    "51": 0.2,
+    "52": 0.26666666666666666,
+    "53": 0.26666666666666666,
+    "54": 0.2,
+    "55": 0.2,
+    "56": 0.3111111111111111,
+    "57": 0.2,
+    "58": 0.2222222222222222,
+    "59": 0.2222222222222222,
+    "60": 0.2222222222222222,
+    "61": 0.2222222222222222,
+    "62": 0.2222222222222222,
+    "63": 0.2222222222222222,
+    "64": 0.39285714285714285,
+    "65": 0.25,
+    "66": 0.25,
+    "67": 0.2857142857142857,
+    "68": 0.42857142857142855,
+    "69": 0.4,
+    "70": 0.3333333333333333,
+    "71": 0.3333333333333333,
+    "72": 0.3333333333333333,
+    "73": 0.6,
+    "74": 0.4,
+    "75": 0.4,
+    "76": 0.4,
+    "77": 0.5,
+    "78": 0.4,
+    "79": 0.8333333333333334,
+    "80": 0.5,
+    "81": 0.8333333333333334,
+    "82": 0.5,
+    "83": 0.5,
+    "84": 0.5,
+    "85": 0.5,
+    "86": 0.5,
+    "87": 0.6666666666666666,
+    "88": 0.6666666666666666,
+    "89": 0.6666666666666666,
+    "90": 0.6666666666666666,
+    "91": 0.6666666666666666,
+    "92": 0.6666666666666666,
+    "93": 0.6666666666666666,
+    "94": 0.6666666666666666,
+    "95": 0.6666666666666666,
+    "96": 0.6666666666666666,
+    "97": 0.6666666666666666,
+    "98": 0.6666666666666666,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0,
+    "149": 1.0,
+    "150": 1.0,
+    "151": 1.0,
+    "152": 1.0,
+    "153": 1.0,
+    "154": 1.0,
+    "155": 1.0,
+    "156": 1.0,
+    "157": 1.0,
+    "158": 1.0,
+    "159": 1.0,
+    "160": 1.0,
+    "161": 1.0,
+    "162": 1.0,
+    "163": 1.0,
+    "164": 1.0,
+    "165": 1.0,
+    "166": 1.0,
+    "167": 1.0,
+    "168": 1.0,
+    "169": 1.0,
+    "170": 1.0,
+    "171": 1.0,
+    "172": 1.0,
+    "173": 1.0,
+    "174": 1.0,
+    "175": 1.0,
+    "176": 1.0,
+    "177": 1.0,
+    "178": 1.0,
+    "179": 1.0,
+    "180": 1.0,
+    "181": 1.0,
+    "182": 1.0,
+    "183": 1.0,
+    "184": 1.0,
+    "185": 1.0,
+    "186": 1.0,
+    "187": 1.0,
+    "188": 1.0,
+    "189": 1.0,
+    "190": 1.0,
+    "191": 1.0,
+    "192": 1.0,
+    "193": 1.0,
+    "194": 1.0,
+    "195": 1.0,
+    "196": 1.0,
+    "197": 1.0,
+    "198": 1.0,
+    "199": 1.0,
+    "200": 1.0,
+    "201": 1.0,
+    "202": 1.0,
+    "203": 1.0,
+    "204": 1.0,
+    "205": 1.0,
+    "206": 1.0,
+    "207": 1.0,
+    "208": 1.0,
+    "209": 1.0,
+    "210": 1.0,
+    "211": 1.0,
+    "212": 1.0,
+    "213": 1.0,
+    "214": 1.0,
+    "215": 1.0,
+    "216": 1.0,
+    "217": 1.0,
+    "218": 1.0,
+    "219": 1.0,
+    "220": 1.0,
+    "221": 1.0,
+    "222": 1.0,
+    "223": 1.0,
+    "224": 1.0,
+    "225": 1.0,
+    "226": 1.0,
+    "227": 1.0,
+    "228": 1.0,
+    "229": 1.0,
+    "230": 1.0,
+    "231": 1.0,
+    "232": 1.0,
+    "233": 1.0,
+    "234": 1.0,
+    "235": 1.0,
+    "236": 1.0,
+    "237": 1.0,
+    "238": 1.0,
+    "239": 1.0,
+    "240": 1.0,
+    "241": 1.0,
+    "242": 1.0,
+    "243": 1.0,
+    "244": 1.0,
+    "245": 1.0,
+    "246": 1.0,
+    "247": 1.0,
+    "248": 1.0,
+    "249": 1.0,
+    "250": 1.0,
+    "251": 1.0,
+    "252": 1.0,
+    "253": 1.0,
+    "254": 1.0,
+    "255": 1.0,
+    "256": 1.0,
+    "257": 1.0,
+    "258": 1.0,
+    "259": 1.0,
+    "260": 1.0,
+    "261": 1.0,
+    "262": 1.0,
+    "263": 1.0,
+    "264": 1.0,
+    "265": 1.0,
+    "266": 1.0,
+    "267": 1.0,
+    "268": 1.0,
+    "269": 1.0,
+    "270": 1.0,
+    "271": 1.0,
+    "272": 1.0,
+    "273": 1.0,
+    "274": 1.0,
+    "275": 1.0,
+    "276": 1.0,
+    "277": 1.0,
+    "278": 1.0,
+    "279": 1.0,
+    "280": 1.0,
+    "281": 1.0,
+    "282": 1.0,
+    "283": 1.0,
+    "284": 1.0,
+    "285": 1.0,
+    "286": 1.0,
+    "287": 1.0,
+    "288": 1.0,
+    "289": 1.0,
+    "290": 1.0,
+    "291": 1.0,
+    "292": 1.0,
+    "293": 1.0,
+    "294": 1.0,
+    "295": 1.0,
+    "296": 1.0,
+    "297": 1.0,
+    "298": 1.0
+  },
+  "gods": [
+    {
+      "id": "src_app_components_ui_utils_cn",
+      "label": "cn()",
+      "degree": 269
+    },
+    {
+      "id": "src_app_components_ui_button_button",
+      "label": "Button",
+      "degree": 31
+    },
+    {
+      "id": "src_app_context_authcontext_useauth",
+      "label": "useAuth()",
+      "degree": 27
+    },
+    {
+      "id": "src_app_components_ui_badge_badge",
+      "label": "Badge()",
+      "degree": 23
+    },
+    {
+      "id": "mobile_app_utils_responsive_scale",
+      "label": "scale()",
+      "degree": 21
+    },
+    {
+      "id": "src_app_context_datacontext_usedata",
+      "label": "useData()",
+      "degree": 21
+    },
+    {
+      "id": "mobile_app_hooks_data_usedashboard_usedashboard",
+      "label": "useDashboard()",
+      "degree": 20
+    },
+    {
+      "id": "mobile_app_utils_responsive_verticalscale",
+      "label": "verticalScale()",
+      "degree": 20
+    },
+    {
+      "id": "src_app_types_index_deliveryrequest",
+      "label": "DeliveryRequest",
+      "degree": 20
+    },
+    {
+      "id": "mobile_app_utils_responsive_moderatescale",
+      "label": "moderateScale()",
+      "degree": 19
+    }
+  ],
+  "surprises": [
+    {
+      "source": "stopBackgroundTracking()",
+      "target": "Location",
+      "source_files": [
+        "mobile-app/context/LocationContext.tsx",
+        "src/app/types/index.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; peripheral node `stopBackgroundTracking()` unexpectedly reaches hub `Location`"
+    },
+    {
+      "source": "LocationProvider()",
+      "target": "Location",
+      "source_files": [
+        "mobile-app/context/LocationContext.tsx",
+        "src/app/types/index.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "AnalyticsHub()",
+      "target": "xlsx",
+      "source_files": [
+        "src/app/pages/Admin/AnalyticsHub.tsx",
+        "package.json"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "AdminDashboard()",
+      "target": "useRealTime()",
+      "source_files": [
+        "mobile-admin/app/(tabs)/index.tsx",
+        "mobile-admin/context/RealTimeContext.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities; peripheral node `AdminDashboard()` unexpectedly reaches hub `useRealTime()`"
+    },
+    {
+      "source": "Props",
+      "target": "Job",
+      "source_files": [
+        "mobile-app/components/TacticalBriefing/RadarBriefing.tsx",
+        "mobile-app/types/index.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities; peripheral node `Props` unexpectedly reaches hub `Job`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `cn()` connect `cn` to `utils.ts`, `index.ts`, `sidebar.tsx`, `CalendarView.tsx`, `AuthContext.tsx`, `RequestDetailsPanel.tsx`, `AdminLayout.tsx`, `PersonnelDashboard.tsx`, `DispatchConsole.tsx`, `LiveTrackingMap.tsx`, `menubar.tsx`, `carousel.tsx`, `pagination.tsx`, `form.tsx`, `chart.tsx`, `drawer.tsx`, `RequestCard.tsx`, `dropdown-menu.tsx`, `navigation-menu.tsx`, `toggle-group.tsx`, `alert.tsx`, `input-otp.tsx`, `hover-card.tsx`?",
+      "why": "High betweenness centrality (0.142) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Location` connect `RequestDetailsPanel.tsx` to `index.ts`, `PersonnelDashboard.tsx`, `LocationContext.tsx`?",
+      "why": "High betweenness centrality (0.131) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `LocationProvider()` connect `LocationContext.tsx` to `RequestDetailsPanel.tsx`, `_layout.tsx`, `_layout.tsx`?",
+      "why": "High betweenness centrality (0.108) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `expo-router`, `ExpoRouter`, `__routes` to the rest of the system?",
+      "why": "601 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `index.tsx` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09234365867913501 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `utils.ts` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09877551020408164 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `cn` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06612244897959184 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

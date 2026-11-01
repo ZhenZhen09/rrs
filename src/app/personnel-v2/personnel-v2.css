@@ -254,6 +254,49 @@
   display: none;
 }
 
+@media (max-width: 767px) {
+  .personnel-v2-requests-panel {
+    padding: 1rem !important;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-filters {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible !important;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-filters button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+    padding: 0.65rem 0.5rem;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-row {
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+    margin-bottom: 0.5rem;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 0.9rem;
+    padding: 0.85rem 0.75rem !important;
+    background: #fff;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-row > div:first-child {
+    flex: 1 1 auto;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-row > div:first-child p {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .personnel-v2-requests-panel .personnel-v2-request-row > div:last-child {
+    gap: 0.35rem;
+  }
+}
+
 .personnel-v2-map-shell {
   width: 100%;
   height: 100%;
@@ -264,6 +307,10 @@
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
+}
+
+.personnel-v2-mobile-details-toggle {
+  display: none;
 }
 
 @media (max-width: 767px) {
@@ -671,69 +718,123 @@
 
 @media (max-width: 767px) {
   .personnel-v2-map-shell {
+    position: relative;
+    width: 100vw;
     height: 100dvh;
     min-height: 0;
+    overflow: hidden;
+    background: #e5e3df;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] {
+  .personnel-v2-map-shell .personnel-v2-map-picker-map {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: min(50dvh, 400px) !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: calc(100dvh - min(50dvh, 400px)) !important;
+    padding: 0 !important;
+    z-index: 0 !important;
+  }
+
+  .personnel-v2-map-shell.mobile-details-open .personnel-v2-map-picker-map {
+    bottom: min(76dvh, 640px) !important;
+    height: calc(100dvh - min(76dvh, 640px)) !important;
+  }
+
+  .personnel-v2-map-shell .personnel-v2-map-picker-panel {
+    position: absolute !important;
     top: auto !important;
     right: 0 !important;
     bottom: 0 !important;
     left: 0 !important;
+    display: flex !important;
     width: 100% !important;
-    height: min(36dvh, 350px) !important;
-    max-height: 36dvh !important;
+    height: min(50dvh, 400px) !important;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 1rem) !important;
     transform: none !important;
+    transition: height 220ms ease-out !important;
+    z-index: 50 !important;
   }
 
-  .personnel-v2-map-shell.mobile-details-open [class~="absolute"][class~="z-50"] {
-    height: min(68dvh, 600px) !important;
-    max-height: 68dvh !important;
+  .personnel-v2-map-shell.mobile-details-open .personnel-v2-map-picker-panel {
+    height: min(76dvh, 640px) !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div {
+  .personnel-v2-map-picker-panel > div:first-child {
+    display: flex !important;
+    min-height: 0 !important;
     height: 100% !important;
+    width: 100% !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     border-radius: 1.5rem 1.5rem 0 0 !important;
     box-shadow: 0 -18px 45px rgba(15, 23, 42, 0.22) !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div > div:first-child {
-    padding: 0.55rem 0.75rem 0.4rem !important;
+  .personnel-v2-map-picker-panel > div:first-child > div:first-child {
+    flex: 0 0 auto !important;
+    padding: 0.65rem 0.9rem 0.55rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div > div:first-child h2 {
-    font-size: 0.85rem !important;
+  .personnel-v2-map-picker-panel > div:first-child > div:first-child h2 {
+    font-size: 0.95rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] input {
-    height: 2.4rem !important;
+  .personnel-v2-map-picker-panel input {
+    height: 2.7rem !important;
     font-size: 0.75rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] [class~="flex-1"][class~="overflow-y-auto"] {
+  .personnel-v2-map-picker-panel .custom-sidebar-scrollbar {
+    flex: 1 1 0% !important;
     min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-bottom: 7rem !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] [class~="flex-1"][class~="overflow-y-auto"] > div {
+  .personnel-v2-map-picker-panel .custom-sidebar-scrollbar > div {
     padding: 0.65rem 0.75rem !important;
     gap: 0.7rem !important;
   }
 
-  /* Nearby discovery is useful on desktop but consumes too much mobile space.
-     Search remains available at the top of the sheet. */
-  .personnel-v2-map-shell:not(.mobile-details-open) [class~="absolute"][class~="z-50"] [class~="flex-1"][class~="overflow-y-auto"] > div > div:nth-child(2) {
+  /* Keep the peek state focused on search and the selected point. */
+  .personnel-v2-map-shell:not(.mobile-details-open) .personnel-v2-map-picker-panel .custom-sidebar-scrollbar {
     display: none !important;
+  }
+
+  /* While picking an autocomplete result, keep the drawer tall and focused on search. */
+  .personnel-v2-map-shell.mobile-search-open .personnel-v2-map-optional-details {
+    display: none !important;
+  }
+
+  .personnel-v2-map-picker-panel .personnel-v2-map-suggestions {
+    max-height: min(34dvh, 260px) !important;
+    overflow: hidden !important;
+  }
+
+  .personnel-v2-map-picker-panel .personnel-v2-map-suggestions > div {
+    max-height: min(34dvh, 260px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .personnel-v2-mobile-details-toggle {
     position: absolute;
-    right: 1rem;
-    bottom: calc(36dvh + 0.45rem);
+    left: 50%;
+    right: auto;
+    bottom: calc(min(50dvh, 400px) - 0.8rem);
     z-index: 70;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    min-height: 2.25rem;
+    min-height: 2rem;
+    transform: translateX(-50%);
     border: 1px solid rgba(226, 232, 240, 0.95);
     border-radius: 999px;
     padding: 0.5rem 0.75rem;
@@ -745,91 +846,124 @@
   }
 
   .personnel-v2-map-shell.mobile-details-open .personnel-v2-mobile-details-toggle {
-    bottom: calc(68dvh + 0.45rem);
+    bottom: calc(min(76dvh, 640px) - 0.8rem);
   }
 
   .personnel-v2-mobile-details-toggle:hover {
     background: #ecfdf5;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] h3 {
+  .personnel-v2-map-picker-panel h3 {
     font-size: 0.95rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] [class~="flex-1"][class~="overflow-y-auto"] > div > div:nth-child(3) {
+  .personnel-v2-map-picker-panel .custom-sidebar-scrollbar > div > div:nth-child(3) {
     padding-top: 0.55rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div > div:last-child {
-    padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom)) !important;
+  .personnel-v2-map-picker-footer {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: env(safe-area-inset-bottom, 0px) !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    padding: 0.55rem 0.85rem calc(0.65rem + env(safe-area-inset-bottom, 0px)) !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background: #fff !important;
+    box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.06);
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] label,
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] p,
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] span {
+  .personnel-v2-map-selected-summary {
+    display: flex !important;
+  }
+
+  .personnel-v2-map-picker-panel label,
+  .personnel-v2-map-picker-panel p,
+  .personnel-v2-map-picker-panel span {
     font-size: 0.68rem !important;
     line-height: 1.25 !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] [class~="h-12"],
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] [class~="h-11"] {
+  .personnel-v2-map-picker-panel .personnel-v2-map-selected-summary p {
+    font-size: 0.75rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .personnel-v2-map-picker-panel .personnel-v2-map-selected-summary p + p {
+    margin-top: 0.15rem;
+    font-size: 0.7rem !important;
+  }
+
+  .personnel-v2-map-picker-panel .personnel-v2-map-picker-footer button {
+    height: 2.9rem !important;
+    font-size: 0.75rem !important;
+    position: relative;
+    top: -0.5rem;
+  }
+
+  .personnel-v2-map-picker-panel .custom-sidebar-scrollbar [class~="h-12"],
+  .personnel-v2-map-picker-panel .custom-sidebar-scrollbar [class~="h-11"] {
     height: 2.35rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div > div:last-child button {
-    height: 2.65rem !important;
-    font-size: 0.72rem !important;
+  .personnel-v2-map-floating-confirm {
+    display: none !important;
   }
 
   .personnel-v2-map-shell [class~="absolute"][class~="z-40"] {
     top: calc(1rem + env(safe-area-inset-top)) !important;
     right: 1rem !important;
+    z-index: 40 !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-40"] button {
+  .personnel-v2-map-shell [class~="absolute"][class~="z-40"] button:not(.personnel-v2-map-floating-confirm) {
     width: 3rem !important;
     height: 3rem !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-0"] {
-    padding-left: 0 !important;
-  }
-
   /* The desktop collapse handle is not useful in the mobile sheet. */
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] button.hidden {
+  .personnel-v2-map-picker-panel button.hidden {
     display: none !important;
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] .custom-sidebar-scrollbar {
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] .leaflet-control-attribution {
+  .personnel-v2-map-shell .leaflet-control-attribution {
     font-size: 9px;
   }
 }
 
 @media (max-width: 767px) and (orientation: landscape) {
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] {
-    height: min(58dvh, 250px) !important;
-    max-height: 58dvh !important;
+  .personnel-v2-map-picker-map {
+    bottom: min(44dvh, 220px) !important;
+    height: calc(100dvh - min(44dvh, 220px)) !important;
   }
 
-  .personnel-v2-map-shell.mobile-details-open [class~="absolute"][class~="z-50"] {
+  .personnel-v2-map-shell.mobile-details-open .personnel-v2-map-picker-map {
+    bottom: min(86dvh, 390px) !important;
+    height: calc(100dvh - min(86dvh, 390px)) !important;
+  }
+
+  .personnel-v2-map-dialog {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .personnel-v2-map-picker-panel {
+    height: min(44dvh, 220px) !important;
+  }
+
+  .personnel-v2-map-shell.mobile-details-open .personnel-v2-map-picker-panel {
     height: min(86dvh, 390px) !important;
-    max-height: 86dvh !important;
   }
 
   .personnel-v2-mobile-details-toggle {
-    bottom: calc(58dvh + 0.45rem);
+    bottom: calc(min(44dvh, 220px) - 0.8rem);
   }
 
   .personnel-v2-map-shell.mobile-details-open .personnel-v2-mobile-details-toggle {
-    bottom: calc(86dvh + 0.45rem);
+    bottom: calc(min(86dvh, 390px) - 0.8rem);
   }
 
-  .personnel-v2-map-shell [class~="absolute"][class~="z-50"] > div > div:first-child {
-    padding-top: calc(0.35rem + env(safe-area-inset-top)) !important;
+  .personnel-v2-map-picker-panel > div:first-child > div:first-child {
+    padding-top: 0.45rem !important;
   }
 }

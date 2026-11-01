@@ -3,7 +3,6 @@ import { AuthManager } from '@/utils/AuthManager';
 import {
   acknowledgeLocationEvents,
   getPendingLocationEvents,
-  markLocationEventsRejected,
   markLocationEventsForRetry,
 } from './locationOutbox';
 
@@ -39,16 +38,17 @@ export const flushLocationOutbox = async (trigger: LocationSyncTrigger) => {
 
       await acknowledgeLocationEvents(accepted);
       if (rejected.length > 0) {
-        for (const item of rejected as Array<{ eventId: string; reason: string }>) {
-          await markLocationEventsRejected([item.eventId], item.reason || 'Location event rejected by the server');
-        }
+        // Rejected GPS samples cannot become valid by retrying them later.
+        // Discard them so an offline backlog cannot accumulate forever.
+        await acknowledgeLocationEvents((rejected as Array<{ eventId: string }>).map((item) => item.eventId));
       }
 
       return { accepted: accepted.length, rejected: rejected.length };
     } catch (error: any) {
       const status = error?.response?.status;
       if (status >= 400 && status < 500 && status !== 429) {
-        await markLocationEventsRejected(riderEvents.map((event) => event.eventId), error?.response?.data?.error || error.message || 'Location update rejected');
+        // Permanent client errors are not retryable GPS samples.
+        await acknowledgeLocationEvents(riderEvents.map((event) => event.eventId));
         return { accepted: 0, rejected: riderEvents.length };
       }
       await markLocationEventsForRetry(

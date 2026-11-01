@@ -184,6 +184,9 @@ export const submitAttendance = async (userId: string, status: 'present' | 'abse
 
 export const getMyShiftSession = async () => (await api.get('/api/users/me/shift-session')).data;
 
+export const requestShiftReopen = async (userId: string, reason: string) =>
+  (await api.post(`/api/users/${userId}/shift-reopen-requests`, { reason })).data;
+
 export const getMyAttendance = async () => {
   const res = await api.get('/api/users/me/attendance');
   return res.data; // { status: 'absent' | 'present' | 'on_leave' | null }

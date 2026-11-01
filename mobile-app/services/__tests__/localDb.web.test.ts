@@ -15,10 +15,14 @@ describe('web local database startup recovery', () => {
       },
     });
     storage.set('rrs_local_db_v1', JSON.stringify({
-      locationOutbox: [],
+      locationOutbox: [
+        { event_id: 'stale-event', rider_id: 'rider-A', status: 'rejected', sequence: 1 },
+        { event_id: 'pending-event', rider_id: 'rider-A', status: 'pending', sequence: 2 },
+      ],
       syncQueue: [
         { id: 1, endpoint: '/api/requests/request-1/status', status: 'syncing', payload: '{}', created_at: 1 },
         { id: 2, endpoint: '/api/users/location', status: 'syncing', payload: '{"riderId":"rider-A"}', created_at: 2 },
+        { id: 3, endpoint: '/api/users/location', status: 'failed', payload: '{"riderId":"rider-A"}', created_at: 3 },
       ],
       tasksCache: [],
       statusActions: [['op-1', {
@@ -42,6 +46,9 @@ describe('web local database startup recovery', () => {
     expect(savedState.syncQueue).toEqual([
       expect.objectContaining({ id: 1, status: 'failed', last_error: 'Legacy rider status action requires review' }),
       expect.objectContaining({ id: 2, status: 'pending' }),
+    ]);
+    expect(savedState.locationOutbox).toEqual([
+      expect.objectContaining({ event_id: 'pending-event', status: 'pending' }),
     ]);
   });
 });
