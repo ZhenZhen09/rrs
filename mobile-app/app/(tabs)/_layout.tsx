@@ -9,8 +9,6 @@ import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
 import { useLocation } from '@/context/LocationContext';
-import { AttendanceLockout } from '@/components/AttendanceLockout';
-import { useDashboard } from '@/hooks/data/useDashboard';
 import { getTasks } from '@/services/apiService';
 import { getRiderTaskCounts } from '@/utils/taskFilters';
 import { useMessagingUnread } from '@/hooks/useMessagingUnread';
@@ -20,8 +18,7 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { attendanceStatus, hasOpenShift, isOnDuty, isShiftStatusReady, isNetworkReachable } = useLocation();
-  const { handleLogout } = useDashboard();
+  const { hasOpenShift, isOnDuty, isShiftStatusReady, isNetworkReachable } = useLocation();
   const unreadMessages = useMessagingUnread();
 
   const { data: tasks = [] } = useQuery({
@@ -32,15 +29,6 @@ export default function TabLayout() {
   });
 
   const counts = getRiderTaskCounts(isShiftStatusReady && hasOpenShift && isOnDuty && isNetworkReachable !== false ? tasks : []);
-
-  if (attendanceStatus === 'absent' || attendanceStatus === 'on_leave') {
-    return (
-      <AttendanceLockout
-        status={attendanceStatus as any}
-        onLogout={handleLogout}
-      />
-    );
-  }
 
   return (
     <View style={styles.tabLayout}>

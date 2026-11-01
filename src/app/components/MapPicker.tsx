@@ -55,6 +55,8 @@ export interface MapPickerProps {
   initialLocation?: Location;
   title: string;
   isStandalone?: boolean;
+  locationPurpose?: "pickup" | "destination";
+  onSuggestionsVisibilityChange?: (visible: boolean) => void;
 }
 
 interface SearchResult {
@@ -135,12 +137,16 @@ export function MapPickerContent({
   title,
   onClose,
   isStandalone = false,
+  locationPurpose = "destination",
+  onSuggestionsVisibilityChange,
 }: {
   onLocationSelect: (location: Location) => void;
   initialLocation?: Location;
   title: string;
   onClose?: () => void;
   isStandalone?: boolean;
+  locationPurpose?: "pickup" | "destination";
+  onSuggestionsVisibilityChange?: (visible: boolean) => void;
 }) {
   // DEFAULT LOCATION: Toyota Pasong Tamo @ Chino Roces Ave
   const defaultCenter: [number, number] = [14.544837, 121.018449];
@@ -166,10 +172,14 @@ export function MapPickerContent({
       : defaultAddress,
   );
   const [customAddressName, setCustomAddressName] = useState(
-    initialLocation ? formatAddress(initialLocation.address).main : defaultBusinessName,
+    initialLocation
+      ? initialLocation.businessName || formatAddress(initialLocation.address).main
+      : defaultBusinessName,
   );
 
-  const [landmarks, setLandmarks] = useState(initialLocation?.address.match(/\(Landmarks: (.*?)\)/)?.[1] || "");
+  const [landmarks, setLandmarks] = useState(
+    initialLocation?.landmarks || initialLocation?.address.match(/\(Landmarks: (.*?)\)/)?.[1] || "",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -177,7 +187,6 @@ export function MapPickerContent({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Geoapify Specific States
   const [discoveryResults, setDiscoveryResults] = useState<any[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
 
@@ -189,42 +198,30 @@ export function MapPickerContent({
 
   const GEOAPIFY_KEY = "e981beca841349698124675a91674f3a"; // Updated Geoapify Key
 
-  // 1. Discovery/Nearby Search Logic
   const fetchNearbyPlaces = async (lat: number, lon: number) => {
-    // Cancel previous discovery request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
-
+    setIsDiscovering(true);
     try {
-      // Nearby search for businesses, cafes, offices, etc.
       const response = await fetch(
         `https://api.geoapify.com/v2/places?categories=commercial,catering,education,healthcare,office,entertainment,tourism&filter=circle:${lon},${lat},1000&bias=proximity:${lon},${lat}&limit=10&apiKey=${GEOAPIFY_KEY}`,
         { signal },
       );
-      setIsDiscovering(true);
       const data = await response.json();
-      if (data.features) {
-        setDiscoveryResults(
-          data.features.map((f: any) => ({
-            name:
-              f.properties.name || f.properties.street || "Business/Building",
-            address: f.properties.formatted,
-            lat: f.properties.lat,
-            lon: f.properties.lon,
-            category: f.properties.categories[0]?.replace(/_/g, " ") || "Place",
-          })),
-        );
+      if (!signal.aborted && data.features) {
+        setDiscoveryResults(data.features.map((feature: any) => ({
+          name: feature.properties.name || feature.properties.street || "Business/Building",
+          address: feature.properties.formatted,
+          lat: feature.properties.lat,
+          lon: feature.properties.lon,
+          category: feature.properties.categories[0]?.replace(/_/g, " ") || "Place",
+        })));
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return;
-      console.error("Discovery failed", error);
+      if (error instanceof Error && error.name !== "AbortError") console.error("Discovery failed", error);
     } finally {
-      if (!signal.aborted) {
-        setIsDiscovering(false);
-      }
+      if (!signal.aborted) setIsDiscovering(false);
     }
   };
 
@@ -232,6 +229,7 @@ export function MapPickerContent({
     if (!query.trim() || query.length < 2) {
       setSuggestions([]);
       setIsSearching(false);
+      onSuggestionsVisibilityChange?.(false);
       return;
     }
 
@@ -271,11 +269,15 @@ export function MapPickerContent({
 
       if (!signal.aborted) {
         setSuggestions(addrSuggestions);
-        if (addrSuggestions.length > 0) setShowSuggestions(true);
+        setShowSuggestions(addrSuggestions.length > 0);
+        onSuggestionsVisibilityChange?.(addrSuggestions.length > 0);
       }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       console.error("Search failed:", error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      onSuggestionsVisibilityChange?.(false);
     } finally {
       if (!signal.aborted) {
         setIsSearching(false);
@@ -317,7 +319,6 @@ export function MapPickerContent({
           });
         }
 
-        // Also fetch nearby businesses whenever point changes
         fetchNearbyPlaces(currentPos[0], currentPos[1]);
       } catch (error) {
         setAddressDetails({
@@ -350,10 +351,12 @@ export function MapPickerContent({
 
     if (value.trim().length >= 2) {
       setShowSuggestions(true);
+      onSuggestionsVisibilityChange?.(true);
       searchTimeoutRef.current = setTimeout(() => fetchSuggestions(value), 200);
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
+      onSuggestionsVisibilityChange?.(false);
     }
   };
 
@@ -367,6 +370,7 @@ export function MapPickerContent({
     hasEditedRef.current = true;
     setSearchQuery("");
     setShowSuggestions(false);
+    onSuggestionsVisibilityChange?.(false);
   };
 
   const handleSelectDiscovery = (place: any) => {
@@ -388,7 +392,7 @@ export function MapPickerContent({
       lat: currentPos[0],
       lng: currentPos[1],
       address: fullAddress || "Selected Location",
-      businessName: customAddressName,
+      businessName: customAddressName.trim() || addressDetails.main || "Selected Location",
       landmarks: landmarks,
     });
   };
@@ -445,7 +449,7 @@ export function MapPickerContent({
 
       {/* FULLSCREEN MAP FOUNDATION */}
       <div
-        className={`absolute inset-0 z-0 bg-[#e5e3df] transition-all duration-500 ease-in-out ${isExpanded ? "md:pl-[424px]" : "md:pl-0"}`}
+        className={`personnel-v2-map-picker-map absolute inset-0 z-0 bg-[#e5e3df] transition-all duration-500 ease-in-out ${isExpanded ? "md:pl-[424px]" : "md:pl-0"}`}
       >
         <MapContainer
           center={mapCenter}
@@ -476,7 +480,8 @@ export function MapPickerContent({
 
       {/* FLOATING SIDEBAR */}
       <div
-        className={`
+        id="mobile-location-picker-drawer"
+        className={`personnel-v2-map-picker-panel
         absolute z-50 transition-all duration-500 ease-in-out
         md:top-6 md:left-6 md:bottom-6 md:w-[400px]
         top-0 left-0 w-full h-full md:h-auto
@@ -514,24 +519,28 @@ export function MapPickerContent({
                 className="h-14 pl-11 pr-12 bg-slate-50 border-slate-100 rounded-2xl focus-visible:ring-[#00B14F]/10 focus-visible:border-[#00B14F] font-bold text-slate-900 transition-all"
                 value={searchQuery}
                 onChange={handleInputChange}
-                onFocus={() => setShowSuggestions(true)}
+                onFocus={() => {
+                  const visible = suggestions.length > 0;
+                  setShowSuggestions(visible);
+                  onSuggestionsVisibilityChange?.(visible);
+                }}
               />
               {isSearching && (
                 <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
               )}
 
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 w-full mt-3 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
-                  <div className="max-h-[320px] overflow-y-auto custom-sidebar-scrollbar">
-                    <div className="py-2">
+                <div className="personnel-v2-map-suggestions absolute top-full left-0 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
+                  <div className="max-h-[320px] overflow-y-auto overscroll-contain custom-sidebar-scrollbar">
+                    <div className="py-1">
                       {suggestions.map((s, i) => (
                         <button
                           key={i}
-                          className="w-full text-left px-5 py-4 hover:bg-slate-50 transition-colors flex items-start gap-4 border-b border-slate-50 last:border-0"
+                          className="w-full text-left px-3 py-2.5 hover:bg-slate-50 transition-colors flex items-start gap-3 border-b border-slate-50 last:border-0"
                           onClick={() => handleSelectSuggestion(s)}
                         >
-                          <div className="p-2 bg-slate-100 rounded-full mt-0.5 shrink-0">
-                            <MapPin className="h-4 w-4 text-slate-500" />
+                          <div className="p-1.5 bg-slate-100 rounded-full mt-0.5 shrink-0">
+                            <MapPin className="h-3.5 w-3.5 text-slate-500" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-[14px] font-bold text-slate-900 truncate">
@@ -552,139 +561,123 @@ export function MapPickerContent({
 
           {/* Scrollable Discovery Panel - Changed from ScrollArea to div for better scrollbar control */}
           <div className="flex-1 bg-white overflow-y-auto custom-sidebar-scrollbar">
-            <div className="p-6 space-y-8">
-              {/* Selected Location Information */}
-              <div className="space-y-6">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                      Selected Point
-                    </div>
+            <div className="hidden space-y-6 p-6 md:block">
+              <div className="space-y-4">
+                <div className="px-1">
+                  <div className="mb-2 inline-flex rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-600">
+                    Selected point
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
+                  <h3 className="text-xl font-black leading-tight tracking-tight text-slate-900">
                     {customAddressName || "Select a location"}
                   </h3>
-                  <div className="flex items-start gap-2 mt-2">
-                    <MapPinned className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                    <p className="text-sm font-bold text-slate-500 leading-relaxed italic">
-                      {isGeocoding
-                        ? "Identifying location..."
-                        : addressDetails.sub ||
-                          "Click on the map or search to pick a location"}
+                  <div className="mt-2 flex items-start gap-2">
+                    <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <p className="text-sm font-bold italic leading-relaxed text-slate-500">
+                      {isGeocoding ? "Identifying location..." : addressDetails.sub || "Click on the map or search to pick a location"}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Geoapify Discovery & Nearby Section */}
-              <div className="space-y-4 pt-6 border-t border-slate-100">
+              <div className="space-y-4 border-t border-slate-100 pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-50 rounded-lg">
-                      <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                    </div>
-                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Discovery & Businesses
-                    </Label>
+                    <div className="rounded-lg bg-blue-50 p-1.5"><Building2 className="h-3.5 w-3.5 text-blue-600" /></div>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Discovery &amp; Businesses</Label>
                   </div>
-                  {isDiscovering && (
-                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                  )}
+                  {isDiscovering && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
                 </div>
-
                 {discoveryResults.length > 0 ? (
                   <div className="space-y-3">
                     {discoveryResults.slice(0, 5).map((place, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSelectDiscovery(place)}
-                        className="w-full group text-left p-3 rounded-2xl border border-slate-50 bg-slate-50/30 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all duration-300"
-                      >
+                      <button key={idx} type="button" onClick={() => handleSelectDiscovery(place)} className="group w-full rounded-2xl border border-slate-50 bg-slate-50/30 p-3 text-left transition-all duration-300 hover:border-blue-100 hover:bg-white hover:shadow-md">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-white rounded-xl shadow-sm group-hover:bg-blue-50 transition-colors">
-                            <Star className="h-3.5 w-3.5 text-amber-500" />
-                          </div>
+                          <div className="rounded-xl bg-white p-2 shadow-sm transition-colors group-hover:bg-blue-50"><Star className="h-3.5 w-3.5 text-amber-500" /></div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-black text-slate-900 truncate">
-                                {place.name}
-                              </p>
-                              <span className="text-[8px] font-black text-blue-500 uppercase bg-blue-50 px-1.5 py-0.5 rounded-md">
-                                {place.category}
-                              </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-xs font-black text-slate-900">{place.name}</p>
+                              <span className="shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[8px] font-black uppercase text-blue-500">{place.category}</span>
                             </div>
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                              {place.address}
-                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-slate-400">{place.address}</p>
                           </div>
                         </div>
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-8 text-center bg-slate-50/50 rounded-[1.5rem] border border-dashed border-slate-200">
-                    <p className="text-[11px] font-bold text-slate-400">
-                      Search for businesses or explore nearby
-                    </p>
+                  <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50/50 py-8 text-center">
+                    <p className="text-[11px] font-bold text-slate-400">Search for businesses or explore nearby</p>
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Discovery Details Form */}
-              <div className="space-y-6 pt-6 border-t border-slate-100">
-                <div className="flex items-center gap-2 px-1">
-                  <InfoIcon className="h-3.5 w-3.5 text-[#00B14F]" />
-                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Personalize Location
+            <div className="personnel-v2-map-optional-details space-y-4 border-t border-slate-100 p-4 md:space-y-6 md:p-6">
+              <p className="text-xs leading-5 text-slate-500">
+                Add optional details to help the rider find the exact spot.
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                  <Label htmlFor="map-picker-place-name" className="text-[11px] font-bold text-slate-600">
+                    <span className="hidden md:inline">Business / Building Name</span>
+                    <span className="md:hidden">{locationPurpose === "pickup" ? "Pickup point name (optional)" : "Building or place name (optional)"}</span>
                   </Label>
                 </div>
-
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 ml-1">
-                      <Building2 className="h-3 w-3 text-slate-400" />
-                      <Label className="text-[11px] font-bold text-slate-500">
-                        Business / Building Name
-                      </Label>
-                    </div>
-                    <Input
-                      value={customAddressName}
-                      onChange={(e) => {
-                        setCustomAddressName(e.target.value);
-                        hasEditedRef.current = true;
-                      }}
-                      placeholder="e.g. Starbucks, 5th Ave Entrance"
-                      className="h-12 bg-slate-50 border-transparent font-black text-slate-900 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 ml-1">
-                      <Info className="h-3 w-3 text-slate-400" />
-                      <Label className="text-[11px] font-bold text-slate-500">
-                        Nearby Landmarks / Instructions
-                      </Label>
-                    </div>
-                    <Input
-                      value={landmarks}
-                      onChange={(e) => setLandmarks(e.target.value)}
-                      placeholder="e.g. Beside the main lobby elevators"
-                      className="h-12 bg-slate-50 border-transparent text-sm font-bold text-slate-700 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
-                    />
-                  </div>
+                <Input
+                  id="map-picker-place-name"
+                  value={customAddressName}
+                  onChange={(e) => {
+                    setCustomAddressName(e.target.value);
+                    hasEditedRef.current = true;
+                  }}
+                  placeholder={locationPurpose === "pickup" ? "Shop, office, or collection desk" : "Building, unit, or recipient location"}
+                  className="h-12 bg-slate-50 border-transparent font-bold text-slate-900 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <Info className="h-3.5 w-3.5 text-slate-400" />
+                  <Label htmlFor="map-picker-directions" className="text-[11px] font-bold text-slate-600">
+                    <span className="hidden md:inline">Nearby Landmarks / Instructions</span>
+                    <span className="md:hidden">{locationPurpose === "pickup" ? "Pickup entrance or collection note (optional)" : "Delivery directions (optional)"}</span>
+                  </Label>
                 </div>
+                <Input
+                  id="map-picker-directions"
+                  value={landmarks}
+                  onChange={(e) => setLandmarks(e.target.value)}
+                  placeholder={locationPurpose === "pickup" ? "e.g. Use the loading bay entrance" : "e.g. Gate, floor, unit, or nearby landmark"}
+                  className="h-12 bg-slate-50 border-transparent text-sm font-semibold text-slate-700 rounded-2xl focus-visible:bg-white focus-visible:border-slate-200 transition-all"
+                />
               </div>
             </div>
           </div>
 
           {/* Confirm Button */}
-          <div className="p-6 border-t border-slate-50 bg-white md:rounded-b-[2rem]">
+          <div className="personnel-v2-map-picker-footer p-6 border-t border-slate-50 bg-white md:rounded-b-[2rem]">
+            <div className="personnel-v2-map-selected-summary mb-2 flex min-w-0 items-center gap-2 md:hidden">
+              <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="min-w-0">
+                <p className="truncate text-xs font-black text-slate-900">
+                  <span className="font-bold text-slate-500">Business / building:</span>{" "}
+                  {customAddressName.trim() || addressDetails.main || "Selected location"}
+                </p>
+                <p className="truncate text-[10px] font-medium text-slate-500">{isGeocoding ? "Updating address…" : addressDetails.sub || "Location pin selected"}</p>
+                <p className="truncate text-[10px] font-medium text-slate-500">
+                  <span className="font-bold text-slate-600">Nearby landmark:</span>{" "}
+                  {landmarks.trim() || "Add one in More details"}
+                </p>
+              </div>
+            </div>
             <Button
+              type="button"
               onClick={handleConfirm}
-              disabled={isGeocoding || !customAddressName}
+              disabled={isGeocoding || !addressDetails.main || addressDetails.main === "Locating..."}
               className="w-full h-11 rounded-[1.4rem] bg-slate-900 hover:bg-slate-800 text-white font-black text-sm uppercase tracking-widest shadow-2xl shadow-slate-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
             >
-              Confirm Selection
+              <span className="hidden md:inline">Confirm Selection</span>
+              <span className="md:hidden">{locationPurpose === "pickup" ? "Confirm pickup" : "Confirm destination"}</span>
               <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
@@ -704,9 +697,9 @@ export function MapPickerContent({
       <div className="absolute top-6 right-6 z-40 flex flex-col gap-3">
         {isStandalone && (
           <Button
+            className="personnel-v2-map-floating-confirm rounded-2xl h-14 px-6 bg-[#00B14F] text-white shadow-2xl hover:bg-[#009e46] border-none font-black text-xs uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2"
             onClick={handleConfirm}
-            disabled={isGeocoding || !customAddressName}
-            className="rounded-2xl h-14 px-6 bg-[#00B14F] text-white shadow-2xl hover:bg-[#009e46] border-none font-black text-xs uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2"
+            disabled={isGeocoding || !addressDetails.main || addressDetails.main === "Locating..."}
           >
             <Check className="h-5 w-5" />
             Confirm
@@ -743,6 +736,8 @@ export function MapPicker({
   onLocationSelect,
   initialLocation,
   title,
+  locationPurpose,
+  onSuggestionsVisibilityChange,
 }: MapPickerProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -752,6 +747,8 @@ export function MapPicker({
           title={title}
           initialLocation={initialLocation}
           onLocationSelect={onLocationSelect}
+          locationPurpose={locationPurpose}
+          onSuggestionsVisibilityChange={onSuggestionsVisibilityChange}
           onClose={() => onOpenChange?.(false)}
         />
       </DialogContent>

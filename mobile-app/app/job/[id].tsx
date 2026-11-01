@@ -830,19 +830,16 @@ export default function JobDetailsScreen() {
       <BottomSheet ref={bottomSheetRef} index={0} snapPoints={snapPoints} handleIndicatorStyle={{ backgroundColor: '#E2E8F0', width: 40 }} backgroundStyle={{ backgroundColor: '#FFFFFF', borderRadius: 32 }}>
         <BottomSheetScrollView contentContainerStyle={styles.drawerInner}>
           <View style={styles.header}>
-            <View><Text style={styles.label}>TRANSACTION ID</Text><Text style={styles.idText}>#{job.request_id.slice(-8).toUpperCase()}</Text></View>
-            <View style={styles.headerStatusColumn}>
+            <View style={styles.headerMainRow}>
+              <View style={styles.headerRequestId}><Text style={styles.label}>TRANSACTION ID</Text><Text style={styles.idText}>#{job.request_id.slice(-8).toUpperCase()}</Text></View>
               <Badge label={(job.delivery_status || 'PENDING').toUpperCase()} status={job.delivery_status === 'in_progress' ? 'warning' : job.delivery_status === 'completed' ? 'success' : 'info'} />
-              {hasStatusAction && <Text style={[styles.syncLabel, syncStatus === 'sync_error' && styles.syncErrorLabel]}>
-                {syncStatus === 'sync_error' ? 'Needs attention' : syncStatus === 'synced' ? 'Synced' : 'Pending sync'}
-              </Text>}
-              {syncStatus === 'sync_error' && statusActionError ? <Text accessibilityRole="text" style={[styles.syncLabel, styles.syncErrorLabel]} numberOfLines={2}>{statusActionError}</Text> : null}
-              {cachedSavedAt ? <Text style={styles.syncLabel}>Saved on this device · {new Date(cachedSavedAt).toLocaleTimeString()}</Text> : null}
-              {Boolean(locationOutboxSummary?.pending || locationOutboxSummary?.rejected) && <Text style={[styles.syncLabel, Boolean(locationOutboxSummary?.rejected) && styles.syncErrorLabel]}>
-                {locationOutboxSummary?.rejected ? `${locationOutboxSummary.rejected} location update${locationOutboxSummary.rejected === 1 ? '' : 's'} need review` : `${locationOutboxSummary?.pending} location update${locationOutboxSummary?.pending === 1 ? '' : 's'} pending`}
-              </Text>}
-              {locationOutboxSummary?.rejected && locationOutboxSummary.lastError ? <Text accessibilityRole="text" style={[styles.syncLabel, styles.syncErrorLabel]} numberOfLines={2}>{locationOutboxSummary.lastError}</Text> : null}
             </View>
+            {hasStatusAction && <Text style={[styles.syncLabel, syncStatus === 'sync_error' && styles.syncErrorLabel]}>
+              {syncStatus === 'sync_error' ? 'Delivery update needs attention' : syncStatus === 'synced' ? 'Delivery update synced' : 'Delivery update pending sync'}
+            </Text>}
+            {syncStatus === 'sync_error' && statusActionError ? <Text accessibilityRole="text" style={[styles.syncLabel, styles.syncErrorLabel]} numberOfLines={2}>{statusActionError}</Text> : null}
+            {cachedSavedAt ? <Text style={styles.syncLabel}>Saved on this device at {new Date(cachedSavedAt).toLocaleTimeString()}</Text> : null}
+            {Boolean(locationOutboxSummary?.pending) && <Text style={styles.locationSyncLabel} accessibilityRole="text">Location sync pending: {locationOutboxSummary?.pending} update{locationOutboxSummary?.pending === 1 ? '' : 's'} waiting to send</Text>}
           </View>
 
           {isActiveSequenceLock && (
@@ -1023,11 +1020,13 @@ const styles = StyleSheet.create({
   warningBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginRight: 8, elevation: 4 },
   statusBadge: { paddingHorizontal: 12, height: 32, borderRadius: 16, justifyContent: 'center', elevation: 4 },
   statusText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  syncLabel: { color: '#A16207', fontSize: 10, fontWeight: '700', marginTop: 4, textAlign: 'right' },
+  syncLabel: { color: '#A16207', fontSize: 10, fontWeight: '700', marginTop: 6, textAlign: 'left', flexWrap: 'wrap' },
   syncErrorLabel: { color: '#B91C1C' },
+  locationSyncLabel: { color: '#92400E', fontSize: 11, fontWeight: '700', marginTop: 6, flexWrap: 'wrap' },
   drawerInner: { padding: 24, paddingBottom: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  headerStatusColumn: { alignItems: 'flex-end', marginLeft: 12 },
+  header: { flexDirection: 'column', alignItems: 'stretch', marginBottom: 20 },
+  headerMainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' },
+  headerRequestId: { flexShrink: 1, minWidth: 0, marginRight: 12 },
   headerEta: { flexDirection: 'row', alignItems: 'center', minHeight: 36, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginTop: -10, marginBottom: 14, gap: 7 },
   headerCompletedEta: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
   headerEtaLabel: { fontSize: 9, fontWeight: '900', color: '#1D4ED8', letterSpacing: 0.5 },

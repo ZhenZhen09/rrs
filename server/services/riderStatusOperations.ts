@@ -1,4 +1,28 @@
 import { createHash } from 'crypto';
+import { pool } from '../db';
+
+let ensureTablePromise: Promise<void> | null = null;
+
+export async function ensureRiderStatusOperationsTable(): Promise<void> {
+  ensureTablePromise ??= pool.query(`
+    CREATE TABLE IF NOT EXISTS rider_status_operations (
+      rider_id VARCHAR(191) NOT NULL,
+      operation_id VARCHAR(191) NOT NULL,
+      request_id VARCHAR(191) NOT NULL,
+      payload_hash CHAR(64) NOT NULL,
+      delivery_status VARCHAR(32) NOT NULL,
+      response_json JSON NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (rider_id, operation_id),
+      KEY idx_rider_status_operations_request (rider_id, request_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `).then(() => undefined).catch((error) => {
+    ensureTablePromise = null;
+    throw error;
+  });
+
+  await ensureTablePromise;
+}
 
 export type RiderStatusOperation = {
   rider_id: string;

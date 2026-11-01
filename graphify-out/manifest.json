@@ -175,8 +175,8 @@
     "semantic_hash": "6d5545b6c3ab3891d52d25c4e406c026"
   },
   "mobile-app/.expo/devices.json": {
-    "mtime": 1793052835.2360444,
-    "ast_hash": "b04cee242cecd32e28fa61578dc85140",
+    "mtime": 1793089659.5976164,
+    "ast_hash": "a0168af4c63f6c171c5ca5f3d88f6dd0",
     "semantic_hash": ""
   },
   "mobile-app/.expo/settings.json": {
@@ -185,7 +185,7 @@
     "semantic_hash": "ffc728163353197775f8d183bf231675"
   },
   "mobile-app/.expo/types/router.d.ts": {
-    "mtime": 1793052937.1097047,
+    "mtime": 1793528692.0315137,
     "ast_hash": "b5a08459879af7aa0b166027240f7527",
     "semantic_hash": ""
   },
@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "mobile-app/app.json": {
-    "mtime": 1793041838.8137667,
-    "ast_hash": "8092c5940214a7d09ed0a16296b937de",
+    "mtime": 1793094189.5625155,
+    "ast_hash": "3be44241e1715645a495f3a9834f6b58",
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/_layout.tsx": {
-    "mtime": 1792940296.7980523,
-    "ast_hash": "a499add3a6db06cc4a6cc7d19e77b627",
+    "mtime": 1793348975.9373398,
+    "ast_hash": "1d3bba9a13edb25f84ddc3234f30010d",
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/history.tsx": {
@@ -240,8 +240,8 @@
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/index.tsx": {
-    "mtime": 1792940296.7988482,
-    "ast_hash": "ecca18812f74b62fe234b1b9f1371413",
+    "mtime": 1793349914.9532106,
+    "ast_hash": "771574ecbb80dbab0c86a2412e3d5bc6",
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/overdue.tsx": {
@@ -282,11 +282,6 @@
   "mobile-app/components/AttendanceGate.tsx": {
     "mtime": 1791958185.509042,
     "ast_hash": "33c4d75aff2525e66e5fdf4626abc149",
-    "semantic_hash": ""
-  },
-  "mobile-app/components/AttendanceLockout.tsx": {
-    "mtime": 1792983904.265276,
-    "ast_hash": "b981019a0ba8808e23d7a44f962d7548",
     "semantic_hash": ""
   },
   "mobile-app/components/HandoverModal.tsx": {
@@ -420,8 +415,8 @@
     "semantic_hash": "9eaa738f2cbe67d7f88cb7af1d5a93de"
   },
   "mobile-app/constants/Config.ts": {
-    "mtime": 1793050767.9946468,
-    "ast_hash": "fad51f43302cffa5db55856836ae76bb",
+    "mtime": 1793527492.8712318,
+    "ast_hash": "9b56f1e979fc00c33d45ddb222180404",
     "semantic_hash": ""
   },
   "mobile-app/constants/LeafletAssets.ts": {
@@ -440,8 +435,8 @@
     "semantic_hash": ""
   },
   "mobile-app/context/LocationContext.tsx": {
-    "mtime": 1793022021.4413333,
-    "ast_hash": "4f761a1f5e70ea39ca7b06031e36d6b4",
+    "mtime": 1793529016.061151,
+    "ast_hash": "4ab20910ce2c156fe054b8be30f4d81d",
     "semantic_hash": ""
   },
   "mobile-app/eas.json": {
@@ -455,7 +450,7 @@
     "semantic_hash": "560a864580ad8107fbbf8d6d452c82fe"
   },
   "mobile-app/expo-env.d.ts": {
-    "mtime": 1793042327.4863667,
+    "mtime": 1793528691.009714,
     "ast_hash": "0dd9dccdb4b08595bc83df70d6a154d3",
     "semantic_hash": "0dd9dccdb4b08595bc83df70d6a154d3"
   },
@@ -725,8 +720,8 @@
     "semantic_hash": ""
   },
   "server/routes/users.ts": {
-    "mtime": 1793022500.411584,
-    "ast_hash": "857e6684acb66cd4678996cc667e961f",
+    "mtime": 1793350124.7500615,
+    "ast_hash": "42458f03c14134aa232b82ac94fc76aa",
     "semantic_hash": ""
   },
   "server/schemas/authSchema.ts": {
@@ -4780,13 +4775,13 @@
     "semantic_hash": ""
   },
   "mobile-app/components/ShiftControlCard.tsx": {
-    "mtime": 1792940296.813045,
-    "ast_hash": "73a34edb138443ad243494d666b0f090",
+    "mtime": 1793349833.895429,
+    "ast_hash": "3ab3c72533525d9a0001dadc43e2e292",
     "semantic_hash": ""
   },
   "mobile-app/components/ShiftControlDrawer.tsx": {
-    "mtime": 1792940296.814203,
-    "ast_hash": "c6a69afc0f985aad5588fd4a8d7ffcf6",
+    "mtime": 1793351144.469619,
+    "ast_hash": "8e896e4e25e526c21c37abf988203d1e",
     "semantic_hash": ""
   },
   "mobile-app/components/__tests__/ShiftControlCard.test.tsx": {
@@ -4840,8 +4835,8 @@
     "semantic_hash": ""
   },
   "server/middleware/riderShiftAccess.ts": {
-    "mtime": 1792940298.7446847,
-    "ast_hash": "175b99215ecd89b67712cffa2ba7d048",
+    "mtime": 1793350124.2708392,
+    "ast_hash": "9e0087fa942686c6921a386d261216a7",
     "semantic_hash": ""
   },
   "server/routes/shiftSchedule.ts": {

@@ -9,11 +9,27 @@ export async function getRiderShiftAccess(riderId: string, now: Date = new Date(
   let policy = await getShiftPolicy(pool, riderId, now);
   const [openRows]: any = await pool.query("SELECT id FROM shift_sessions WHERE rider_id=? AND session_state='open' LIMIT 1", [riderId]);
   const hasOpenShift = Boolean(openRows[0]);
+  const [clearanceRows]: any = await pool.query(`SELECT rider_id FROM attendance_absence_clearances
+    WHERE rider_id=? AND date=DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')) LIMIT 1`, [riderId]);
+  const adminClearedAbsence = Boolean(clearanceRows[0]);
+  const [lateApprovalRows]: any = await pool.query(`SELECT rider_id FROM attendance_logs
+    WHERE rider_id=? AND date=DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))
+      AND status='absent' AND absence_source='automatic_no_show'
+      AND late_checkin_approved_at IS NOT NULL LIMIT 1`, [riderId]);
+  const lateCheckInApproved = Boolean(lateApprovalRows[0]);
+  const [manualEndRows]: any = await pool.query(`SELECT id FROM shift_sessions
+    WHERE rider_id=? AND session_state='closed' AND end_source='manual'
+      AND DATE(start_time)=DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00')) LIMIT 1`, [riderId]);
+  const manuallyEndedShift = Boolean(manualEndRows[0]);
+  const [reopenApprovalRows]: any = await pool.query(`SELECT request_id FROM shift_reopen_requests
+    WHERE rider_id=? AND work_date=DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00'))
+      AND status='approved' ORDER BY reviewed_at DESC LIMIT 1`, [riderId]);
+  const reopenApproved = Boolean(reopenApprovalRows[0]);
   const automaticShiftClose = await getAutomaticShiftCloseSetting(pool);
   if (!automaticShiftClose.enabled && hasOpenShift && policy.window === 'ended') {
     policy = { ...policy, canWork: true, nextStartAt: null };
   }
-  return { closed, policy, locked: policy.active && !policy.canWork, hasOpenShift, automaticShiftClose };
+  return { closed, policy, locked: policy.active && !policy.canWork, hasOpenShift, adminClearedAbsence, lateCheckInApproved, manuallyEndedShift, reopenApproved, automaticShiftClose };
 }
 
 export async function requireRiderWorkAccess(req: Request, res: Response, next: NextFunction) {

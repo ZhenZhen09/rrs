@@ -523,6 +523,11 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
 
             {/* Rider Assignment / Status Section */}
             <div className="lg:col-span-2 space-y-4">
+              {isCompleted && request.personnel_feedback && <Card className={`border p-4 shadow-sm ${request.personnel_feedback.outcome === 'no' ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                <p className={`text-[8px] font-black uppercase tracking-widest ${request.personnel_feedback.outcome === 'no' ? 'text-amber-800' : 'text-emerald-800'}`}>Personnel feedback · {request.personnel_feedback.outcome === 'no' ? 'Needs attention' : 'Completed as expected'}</p>
+                {request.personnel_feedback.comment && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">{request.personnel_feedback.comment}</p>}
+                <p className="mt-2 text-[9px] font-semibold text-slate-500">Submitted {formatDateTime(request.personnel_feedback.submitted_at, 'MMM d, h:mm a')}</p>
+              </Card>}
               {!readOnly && isPending ? (
                 <>
                   <RiderSelectionList 

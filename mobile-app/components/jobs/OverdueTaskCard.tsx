@@ -9,6 +9,7 @@ import { Job } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { TaskDetailIcon } from './TaskDetailIcon';
+import { StopNumberWatermark } from './StopNumberWatermark';
 
 type OverdueTaskCardProps = {
   task: Job;
@@ -28,9 +29,11 @@ export function OverdueTaskCard({ task, index, allTasks, isLocked, isAvailable =
     || task.pickup_location?.businessName
     || 'Building not provided';
   const status = task.delivery_status || 'pending';
+  const sequenceLabel = getRiderTaskSequenceLabel(task, allTasks);
 
   return (
     <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isAvailable ? styles.unavailableCard : {}) }}>
+      <StopNumberWatermark sequenceLabel={sequenceLabel} />
       <TouchableOpacity
         testID={`overdue_task_card_${index}`}
         activeOpacity={0.7}
@@ -41,7 +44,7 @@ export function OverdueTaskCard({ task, index, allTasks, isLocked, isAvailable =
           <View style={styles.headerDetails}>
             <View style={styles.sequenceRow}>
               <View style={styles.taskNumberBadge}>
-                <Text style={styles.taskNumberText}>{getRiderTaskSequenceLabel(task, allTasks)}</Text>
+                <Text style={styles.taskNumberText}>{sequenceLabel}</Text>
               </View>
               <View style={[styles.sequenceBadge, isLocked ? styles.queuedBadge : styles.nextBadge]}>
                 <Text style={[styles.sequenceBadgeText, isLocked ? styles.queuedBadgeText : styles.activeBadgeText]}>
@@ -138,6 +141,7 @@ const styles = StyleSheet.create({
     padding: moderateScale(14),
     borderLeftWidth: 4,
     borderLeftColor: '#EF4444',
+    position: 'relative',
   },
   lockedCard: { backgroundColor: '#FAFAFA', opacity: 0.85, borderColor: '#F1F5F9', borderLeftColor: '#94A3B8' },
   unavailableCard: { backgroundColor: '#F8FAFC', opacity: 0.62, borderColor: '#CBD5E1', borderLeftColor: '#94A3B8' },

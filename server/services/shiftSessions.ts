@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getPhilippineDateTime } from './shiftSchedule';
+import { consumeApprovedShiftReopenRequest } from './shiftReopenRequests';
 
 type Db = { query: (sql: string, values?: any[]) => Promise<any>; getConnection: () => Promise<any> };
 export type ShiftSession = {
@@ -52,7 +53,7 @@ export async function startShiftSession(db: Db, input: { riderId: string; operat
   });
 }
 
-export async function setRiderAvailability(db: Db, input: { riderId: string; isOnDuty: boolean }) {
+export async function setRiderAvailability(db: Db, input: { riderId: string; isOnDuty: boolean; consumeReopenApproval?: boolean }) {
   return transition(db, input.riderId, async (conn) => {
     const [open] = await conn.query("SELECT * FROM shift_sessions WHERE rider_id = ? AND session_state = 'open' ORDER BY start_time DESC LIMIT 1", [input.riderId]);
     let session = open[0] || null;
@@ -64,6 +65,10 @@ export async function setRiderAvailability(db: Db, input: { riderId: string; isO
       await conn.query(`INSERT INTO attendance_logs (id,rider_id,date,status,check_in_time) VALUES (?, ?, ${TODAY}, 'present', ${NOW}) ON DUPLICATE KEY UPDATE check_in_time=IF(status='present',check_in_time,${NOW}), status='present'`, [`att_${crypto.randomUUID()}`, input.riderId]);
       await conn.query(`DELETE FROM attendance_absence_clearances WHERE rider_id=? AND date=${TODAY}`, [input.riderId]);
       if (!session) {
+        if (input.consumeReopenApproval) {
+          const consumed = await consumeApprovedShiftReopenRequest(conn, input.riderId);
+          if (!consumed) throw new ShiftSessionError('ATTENDANCE_CONFLICT', 'The shift reopen approval is no longer available. Refresh and try again.');
+        }
         const shiftId = `shift_${crypto.randomUUID()}`;
         const operationId = `duty_${crypto.randomUUID()}`;
         await conn.query(`INSERT INTO shift_sessions (id,rider_id,start_time,session_state,start_operation_id) VALUES (?, ?, ${NOW}, 'open', ?)`, [shiftId, input.riderId, operationId]);

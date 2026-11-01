@@ -1,4 +1,1 @@
-export const getRememberMe = (
-  req: { headers: Record<string, unknown> },
-  requestedRememberMe = false,
-) => requestedRememberMe || req.headers['x-client-type'] === 'mobile';
+export const getRememberMe = (requestedRememberMe: unknown = false): boolean => requestedRememberMe === true;

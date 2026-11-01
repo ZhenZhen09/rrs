@@ -191,8 +191,6 @@ export const useJobDetails = () => {
       ]);
       return {
         pending: outbox.pending + genericQueue.pending,
-        rejected: outbox.rejected + genericQueue.rejected,
-        lastError: outbox.lastError || genericQueue.lastError,
       };
     },
     enabled: Boolean(user?.id),

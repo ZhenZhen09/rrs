@@ -62,12 +62,15 @@ api.interceptors.response.use((response) => response, async (error) => {
   const originalRequest = error.config;
 
   if (error.response?.status === 403) {
-    console.warn('[AUTH] Request forbidden', {
-      url: originalRequest?.url,
-      method: originalRequest?.method,
-      code: error.response?.data?.code,
-      error: error.response?.data?.error,
-    });
+    const errorCode = error.response?.data?.code;
+    if (errorCode !== 'SHIFT_START_CLOSED' && errorCode !== 'SHIFT_HOURS_LOCKED' && errorCode !== 'SHIFT_ALREADY_ENDED') {
+      console.warn('[API] Request forbidden', {
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        code: errorCode,
+        error: error.response?.data?.error,
+      });
+    }
   }
 
   if (!originalRequest || error.response?.status !== 401) {

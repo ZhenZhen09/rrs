@@ -6,6 +6,10 @@ type Revision = { effective_date: string; start_time: string; end_time: string; 
 type AutomaticShiftClose = { enabled: boolean; changed_at: string | null; changed_by: string | null };
 type ReviewRider = { session_id: string; rider_id: string; rider_name: string; end_time: string; active_task_count_at_end: number; current_active_tasks: number };
 
+const getPhilippineTime = () => new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).format(new Date());
+
 export function ShiftHours({ onOpenAttendance }: { onOpenAttendance: () => void }) {
   const [current, setCurrent] = useState<Revision | null>(null);
   const [pending, setPending] = useState<Revision | null>(null);
@@ -39,9 +43,9 @@ export function ShiftHours({ onOpenAttendance }: { onOpenAttendance: () => void 
       setCurrent(schedule.current);
       setPending(schedule.pending);
       setDate(schedule.date);
-      setStartTime(schedule.pending?.start_time || schedule.current?.start_time || '');
-      setEndTime(schedule.pending?.end_time || schedule.current?.end_time || '19:00');
-      setGraceMinutes(String(schedule.pending?.grace_minutes ?? schedule.current?.grace_minutes ?? 15));
+      setStartTime(schedule.current?.start_time || schedule.pending?.start_time || '');
+      setEndTime(schedule.current?.end_time || schedule.pending?.end_time || '19:00');
+      setGraceMinutes(String(schedule.current?.grace_minutes ?? schedule.pending?.grace_minutes ?? 15));
       setAutomaticShiftClose(schedule.automatic_shift_close || { enabled: true, changed_at: null, changed_by: null });
       setReview(cutoff.riders || []);
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load shift hours'); })
@@ -79,14 +83,40 @@ export function ShiftHours({ onOpenAttendance }: { onOpenAttendance: () => void 
     setSaving(true);
     setError(null);
     try {
+      if (automaticShiftClose.enabled && endTime <= getPhilippineTime()) {
+        const impactResponse = await fetch('/api/shift-schedule', { credentials: 'include' });
+        const impactData = await impactResponse.json();
+        if (!impactResponse.ok) throw new Error(impactData.error || 'Unable to check open shifts before saving');
+        const openShiftCount = Number(impactData.cutoff_impact?.open_shift_count || 0);
+        const activeTaskCount = Number(impactData.cutoff_impact?.active_task_count || 0);
+        if (openShiftCount > 0) {
+          const taskMessage = activeTaskCount > 0
+            ? ` ${activeTaskCount} active task${activeTaskCount === 1 ? '' : 's'} will remain assigned for admin follow-up.`
+            : '';
+          if (!window.confirm(`This end time has already passed. Saving will immediately close ${openShiftCount} open rider shift${openShiftCount === 1 ? '' : 's'}.${taskMessage} Continue?`)) return;
+        }
+      }
       const response = await fetch('/api/shift-schedule', {
         method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ start_time: startTime, end_time: endTime, grace_minutes: Number(graceMinutes) }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Failed to save shift hours');
-      setPending(body.schedule);
-      toast.success(`Shift hours saved for ${body.schedule.effective_date}`);
+      setCurrent(body.schedule);
+      setPending(body.pending ?? null);
+      setDate(body.schedule.effective_date);
+      const reviewResponse = await fetch('/api/shift-schedule/cutoff-review', { credentials: 'include' });
+      if (reviewResponse.ok) {
+        const reviewData = await reviewResponse.json();
+        setReview(reviewData.riders || []);
+      }
+      if (body.cutoff_reconciliation_pending) {
+        toast.success(`Shift hours applied for today (${body.schedule.effective_date}). Open shifts will be reconciled shortly.`);
+      } else if (body.closed_shift_count > 0) {
+        toast.success(`Shift hours applied today. ${body.closed_shift_count} open shift${body.closed_shift_count === 1 ? '' : 's'} closed.`);
+      } else {
+        toast.success(`Shift hours applied for today (${body.schedule.effective_date})`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Failed to save shift hours');
     } finally { setSaving(false); }
@@ -116,8 +146,8 @@ export function ShiftHours({ onOpenAttendance }: { onOpenAttendance: () => void 
             <input aria-label="Start grace period" required type="number" min="0" max="120" value={graceMinutes} onChange={event => setGraceMinutes(event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200" />
             <span className="mt-1 block text-xs font-normal text-slate-500">Riders can start only during this period after the scheduled start time. Default: 15 minutes.</span>
           </label>
-          <p className="text-sm text-slate-600">Changes saved today ({date || 'Philippine time'}) take effect tomorrow and repeat daily until changed. At the automatic shift end, all open shifts close, including shifts with unfinished tasks. Riders can access assigned tasks again when their next shift begins.</p>
-          <button type="submit" disabled={saving} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60">{saving ? 'Saving…' : 'Save daily schedule'}</button>
+          <p className="text-sm text-slate-600">Changes saved today ({date || 'Philippine time'}) take effect immediately and repeat daily until replaced. Any separately scheduled future change remains in place. If the new end time has passed and Automatic Shift Closing is on, open shifts close now; unfinished tasks remain assigned for admin follow-up.</p>
+          <button type="submit" disabled={saving} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60">{saving ? 'Applying…' : 'Apply today’s schedule'}</button>
         </form>
       </section>
       <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm">

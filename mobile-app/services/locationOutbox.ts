@@ -41,14 +41,10 @@ export const getPendingLocationEvents = async (riderId: string, limit = 50): Pro
 export const getLocationOutboxSummary = async (riderId: string) => {
   const db = await getDb();
   const rows = await db.getAllAsync(
-    "SELECT status, last_error, created_at FROM location_outbox WHERE rider_id = ? AND status IN ('pending', 'rejected') ORDER BY created_at ASC",
+    "SELECT status FROM location_outbox WHERE rider_id = ? AND status = 'pending'",
     [riderId],
-  ) as Array<{ status: string; last_error: string | null; created_at: number }>;
-  return {
-    pending: rows.filter((row) => row.status === 'pending').length,
-    rejected: rows.filter((row) => row.status === 'rejected').length,
-    lastError: rows.find((row) => row.last_error)?.last_error || null,
-  };
+  );
+  return { pending: rows.length };
 };
 
 export const acknowledgeLocationEvents = async (eventIds: string[]) => {
@@ -67,16 +63,6 @@ export const markLocationEventsForRetry = async (eventIds: string[], error: stri
   const placeholders = eventIds.map(() => '?').join(', ');
   await db.runAsync(
     `UPDATE location_outbox SET status = 'pending', retry_count = retry_count + 1, last_error = ? WHERE event_id IN (${placeholders})`,
-    [error, ...eventIds],
-  );
-};
-
-export const markLocationEventsRejected = async (eventIds: string[], error: string) => {
-  if (eventIds.length === 0) return;
-  const db = await getDb();
-  const placeholders = eventIds.map(() => '?').join(', ');
-  await db.runAsync(
-    `UPDATE location_outbox SET status = 'rejected', last_error = ? WHERE event_id IN (${placeholders})`,
     [error, ...eventIds],
   );
 };

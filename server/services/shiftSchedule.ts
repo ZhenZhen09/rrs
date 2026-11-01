@@ -84,6 +84,19 @@ export async function ensureShiftScheduleTables(db: Db = pool): Promise<void> {
     actor_id VARCHAR(255) NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  await db.query(`CREATE TABLE IF NOT EXISTS shift_reopen_requests (
+    request_id VARCHAR(64) NOT NULL PRIMARY KEY,
+    rider_id VARCHAR(255) NOT NULL,
+    work_date DATE NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    review_note VARCHAR(500) NULL,
+    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by VARCHAR(255) NULL,
+    reviewed_at DATETIME NULL,
+    INDEX idx_shift_reopen_date_status (work_date, status),
+    INDEX idx_shift_reopen_rider_date (rider_id, work_date, requested_at)
+  )`);
   const [scheduleColumns] = await db.query(`SELECT COLUMN_NAME FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'shift_schedule_revisions' AND COLUMN_NAME = 'grace_minutes'`);
   if (!(scheduleColumns as any[]).length) await db.query('ALTER TABLE shift_schedule_revisions ADD COLUMN grace_minutes TINYINT UNSIGNED NOT NULL DEFAULT 15');
@@ -169,10 +182,10 @@ export async function getShiftPolicy(db: Db, _riderId: string, now: Date = new D
   };
 }
 
-export async function saveNextDaySchedule(db: Db, actorId: string, startTime: string, endTime: string, graceMinutes = 15, now: Date = new Date()): Promise<ScheduleRevision> {
+export async function saveEffectiveSchedule(db: Db, actorId: string, startTime: string, endTime: string, graceMinutes = 15, now: Date = new Date()): Promise<ScheduleRevision> {
   if (!validScheduleTimes(startTime, endTime)) throw new Error('Start time must be before end time, both in HH:mm format.');
   if (!validGraceMinutes(graceMinutes)) throw new Error('Grace period must be a whole number from 0 to 120 minutes.');
-  const effectiveDate = addPhilippineDays(getPhilippineDateTime(now).date, 1);
+  const effectiveDate = getPhilippineDateTime(now).date;
   await db.query(`INSERT INTO shift_schedule_revisions (effective_date,start_time,end_time,grace_minutes,actor_id)
     VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE start_time=VALUES(start_time), end_time=VALUES(end_time), grace_minutes=VALUES(grace_minutes), actor_id=VALUES(actor_id), created_at=CURRENT_TIMESTAMP`,
   [effectiveDate, startTime, endTime, graceMinutes, actorId]);

@@ -50,13 +50,24 @@ export async function reconcileRiderCutoff(db: Db, riderId: string, now: Date = 
   } finally { conn.release(); }
 }
 
-export async function reconcileDueCutoffs(db: Db = pool, now: Date = new Date()): Promise<number> {
+export async function reconcileDueCutoffs(db: Db = pool, now: Date = new Date(), io?: RealtimeIo, onlyDate?: string): Promise<number> {
   if (!(await getAutomaticShiftCloseSetting(db)).enabled) return 0;
-  const [rows] = await db.query("SELECT DISTINCT rider_id FROM shift_sessions WHERE session_state='open'");
+  const [rows] = onlyDate
+    ? await db.query("SELECT DISTINCT rider_id FROM shift_sessions WHERE session_state='open' AND DATE(start_time)=?", [onlyDate])
+    : await db.query("SELECT DISTINCT rider_id FROM shift_sessions WHERE session_state='open'");
   let closed = 0;
   for (const row of rows as Array<{ rider_id: string }>) {
     try {
-      if (await reconcileRiderCutoff(db, row.rider_id, now)) closed++;
+      const session = await reconcileRiderCutoff(db, row.rider_id, now);
+      if (session) {
+        closed++;
+        io?.to('admin-room').emit('rider-status-updated', {
+          riderId: row.rider_id, type: 'duty', is_on_duty: false, shift_end_source: 'scheduled',
+        });
+        io?.to(row.rider_id).emit('attendance-updated', {
+          status: 'present', shift_ended: true, end_source: 'scheduled',
+        });
+      }
     } catch (error) {
       console.error(`[SHIFT CUTOFF] Failed for rider ${row.rider_id}:`, error);
     }
@@ -137,7 +148,7 @@ export function startShiftCutoffWorker(db: Db = pool, io?: RealtimeIo): () => vo
     if (running) return;
     running = true;
     try {
-      await reconcileDueCutoffs(db);
+      await reconcileDueCutoffs(db, new Date(), io);
       await reconcileDueAutoAbsences(db, new Date(), io);
     }
     catch (error) { console.error('[SHIFT CUTOFF] Worker failed:', error); }

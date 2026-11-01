@@ -1,6 +1,6 @@
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 
-import { appendLocationEvent, getPendingLocationEvents, acknowledgeLocationEvents, markLocationEventsRejected } from '../locationOutbox';
+import { appendLocationEvent, getPendingLocationEvents, getLocationOutboxSummary, acknowledgeLocationEvents } from '../locationOutbox';
 import { getDb } from '../localDb';
 import type { LocationEvent } from '../../types/tracking';
 
@@ -63,12 +63,13 @@ describe('location outbox', () => {
     );
   });
 
-  it('marks permanently rejected events so they are not retried forever', async () => {
-    await markLocationEventsRejected(['session-1:1'], 'stale_location');
+  it('counts only location events waiting to sync', async () => {
+    db.getAllAsync.mockResolvedValue([{ status: 'pending' }]);
 
-    expect(db.runAsync).toHaveBeenCalledWith(
-      expect.stringContaining("status = 'rejected'"),
-      ['stale_location', 'session-1:1'],
+    await expect(getLocationOutboxSummary('rider-1')).resolves.toEqual({ pending: 1 });
+    expect(db.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'pending'"),
+      ['rider-1'],
     );
   });
 });

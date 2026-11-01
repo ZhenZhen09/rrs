@@ -16,8 +16,8 @@ import { RiderSurfaceGradient } from '@/components/RiderSurfaceGradient';
 import { getTodayEmptyStateTopPadding } from '@/utils/todayEmptyStateLayout';
 import { formatOverdueDuration } from '@/utils/eta';
 import { TaskDetailIcon } from '@/components/jobs/TaskDetailIcon';
+import { StopNumberWatermark } from '@/components/jobs/StopNumberWatermark';
 import { useReducedMotionPreference } from '@/hooks/useReducedMotionPreference';
-import { ShiftTaskAccessNotice } from '@/components/jobs/ShiftTaskAccessNotice';
 import { useConnection } from '@/context/ConnectionContext';
 
 export default function TodayScreen() {
@@ -37,7 +37,7 @@ export default function TodayScreen() {
     });
     return () => cancelAnimationFrame(frame);
   }, [dashboardEntrance, reduceMotion]);
-  const { isOnDuty, hasOpenShift, attendanceStatus, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
+  const { isOnDuty, hasOpenShift, attendanceStatus, isLateCheckInApproved, isShiftStatusReady, isNetworkReachable, shiftHoursLocked } = useLocation();
 
   const { 
     user,
@@ -108,19 +108,22 @@ export default function TodayScreen() {
           />
         ) : <View style={styles.offDutyContainer}>
           <View style={styles.offDutyIconCircle}>
-            <MaterialIcons name="power-settings-new" size={40} color="#94A3B8" />
+            <MaterialIcons name={attendanceStatus === 'absent' || attendanceStatus === 'on_leave' || shiftHoursLocked ? 'lock-outline' : 'power-settings-new'} size={28} color="#64748B" />
           </View>
-          <Text style={styles.offDutyTitle}>You are Off Duty</Text>
+          <Text style={styles.offDutyTitle}>Today&apos;s tasks are locked</Text>
           <Text style={styles.offDutyText}>
-            {shiftHoursLocked ? 'Shift hours are closed. Your assignments will be available during your next shift.' : hasOpenShift
-              ? 'Press On Duty to see your assigned tasks and become available for work.'
-              : attendanceStatus === 'present'
-                ? 'You have ended today’s shift. Your attendance and recorded hours are saved.'
-                : attendanceStatus === 'absent' || attendanceStatus === 'on_leave'
-                  ? 'Your attendance is recorded as absent or on leave. Contact Admin if this needs to change.'
-                : 'Press On Duty to record attendance and see your assigned tasks.'}
+            {attendanceStatus === 'absent' || attendanceStatus === 'on_leave'
+              ? isLateCheckInApproved
+                ? 'Admin approved your late check-in. Tap Check in late above to record attendance.'
+                : 'Your attendance is marked absent or on leave. Contact Admin if this needs to change.'
+              : shiftHoursLocked
+                ? 'Shift hours are closed. Your assignments will be available during your next shift.'
+                : hasOpenShift
+                  ? 'Tap On Duty above to become available and view your assigned tasks.'
+                  : attendanceStatus === 'present'
+                    ? 'Your shift has ended. Your attendance and recorded hours are saved.'
+                    : 'Tap On Duty above to start your shift and view your assigned tasks.'}
           </Text>
-          <ShiftTaskAccessNotice title="Today's tasks are locked" message={shiftHoursLocked ? 'Shift hours are closed. Return during your next shift.' : "Press On Duty to record attendance and reveal today's assigned tasks."} />
         </View>
       ) : (
         <ScrollView 
@@ -176,6 +179,7 @@ export default function TodayScreen() {
           ) : (
             orderedTasks.map((task, index) => {
               const isLocked = isTaskLocked(task, allTasks);
+              const sequenceLabel = getRiderTaskSequenceLabel(task, allTasks);
               const buildingName = task?.dropoff_location?.businessName || task?.pickup_location?.businessName || 'Building not provided';
               const personnelNote = task?.personnel_instructions || 'No personnel note provided';
               const adminNote = task?.admin_remark || 'No admin note provided';
@@ -185,6 +189,7 @@ export default function TodayScreen() {
                   style={{ opacity: dashboardEntrance, transform: [{ translateY: dashboardEntrance.interpolate({ inputRange: [0, 1], outputRange: [6 + Math.min(index * 2, 6), 0] }) }] }}
                 >
                 <Card style={{ ...styles.card, ...(isLocked ? styles.lockedCard : {}), ...(!isOnDuty ? styles.offDutyTaskCard : {}) }}>
+                  <StopNumberWatermark sequenceLabel={sequenceLabel} />
                   <TouchableOpacity
                     testID={`today_task_card_${index}`}
                     activeOpacity={0.7}
@@ -195,7 +200,7 @@ export default function TodayScreen() {
                       <View>
                         <View style={styles.sequenceBadgeRow}>
                           <View style={styles.taskNumberBadge}>
-                            <Text style={styles.taskNumberText}>{getRiderTaskSequenceLabel(task, allTasks)}</Text>
+                            <Text style={styles.taskNumberText}>{sequenceLabel}</Text>
                           </View>
                           <View style={[styles.sequenceBadge, isLocked ? styles.queuedBadge : styles.nextBadge]}>
                             <Text style={[styles.sequenceBadgeText, isLocked ? styles.queuedBadgeText : styles.activeBadgeText]}>{isLocked ? 'QUEUED' : 'NEXT TASK'}</Text>
@@ -332,10 +337,12 @@ const styles = StyleSheet.create({
   },
   offDutyContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFD',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: scale(40),
+    paddingHorizontal: scale(24),
+    paddingTop: verticalScale(24),
+    paddingBottom: verticalScale(24),
   },
   shiftStatusLoading: {
     flex: 1,
@@ -346,7 +353,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: scale(20),
-    backgroundColor: '#F8FAFD',
+    backgroundColor: 'transparent',
   },
   savedDeliveryHeading: {
     color: '#0F172A',
@@ -385,16 +392,16 @@ const styles = StyleSheet.create({
   savedDeliveryTitle: { color: '#0F172A', fontSize: normalizeFontSize(14), fontWeight: '800' },
   savedDeliveryAddress: { color: '#64748B', fontSize: normalizeFontSize(12), marginTop: 4 },
   offDutyIconCircle: {
-    width: scale(80),
-    height: scale(80),
-    borderRadius: 40,
+    width: scale(56),
+    height: scale(56),
+    borderRadius: 28,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(12),
   },
   offDutyTitle: {
-    fontSize: normalizeFontSize(18),
+    fontSize: normalizeFontSize(16),
     fontWeight: '900',
     color: '#0F172A',
     textAlign: 'center',
@@ -419,6 +426,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(14),
     padding: moderateScale(16),
     borderRadius: 22,
+    position: 'relative',
   },
   cardHeader: {
     flexDirection: 'row',

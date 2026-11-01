@@ -91,6 +91,11 @@ const setupSchema = async (database: SQLite.SQLiteDatabase) => {
     CREATE INDEX IF NOT EXISTS idx_location_outbox_pending
       ON location_outbox(status, sequence, created_at);
   `);
+
+  // Permanently rejected coordinates are no longer useful and should not
+  // remain visible as unresolved work after an app upgrade.
+  await database.runAsync("DELETE FROM location_outbox WHERE status = 'rejected'");
+  await database.runAsync("DELETE FROM sync_queue WHERE endpoint = '/api/users/location' AND status = 'failed'");
 };
 
 export const clearCache = async () => {
