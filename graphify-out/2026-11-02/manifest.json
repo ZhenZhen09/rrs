@@ -175,8 +175,8 @@
     "semantic_hash": "6d5545b6c3ab3891d52d25c4e406c026"
   },
   "mobile-app/.expo/devices.json": {
-    "mtime": 1793089659.5976164,
-    "ast_hash": "a0168af4c63f6c171c5ca5f3d88f6dd0",
+    "mtime": 1793551933.886408,
+    "ast_hash": "ac21345a1c8105c9c3fe022c67ab152e",
     "semantic_hash": ""
   },
   "mobile-app/.expo/settings.json": {
@@ -185,7 +185,7 @@
     "semantic_hash": "ffc728163353197775f8d183bf231675"
   },
   "mobile-app/.expo/types/router.d.ts": {
-    "mtime": 1793528692.0315137,
+    "mtime": 1793548471.1260238,
     "ast_hash": "b5a08459879af7aa0b166027240f7527",
     "semantic_hash": ""
   },
@@ -240,8 +240,8 @@
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/index.tsx": {
-    "mtime": 1793349914.9532106,
-    "ast_hash": "771574ecbb80dbab0c86a2412e3d5bc6",
+    "mtime": 1793539862.1020439,
+    "ast_hash": "980e2a8875e47680bda1b93b13481056",
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/overdue.tsx": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "mobile-app/app/(tabs)/tomorrow.tsx": {
-    "mtime": 1792940296.8027391,
-    "ast_hash": "04694ccdbff6f69c3352be0cf9955ef1",
+    "mtime": 1793539865.6528673,
+    "ast_hash": "6eabbba87eda23739aef8fb94e4df4fc",
     "semantic_hash": ""
   },
   "mobile-app/app/_layout.tsx": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "mobile-app/app/job/[id].tsx": {
-    "mtime": 1792940296.8102446,
-    "ast_hash": "ca793816ea27fd3bdb7bdc971f165463",
+    "mtime": 1793538602.1171906,
+    "ast_hash": "c5270bf12b0b34e7145661e3d4be0647",
     "semantic_hash": ""
   },
   "mobile-app/app/login.tsx": {
@@ -415,8 +415,8 @@
     "semantic_hash": "9eaa738f2cbe67d7f88cb7af1d5a93de"
   },
   "mobile-app/constants/Config.ts": {
-    "mtime": 1793527492.8712318,
-    "ast_hash": "9b56f1e979fc00c33d45ddb222180404",
+    "mtime": 1793553104.7217536,
+    "ast_hash": "7b91217a11f795aef9724eb08a5623c9",
     "semantic_hash": ""
   },
   "mobile-app/constants/LeafletAssets.ts": {
@@ -430,13 +430,13 @@
     "semantic_hash": "86b35f6fc3c1a9cf036de923e0ec1b04"
   },
   "mobile-app/context/AuthContext.tsx": {
-    "mtime": 1792940296.8224905,
-    "ast_hash": "958b78ee0f67696fe5a81b3d78cf5226",
+    "mtime": 1793533167.010823,
+    "ast_hash": "b9fbc1bad892138b6086a5daf65d4345",
     "semantic_hash": ""
   },
   "mobile-app/context/LocationContext.tsx": {
-    "mtime": 1793529016.061151,
-    "ast_hash": "4ab20910ce2c156fe054b8be30f4d81d",
+    "mtime": 1793534444.1140249,
+    "ast_hash": "4582b6c1134f506869bc585723de3d5a",
     "semantic_hash": ""
   },
   "mobile-app/eas.json": {
@@ -450,7 +450,7 @@
     "semantic_hash": "560a864580ad8107fbbf8d6d452c82fe"
   },
   "mobile-app/expo-env.d.ts": {
-    "mtime": 1793528691.009714,
+    "mtime": 1793541575.4064596,
     "ast_hash": "0dd9dccdb4b08595bc83df70d6a154d3",
     "semantic_hash": "0dd9dccdb4b08595bc83df70d6a154d3"
   },
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "mobile-app/hooks/data/useJobDetails.ts": {
-    "mtime": 1792940296.8281252,
-    "ast_hash": "d0e436b136f104a4c165210ec60c8b49",
+    "mtime": 1793538445.542877,
+    "ast_hash": "8c03b7cc1a137ebebebdb6b116d88e6b",
     "semantic_hash": ""
   },
   "mobile-app/hooks/use-color-scheme.ts": {
@@ -475,8 +475,8 @@
     "semantic_hash": "071fbb9a1a05ffb8af4b7d3b1ffa72d6"
   },
   "mobile-app/hooks/use-push-notifications.ts": {
-    "mtime": 1791886729.3229425,
-    "ast_hash": "b0bbfbf04a085c39081b452edf07d489",
+    "mtime": 1793556626.594621,
+    "ast_hash": "ad840350f9f18268b5c03c41fab7616a",
     "semantic_hash": ""
   },
   "mobile-app/hooks/use-theme-color.ts": {
@@ -485,9 +485,9 @@
     "semantic_hash": ""
   },
   "mobile-app/jest.config.js": {
-    "mtime": 1778902068.246718,
-    "ast_hash": "53483f602afa0c6b551fa8be67e5e056",
-    "semantic_hash": "53483f602afa0c6b551fa8be67e5e056"
+    "mtime": 1793557279.4297092,
+    "ast_hash": "f297a8d53ae3847bc126ad6418cab885",
+    "semantic_hash": ""
   },
   "mobile-app/metro.config.js": {
     "mtime": 1779706894.0694563,
@@ -495,8 +495,8 @@
     "semantic_hash": "2f46397354e5bee992461460e3eab1aa"
   },
   "mobile-app/package.json": {
-    "mtime": 1793041839.3477392,
-    "ast_hash": "dc1869d529589b260400752813cb4cf0",
+    "mtime": 1793557279.8808374,
+    "ast_hash": "f5ecfbbd1f9b7a69904f1ae44b341623",
     "semantic_hash": ""
   },
   "mobile-app/scripts/reset-project.js": {
@@ -525,18 +525,18 @@
     "semantic_hash": "36c1b1000a548d2c4cc4cf83f59a088d"
   },
   "mobile-app/services/apiService.ts": {
-    "mtime": 1792940296.843785,
-    "ast_hash": "bb1a1412d4d367ca31793723745cc780",
+    "mtime": 1793530730.67415,
+    "ast_hash": "a5f5846a28652e7a2aa51bd08e139a5a",
     "semantic_hash": ""
   },
   "mobile-app/services/localDb.ts": {
-    "mtime": 1792940296.846789,
-    "ast_hash": "dfa9eafb8f1b309ef32b17eda5742a60",
+    "mtime": 1793538444.5192716,
+    "ast_hash": "6ce4f5c1db93fc94f88583dc763f5df6",
     "semantic_hash": ""
   },
   "mobile-app/services/syncQueue.ts": {
-    "mtime": 1792940296.851395,
-    "ast_hash": "df5e483ea3d1e45252eecb3d84638469",
+    "mtime": 1793538531.0798268,
+    "ast_hash": "6be203249ff70488597bf0c3500f5338",
     "semantic_hash": ""
   },
   "mobile-app/tsconfig.json": {
@@ -600,8 +600,8 @@
     "semantic_hash": ""
   },
   "mobile-app/utils/api.ts": {
-    "mtime": 1791539096.8860948,
-    "ast_hash": "bf768454d288ba71dac6d54794015559",
+    "mtime": 1793530363.7947388,
+    "ast_hash": "4d7ed91c80e3029d7b6de47052301b16",
     "semantic_hash": ""
   },
   "mobile-app/utils/dateUtils.ts": {
@@ -660,8 +660,8 @@
     "semantic_hash": "bc7ab5fc41fa8c3066bbee5644afe3d2"
   },
   "server/index.ts": {
-    "mtime": 1792940296.862016,
-    "ast_hash": "a199173e9555e8935a011b620bf21beb",
+    "mtime": 1793538074.6525867,
+    "ast_hash": "70ca6b38152127c3b7aad664024a893b",
     "semantic_hash": ""
   },
   "server/locationTracking.ts": {
@@ -700,18 +700,18 @@
     "semantic_hash": ""
   },
   "server/routes/auth.ts": {
-    "mtime": 1792940296.869828,
-    "ast_hash": "20987e6d33d846bdf247c2736b7be9e9",
+    "mtime": 1793533179.7768443,
+    "ast_hash": "e940abc3adfff4c050dcc64397387715",
     "semantic_hash": ""
   },
   "server/routes/notifications.ts": {
-    "mtime": 1792940296.8710701,
-    "ast_hash": "a3b79670ebc7ac3d25c54cb6594ca68b",
+    "mtime": 1793556629.055749,
+    "ast_hash": "565e1f9537d42534b86f08da1091316c",
     "semantic_hash": ""
   },
   "server/routes/requests.ts": {
-    "mtime": 1792940296.872795,
-    "ast_hash": "428e59825a8a9c837b8d74cc59fd1ae1",
+    "mtime": 1793538074.1379304,
+    "ast_hash": "2856ccb34232206f1c8555d5c141dd66",
     "semantic_hash": ""
   },
   "server/routes/riderTasks.ts": {
@@ -720,8 +720,8 @@
     "semantic_hash": ""
   },
   "server/routes/users.ts": {
-    "mtime": 1793350124.7500615,
-    "ast_hash": "42458f03c14134aa232b82ac94fc76aa",
+    "mtime": 1793534425.2568314,
+    "ast_hash": "5e8d0f98754fbab705383c94d79c05b5",
     "semantic_hash": ""
   },
   "server/schemas/authSchema.ts": {
@@ -775,18 +775,18 @@
     "semantic_hash": ""
   },
   "src/app/components/Admin/Dispatch/RequestCard.tsx": {
-    "mtime": 1791527567.6306193,
-    "ast_hash": "08bbae5507dbdd76fdd5fa39b679f885",
+    "mtime": 1793537812.2788477,
+    "ast_hash": "f1445b78db3efe51eda764846d47249d",
     "semantic_hash": ""
   },
   "src/app/components/Admin/Dispatch/RequestDetailsPanel.tsx": {
-    "mtime": 1791427408.2954245,
-    "ast_hash": "e1778147692c9d3796dfde3e373c6211",
+    "mtime": 1793537812.7822535,
+    "ast_hash": "64dbb991cefe7043987c79aa27aa5853",
     "semantic_hash": ""
   },
   "src/app/components/Admin/Dispatch/RequestList.tsx": {
-    "mtime": 1791527567.1254086,
-    "ast_hash": "2224ff96b196cce73ac03c06662d4233",
+    "mtime": 1793537840.8964012,
+    "ast_hash": "5e32b07aef13511c6b45db7eb6d7b660",
     "semantic_hash": ""
   },
   "src/app/components/Admin/Dispatch/RiderSelectionList.tsx": {
@@ -825,8 +825,8 @@
     "semantic_hash": ""
   },
   "src/app/components/MapPicker.tsx": {
-    "mtime": 1791046929.2910683,
-    "ast_hash": "51900380a2b62c2663010f08216eab91",
+    "mtime": 1793536384.8282115,
+    "ast_hash": "00c3f8d82f2ebd8473e927162e1e3897",
     "semantic_hash": ""
   },
   "src/app/components/PasswordResetOverlay.tsx": {
@@ -1150,8 +1150,8 @@
     "semantic_hash": ""
   },
   "src/app/pages/Admin/AttendanceDashboard.tsx": {
-    "mtime": 1793023661.5638294,
-    "ast_hash": "fbf0116342e964318257a8e6afda82b0",
+    "mtime": 1793534895.107667,
+    "ast_hash": "01cc97f1062a928c720727d89955d9f8",
     "semantic_hash": ""
   },
   "src/app/pages/Admin/CalendarView.tsx": {
@@ -1160,8 +1160,8 @@
     "semantic_hash": ""
   },
   "src/app/pages/Admin/DispatchConsole.tsx": {
-    "mtime": 1791603502.017104,
-    "ast_hash": "29612079c047bd3845d36ed23b8827f9",
+    "mtime": 1793537811.1879156,
+    "ast_hash": "a02331dc2e09dbd1c55b75fe40cdad0c",
     "semantic_hash": ""
   },
   "src/app/pages/Admin/RiderMap.tsx": {
@@ -1235,8 +1235,8 @@
     "semantic_hash": ""
   },
   "src/app/types/index.ts": {
-    "mtime": 1791532148.9458444,
-    "ast_hash": "5f98934339c99598852c182c5260a795",
+    "mtime": 1793537798.0712998,
+    "ast_hash": "bd005a866291da85c949553b0348dd87",
     "semantic_hash": ""
   },
   "src/app/utils/__tests__/date-drift.test.ts": {
@@ -1630,8 +1630,8 @@
     "semantic_hash": ""
   },
   "src/app/personnel-v2/PersonnelV2Page.tsx": {
-    "mtime": 1792026913.8498056,
-    "ast_hash": "31dc38343313eedbb4942d5991dbb4cb",
+    "mtime": 1793537840.336301,
+    "ast_hash": "f12f9f4e35716a8b9c2317c00ae6f6ee",
     "semantic_hash": ""
   },
   "src/app/personnel-v2/revisionDraft.ts": {
@@ -2670,13 +2670,13 @@
     "semantic_hash": ""
   },
   "mobile-app/services/__tests__/locationOutbox.test.ts": {
-    "mtime": 1792940296.840787,
-    "ast_hash": "2ce1244fde322a9099a61da65ef3ebfb",
+    "mtime": 1793538515.0585895,
+    "ast_hash": "d9ff0ca7efac878f6e5e3f0fb11d5563",
     "semantic_hash": ""
   },
   "mobile-app/services/__tests__/locationSyncService.test.ts": {
-    "mtime": 1792940296.8417876,
-    "ast_hash": "7c2acf20ed0b8326141d598f528e33ad",
+    "mtime": 1793538514.5794568,
+    "ast_hash": "b777b401958962dcad480ccf62fcbd1d",
     "semantic_hash": ""
   },
   "mobile-app/services/__tests__/trackingSessionService.test.ts": {
@@ -2685,18 +2685,18 @@
     "semantic_hash": ""
   },
   "mobile-app/services/localDb.web.ts": {
-    "mtime": 1792940296.847792,
-    "ast_hash": "1c39e8a74662eda30c08496be4a1fee5",
+    "mtime": 1793538576.9729216,
+    "ast_hash": "efac90ecb3626741f1f2efcbb63a8827",
     "semantic_hash": ""
   },
   "mobile-app/services/locationOutbox.ts": {
-    "mtime": 1792940296.848868,
-    "ast_hash": "9a817dda8f0fccab0175ca0b5a432d90",
+    "mtime": 1793538619.181105,
+    "ast_hash": "850b582ee8187ddd281bca6abbd6a7fe",
     "semantic_hash": ""
   },
   "mobile-app/services/locationSyncService.ts": {
-    "mtime": 1792940296.8503978,
-    "ast_hash": "485cfc50f9e9fd9a6e0e6e9eb035ae02",
+    "mtime": 1793538442.8755498,
+    "ast_hash": "58e68d125d60ea9a362df286882f271c",
     "semantic_hash": ""
   },
   "mobile-app/services/trackingSessionService.ts": {
@@ -2945,13 +2945,13 @@
     "semantic_hash": ""
   },
   "server/routes/__tests__/auth-session.test.ts": {
-    "mtime": 1791000679.6732564,
-    "ast_hash": "664bf5cdacd0572a7ec7ae6d7d69d1ef",
+    "mtime": 1793533180.3745706,
+    "ast_hash": "6592e30ac2c736613838be58137ede66",
     "semantic_hash": ""
   },
   "server/routes/authSession.ts": {
-    "mtime": 1791000701.7100782,
-    "ast_hash": "2473cce959242c81f5a68cb586a57197",
+    "mtime": 1793533179.299565,
+    "ast_hash": "bba3f46775a432ef1e2e1e19ed7e41d1",
     "semantic_hash": ""
   },
   "mobile-app/utils/__tests__/messagingRateLimit.test.ts": {
@@ -3950,8 +3950,8 @@
     "semantic_hash": ""
   },
   "server/services/shiftSessions.ts": {
-    "mtime": 1793022533.6145897,
-    "ast_hash": "b93709d7d3d777687f2c47508a9a5658",
+    "mtime": 1793530688.5744998,
+    "ast_hash": "805c03100d4a913f43e1943013fb0e6f",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-10-05-multi-shift-sessions/progress.md": {
@@ -4200,8 +4200,8 @@
     "semantic_hash": ""
   },
   "mobile-app/components/jobs/OverdueTaskCard.tsx": {
-    "mtime": 1792940296.8170476,
-    "ast_hash": "a5e4a09338e5b28fec1e23b2811ba549",
+    "mtime": 1793539869.2366936,
+    "ast_hash": "2f15a3521187ab05ceb2b650725fb813",
     "semantic_hash": ""
   },
   "mobile-app/components/jobs/SequentialLockPanel.tsx": {
@@ -4695,8 +4695,8 @@
     "semantic_hash": ""
   },
   "mobile-app/hooks/__tests__/use-push-notifications.test.tsx": {
-    "mtime": 1792940296.8251276,
-    "ast_hash": "40efd5312a758338b934720a1540c58f",
+    "mtime": 1793557244.1170237,
+    "ast_hash": "69c871d57163adba33a50540e6ac8077",
     "semantic_hash": ""
   },
   "mobile-app/index.js": {
@@ -4775,8 +4775,8 @@
     "semantic_hash": ""
   },
   "mobile-app/components/ShiftControlCard.tsx": {
-    "mtime": 1793349833.895429,
-    "ast_hash": "3ab3c72533525d9a0001dadc43e2e292",
+    "mtime": 1793540392.7039497,
+    "ast_hash": "4c710e04c79072cbbd9eb5878b25392c",
     "semantic_hash": ""
   },
   "mobile-app/components/ShiftControlDrawer.tsx": {
@@ -4835,13 +4835,13 @@
     "semantic_hash": ""
   },
   "server/middleware/riderShiftAccess.ts": {
-    "mtime": 1793350124.2708392,
-    "ast_hash": "9e0087fa942686c6921a386d261216a7",
+    "mtime": 1793530688.0658405,
+    "ast_hash": "5e2bbe360f45e4be79cd9d61bfc4fd87",
     "semantic_hash": ""
   },
   "server/routes/shiftSchedule.ts": {
-    "mtime": 1792940298.748379,
-    "ast_hash": "10612c5c53d973d7ae79cf020218d5fb",
+    "mtime": 1793531340.2705665,
+    "ast_hash": "b4bd9b5d31cea53139684a5eacfad809",
     "semantic_hash": ""
   },
   "server/services/__tests__/shiftCutoff.test.ts": {
@@ -4855,18 +4855,18 @@
     "semantic_hash": ""
   },
   "server/services/shiftCutoff.ts": {
-    "mtime": 1793022492.6214216,
-    "ast_hash": "1e21e81167c0cc912e28b9e5874fc9c8",
+    "mtime": 1793531338.0631635,
+    "ast_hash": "23731c7f96d7a204e9ab0d000eb0f6b8",
     "semantic_hash": ""
   },
   "server/services/shiftSchedule.ts": {
-    "mtime": 1793022487.563239,
-    "ast_hash": "6697e07a5c0183204badef42ac464410",
+    "mtime": 1793531227.442095,
+    "ast_hash": "f04b836d6232b7281e1b0b7605dee54a",
     "semantic_hash": ""
   },
   "src/app/pages/Admin/ShiftHours.tsx": {
-    "mtime": 1792940298.758978,
-    "ast_hash": "18686d2eb83ca66f126bcf15a5190b35",
+    "mtime": 1793531292.4120321,
+    "ast_hash": "c6a063af60c89d7107919b66e1dbcbc9",
     "semantic_hash": ""
   },
   "codex-session-01a15d4e-d0cf-7193-bec0-10-21-26-to-continue.md": {
@@ -4925,8 +4925,8 @@
     "semantic_hash": ""
   },
   "server/services/riderStatusOperations.ts": {
-    "mtime": 1792940298.7549376,
-    "ast_hash": "b37c67f22267656d1ab2a0c3da66edfe",
+    "mtime": 1793538073.5435705,
+    "ast_hash": "9fdf00107bbc04ea3c00fa3e7eb9b2b2",
     "semantic_hash": ""
   },
   "docs/operations/rider-managed-device-connectivity.md": {
@@ -4960,8 +4960,8 @@
     "semantic_hash": ""
   },
   "mobile-app/services/__tests__/localDb.web.test.ts": {
-    "mtime": 1792940298.740283,
-    "ast_hash": "c06bbfd9ecc3f3f6db95178295ec336c",
+    "mtime": 1793538581.260189,
+    "ast_hash": "05e7f148580572a56b3a0f1a76f26138",
     "semantic_hash": ""
   },
   "src/app/pages/Admin/__tests__/attendance-duty.test.tsx": {
@@ -5162,6 +5162,21 @@
   "mobile-app/android-splash-preview/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp": {
     "mtime": 1793041878.1254873,
     "ast_hash": "60c4ce569f5f9d97a5fec4eacdd44a45",
+    "semantic_hash": ""
+  },
+  "mobile-app/components/jobs/StopNumberWatermark.tsx": {
+    "mtime": 1793540070.7161021,
+    "ast_hash": "3cbb45b46352d021669e4e39beccdca7",
+    "semantic_hash": ""
+  },
+  "server/services/requestCompletionFeedback.ts": {
+    "mtime": 1793537764.356,
+    "ast_hash": "8898dd2df32ef83567421ec354874263",
+    "semantic_hash": ""
+  },
+  "server/services/shiftReopenRequests.ts": {
+    "mtime": 1793534424.7831576,
+    "ast_hash": "c8f6df9e8de639f98b6e10e76c14881b",
     "semantic_hash": ""
   }
 }

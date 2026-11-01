@@ -485,9 +485,9 @@
     "semantic_hash": ""
   },
   "mobile-app/jest.config.js": {
-    "mtime": 1778902068.246718,
-    "ast_hash": "53483f602afa0c6b551fa8be67e5e056",
-    "semantic_hash": "53483f602afa0c6b551fa8be67e5e056"
+    "mtime": 1793557279.4297092,
+    "ast_hash": "f297a8d53ae3847bc126ad6418cab885",
+    "semantic_hash": ""
   },
   "mobile-app/metro.config.js": {
     "mtime": 1779706894.0694563,
@@ -495,8 +495,8 @@
     "semantic_hash": "2f46397354e5bee992461460e3eab1aa"
   },
   "mobile-app/package.json": {
-    "mtime": 1793541326.4926383,
-    "ast_hash": "5daa157036e192ecffea75f85dd27e75",
+    "mtime": 1793557279.8808374,
+    "ast_hash": "f5ecfbbd1f9b7a69904f1ae44b341623",
     "semantic_hash": ""
   },
   "mobile-app/scripts/reset-project.js": {
@@ -755,8 +755,8 @@
     "semantic_hash": "89eba19bf3afe6e6900e104fd6c0db9d"
   },
   "src/app/components/Admin/ConflictResolutionModal.tsx": {
-    "mtime": 1791047075.3302305,
-    "ast_hash": "c39670ad826167c13d12f6b07569115d",
+    "mtime": 1793571920.4393277,
+    "ast_hash": "62698068cd86ad94440043e2bbe765ca",
     "semantic_hash": ""
   },
   "src/app/components/Admin/DevSimulator.tsx": {
@@ -1160,8 +1160,8 @@
     "semantic_hash": ""
   },
   "src/app/pages/Admin/DispatchConsole.tsx": {
-    "mtime": 1793537811.1879156,
-    "ast_hash": "a02331dc2e09dbd1c55b75fe40cdad0c",
+    "mtime": 1793571917.19822,
+    "ast_hash": "d69706b89356232fd231461ab23ad9bd",
     "semantic_hash": ""
   },
   "src/app/pages/Admin/RiderMap.tsx": {
@@ -4695,8 +4695,8 @@
     "semantic_hash": ""
   },
   "mobile-app/hooks/__tests__/use-push-notifications.test.tsx": {
-    "mtime": 1792940296.8251276,
-    "ast_hash": "40efd5312a758338b934720a1540c58f",
+    "mtime": 1793557244.1170237,
+    "ast_hash": "69c871d57163adba33a50540e6ac8077",
     "semantic_hash": ""
   },
   "mobile-app/index.js": {
