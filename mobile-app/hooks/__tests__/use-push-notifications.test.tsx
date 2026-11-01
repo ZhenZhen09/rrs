@@ -1,4 +1,4 @@
-import React from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { usePushNotifications } from '../use-push-notifications';
 
@@ -18,11 +18,14 @@ const mockScheduleNotificationAsync = jest.fn();
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
 const mockRemove = jest.fn();
+let appStateListener: ((state: AppStateStatus) => void) | undefined;
+const mockRouter = { push: mockPush, navigate: mockNavigate };
+const mockQueryClient = { invalidateQueries: mockInvalidateQueries };
 
 jest.mock('expo', () => ({ isRunningInExpoGo: () => false }));
 jest.mock('expo-device', () => ({ isDevice: true }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, navigate: mockNavigate }) }));
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }) }));
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => mockQueryClient }));
 jest.mock('@/services/deliveryNotifications', () => ({
   initializeDeliveryNotificationChannels: jest.fn().mockResolvedValue(undefined),
   presentForegroundPushNotification: (...args: unknown[]) => mockPresentForegroundPushNotification(...args),
@@ -68,6 +71,11 @@ function captureSubscription(mockSubscribe: jest.Mock) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  appStateListener = undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+    appStateListener = listener;
+    return { remove: mockRemove };
+  });
   mockGetToken.mockResolvedValue('native-fcm-token');
   mockRegisterFcmToken.mockResolvedValue('native-fcm-token');
   mockListenForFcmTokenRefresh.mockReturnValue(mockRemove);
@@ -79,6 +87,10 @@ beforeEach(() => {
   mockAddNotificationResponseReceivedListener.mockReturnValue({ remove: mockRemove });
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 it('registers a native FCM token for the signed-in rider', async () => {
   const { unmount } = renderHook(() => usePushNotifications('rider-1'));
 
@@ -87,6 +99,20 @@ it('registers a native FCM token for the signed-in rider', async () => {
   expect(mockListenForFcmTokenRefresh).toHaveBeenCalled();
   unmount();
   expect(mockRemove).toHaveBeenCalled();
+});
+
+it('retries token registration when the rider returns to the app', async () => {
+  const { unmount } = renderHook(() => usePushNotifications('rider-1'));
+
+  await waitFor(() => expect(mockRegisterFcmToken).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(appStateListener).toBeDefined());
+  await waitFor(() => expect(mockListenForFcmTokenRefresh).toHaveBeenCalledTimes(1));
+
+  await act(async () => appStateListener?.('active'));
+
+  await waitFor(() => expect(mockRegisterFcmToken).toHaveBeenCalledTimes(2));
+  expect(mockListenForFcmTokenRefresh).toHaveBeenCalledTimes(1);
+  unmount();
 });
 
 it('refreshes rider queries and captures the alert when an FCM message arrives in foreground', async () => {

@@ -100,11 +100,15 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
         credentials: 'include'
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         toast.success(data.message);
         onSuccess();
         onClose();
+      } else if (res.status === 409 || data.code === 'QUEUE_CHANGED') {
+        onSuccess();
+        onClose();
+        toast.info(data.error || "These tasks changed before the update could be applied. The list has been refreshed; review it and try again.");
       } else {
         toast.error(data.error || "Update failed");
       }

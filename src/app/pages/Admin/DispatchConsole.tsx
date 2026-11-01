@@ -250,14 +250,24 @@ export function DispatchConsole({ openRequestId, onOpenRequest, onRequestOpened 
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to process batch");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409 || body.code === "QUEUE_CHANGED") {
+          await refreshData();
+          setSelectedRequestIds([]);
+          setShowBatchApprove(false);
+          toast.info(body.error || "These tasks changed while you were assigning them. The dispatch list has been refreshed; select the tasks again.");
+          return;
+        }
+        throw new Error(body.error || body.message || "Failed to process batch");
+      }
 
-      toast.success(`Successfully enforced sequence and assigned ${taskIds.length} tasks`);
+      toast.success(body.message || `Successfully enforced sequence and assigned ${taskIds.length} tasks`);
       setSelectedRequestIds([]);
       setShowBatchApprove(false);
-      refreshData();
+      await refreshData();
     } catch (err) {
-      toast.error("Batch assignment failed");
+      toast.error(err instanceof Error ? err.message : "Batch assignment failed");
       throw err;
     } finally {
       setIsSubmitting(false);
